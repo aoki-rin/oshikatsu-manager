@@ -6,6 +6,27 @@ import {
 } from 'lucide-react';
 import { downloadEventIcs, formatDisplayDate, getDaysRemaining } from '../utils';
 
+// Display an ISO (+09:00) instant in JST regardless of the viewer's timezone (R2 principle).
+function fmtJst(iso?: string | null): string {
+  if (!iso) return '未定';
+  return new Date(iso).toLocaleString('ja-JP', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo',
+  });
+}
+
+// Status of an application window relative to now.
+function windowStatus(applyStart?: string | null, applyEnd?: string | null): { label: string; cls: string } {
+  const now = Date.now();
+  if (applyEnd && now > new Date(applyEnd).getTime()) return { label: '受付終了', cls: 'bg-slate-400' };
+  if (applyStart && now < new Date(applyStart).getTime()) return { label: '受付予定', cls: 'bg-blue-500' };
+  return { label: '受付中', cls: 'bg-emerald-500' };
+}
+
+function daysLeft(iso?: string | null): number | null {
+  if (!iso) return null;
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+}
+
 interface EventDetailModalProps {
   event: ActivityEvent;
   artists: Artist[];
@@ -262,6 +283,50 @@ export function EventDetailModal({
 
           {activeTab === 'timeline' && (
             <div className="space-y-4">
+              {/* R3: 真实抓取的多轮抽選/发售窗口（JST 显示） */}
+              {event.ticketWindows && event.ticketWindows.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    🎫 自动抓取的多轮抽選/发售窗口（时间为日本时间 JST）。每轮可点「申込」直达，或点来源核对。
+                  </p>
+                  {event.ticketWindows.map((w) => {
+                    const st = windowStatus(w.applyStart, w.applyEnd);
+                    const dl = daysLeft(w.applyEnd);
+                    return (
+                      <div key={w.id} className="rounded-2xl border border-slate-200 p-3.5 bg-white">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: oshiColor }}>{w.platform}</span>
+                            <span className="text-xs font-bold text-slate-900">{w.roundType}</span>
+                          </div>
+                          <span className={`text-[9px] font-bold text-white px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-[11px] text-slate-700"><span className="text-slate-400">受付</span> {fmtJst(w.applyStart)} → {fmtJst(w.applyEnd)}</p>
+                          {(w.resultStart || w.resultEnd) && (
+                            <p className="text-[11px] text-slate-700"><span className="text-slate-400">当落・入金</span> {fmtJst(w.resultStart)} → {fmtJst(w.resultEnd)}</p>
+                          )}
+                          {st.label === '受付中' && dl !== null && dl >= 0 && (
+                            <p className="text-[11px] font-bold text-rose-600">締切まであと {dl} 日</p>
+                          )}
+                        </div>
+                        <div className="mt-2.5 flex items-center gap-2">
+                          {w.applyUrl && (
+                            <a href={w.applyUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: oshiColor }}>申込はこちら ↗</a>
+                          )}
+                          {w.sourceUrl && (
+                            <a href={w.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-slate-500 underline">来源核对</a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 汎用 fallback timeline（无抓取窗口时） */}
+              {(!event.ticketWindows || event.ticketWindows.length === 0) && (
+              <>
               <p className="text-[11px] text-slate-500 leading-tight">
                 🎫 日本各大票务平台购票一般分为 <b>抽选先行申请</b> 与 <b>一般先到先得发售</b>，中选后务必在 <b>付款截止日</b> 前完成结算。点击以下任意节点可单独生成 ICS 文件！
               </p>
@@ -358,6 +423,8 @@ export function EventDetailModal({
                   </div>
                 )}
               </div>
+              </>
+              )}
             </div>
           )}
 

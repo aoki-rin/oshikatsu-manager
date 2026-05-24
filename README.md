@@ -45,3 +45,14 @@ npm run dev   # vite, http://localhost:3000
 
 ## 源适配器约定（加新源时）
 每个源一个 `scraper/parse-<source>.mjs`，导出一个纯函数 `parse<Source>(html, sourceUrl) -> { artist, ticketWindows[], ... }`，并自带 fixture 测试（存一份 HTML 快照断言解析结果，源改版第一时间发现）。
+
+## 数据更新流程
+```bash
+node scraper/parse-ikimonogakari.mjs   # 抓官方页 -> scraper/output/*.json
+node scraper/build-events.mjs          # 汇总 -> src/data/events.json（app 读这个）
+```
+
+## 开发环境注意（macOS）
+本机默认 `node` 开了 hardened runtime，会拒绝加载 rollup 的原生二进制（`code signature ... different Team IDs`），导致 `npm run dev` 起不来。两个解法：
+- 用 adhoc 签名的 node 跑（如 Homebrew 的）：`/opt/homebrew/bin/node node_modules/vite/bin/vite.js --port=3000 --host=0.0.0.0`
+- 或在 `package.json` 加 `"overrides": { "rollup": "npm:@rollup/wasm-node@^4" }` 后重装（用 WASM 版，无原生二进制）。

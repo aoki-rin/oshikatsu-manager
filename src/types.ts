@@ -8,6 +8,31 @@ export interface TicketTimeline {
   paymentDeadlineDate?: string;
 }
 
+// R3: 多轮抽選/发售 — 一场演出(或一段巡演)对应 N 个 ticket_window。
+// 这是 scraper 产出的权威结构。platform 用 string（抓来的边界数据，不收紧成 union）。
+// 时间均为带时区的 ISO 字符串，存 JST (+09:00)。
+export interface TicketWindow {
+  id: string;
+  platform: string;          // 'Ticket Pia' | 'eplus' | 'Lawson Ticket' | 'LivePocket' | 'Fan Club' | 'unknown'
+  roundType: string;         // 先行 / 2次先行 / 独占先行 / 先着 / FC先行 / 一般 ...
+  labelRaw?: string;         // 原始标签，如「チケットぴあ独占2次先行」
+  applyStart: string | null; // 申込開始 ISO+09:00
+  applyEnd: string | null;   // 申込締切 ISO+09:00
+  resultStart?: string | null; // 当落発表・入金 開始
+  resultEnd?: string | null;   // 当落発表・入金 締切
+  sourceUrl?: string;        // 抓取来源页（信任：可点开自验）
+  applyUrl?: string | null;  // 申込链接（跳转购票）
+  scrapedAt?: string;        // 抓取时间
+}
+
+// 巡演单场（best-effort 从官方页解析）
+export interface TourPerformance {
+  date: string;        // YYYY-MM-DD
+  openTime?: string;   // 開場 HH:MM
+  startTime?: string;  // 開演 HH:MM
+  locationRaw?: string;// 都道府県 + 会場（原始文本，best-effort）
+}
+
 export interface ActivityEvent {
   id: string;
   title: string;
@@ -21,7 +46,9 @@ export interface ActivityEvent {
   platform: TicketPlatform;
   price: string;
   imageUrl: string;
-  timeline: TicketTimeline;
+  timeline: TicketTimeline;   // 派生兼容字段（取最近一轮窗口填充，给未迁移的组件用）
+  ticketWindows?: TicketWindow[]; // R3 权威多轮数据（来自 scraper）
+  performances?: TourPerformance[]; // 巡演多场（best-effort）
   originalUrl: string;
   description: string;
   category: 'Idol' | 'Anime/Seiyuu' | 'J-Pop' | 'Rock/Metal' | 'VTuber' | 'Dance/Club' | 'VTuber / Vocaloid' | 'Rock/J-Pop';

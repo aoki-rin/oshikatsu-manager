@@ -55,12 +55,32 @@ function classify(label) {
 
 // ---- parser -----------------------------------------------------------------
 
+// Performances list: "YYYY.MM.DD (曜) HH:MM / HH:MM 都道府県 会場 ..." (best-effort)
+function parsePerformances(text) {
+  const re = /(\d{4})\.(\d{2})\.(\d{2})\s*[(（].[)）]\s*(\d{1,2}:\d{2})(?:\s*\/\s*(\d{1,2}:\d{2}))?\s+([^]{2,80}?)(?=(?:\d{4}\.\d{2}\.\d{2}\s*[(（])|指定席|t\s?i\s?c\s?k\s?e\s?t|【|$)/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const [, y, mo, d, t1, t2, loc] = m;
+    out.push({
+      date: `${y}-${mo}-${d}`,
+      openTime: t2 ? t1 : undefined,      // when two times, first is 開場
+      startTime: t2 || t1,                // 開演
+      locationRaw: loc.trim().slice(0, 60),
+    });
+  }
+  return out;
+}
+
 export function parseIkimonogakari(html, sourceUrl = SOURCE_URL) {
   const text = toText(html);
 
   // price
   const priceM = text.match(/指定席\s*([\d,]+)\s*円(?:\([^)]*\))?/);
   const price = priceM ? `指定席 ${priceM[1]}円` : null;
+
+  // performances (best-effort)
+  const performances = parsePerformances(text);
 
   // apply URLs from raw HTML (text loses hrefs)
   const urls = [...html.matchAll(/https?:\/\/[^"'\s)]*(?:w\.pia\.jp|t\.pia\.jp|eplus\.jp|l-tike\.com)[^"'\s)]*/g)]
@@ -106,11 +126,13 @@ export function parseIkimonogakari(html, sourceUrl = SOURCE_URL) {
 
   return {
     artist: ARTIST,
+    artistSlug: 'ikimonogakari',
     sourceUrl,
     scrapedAt: new Date().toISOString(),
     price,
     platformsSeen: [...new Set(ticketWindows.map((w) => w.platform))],
     ticketWindows,
+    performances,
     discoveredPlatformUrls: { pia: piaUrl, eplus: eplusUrl, lawson: lawsonUrl },
   };
 }

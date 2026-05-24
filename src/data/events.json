@@ -1,0 +1,265 @@
+{
+  "generatedAt": "2026-05-24T11:37:18.192Z",
+  "events": [
+    {
+      "id": "ikimonogakari-tour",
+      "title": "いきものがかり 全国ツアー 2026-2027",
+      "artistId": "art-ikimonogakari",
+      "artistName": "いきものがかり",
+      "venueId": "ven-ikimonogakari-tour",
+      "venueName": "全国ツアー（複数会場）",
+      "date": "2026-08-22",
+      "time": "18:00",
+      "region": "全国",
+      "platform": "Ticket Pia",
+      "price": "指定席 9,200円",
+      "imageUrl": "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=600&q=80",
+      "timeline": {
+        "lotteryStartDate": "2026-05-14",
+        "lotteryEndDate": "2026-05-26",
+        "paymentDeadlineDate": "2026-06-07"
+      },
+      "ticketWindows": [
+        {
+          "id": "iki-TicketPia-2",
+          "platform": "Ticket Pia",
+          "roundType": "独占2次先行",
+          "labelRaw": "チケットぴあ独占2次先行",
+          "applyStart": "2026-04-28T12:00:00+09:00",
+          "applyEnd": "2026-05-10T23:59:00+09:00",
+          "resultStart": "2026-05-16T18:00:00+09:00",
+          "resultEnd": "2026-05-20T23:59:00+09:00",
+          "sourceUrl": "https://ikimonogakari.com/tour2026-2027/",
+          "applyUrl": "https://w.pia.jp/t/ikimonogakari2026-2027-2/",
+          "scrapedAt": "2026-05-24T11:37:18.151Z"
+        },
+        {
+          "id": "iki-TicketPia-",
+          "platform": "Ticket Pia",
+          "roundType": "先行",
+          "labelRaw": "チケットぴあ先行",
+          "applyStart": "2026-05-14T12:00:00+09:00",
+          "applyEnd": "2026-05-26T23:59:00+09:00",
+          "resultStart": "2026-06-03T18:00:00+09:00",
+          "resultEnd": "2026-06-07T23:59:00+09:00",
+          "sourceUrl": "https://ikimonogakari.com/tour2026-2027/",
+          "applyUrl": "https://w.pia.jp/t/ikimonogakari2026-2027-2/",
+          "scrapedAt": "2026-05-24T11:37:18.151Z"
+        }
+      ],
+      "performances": [
+        {
+          "date": "2026-04-18",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "神奈川 厚木市文化会館 SOLD OUT キョードー横浜 045-671-9911"
+        },
+        {
+          "date": "2026-04-26",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "千葉 市川市文化会館 大ホール SOLD OUT DISK GARAGE https://info.diskgarage"
+        },
+        {
+          "date": "2026-05-23",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "岡山 岡山芸術創造劇場 ハレノワ 大劇場 (協賛: 長瀬石油) SOLD OUT キャンディープロモーション広島 082"
+        },
+        {
+          "date": "2026-05-24",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "鳥取 米子コンベンションセンター SOLD OUT キャンディープロモーション広島 082-249-8334"
+        },
+        {
+          "date": "2026-07-18",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "福岡 福岡サンパレス ホテル&ホール SOLD OUT BEA 092-712-4221 (平日12:00〜16:00)"
+        },
+        {
+          "date": "2026-07-19",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "熊本 熊本城ホール メインホール SOLD OUT BEA 092-712-4221 (平日12:00〜16:00)"
+        },
+        {
+          "date": "2026-08-01",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "長崎 ベネックス長崎ブリックホール SOLD OUT BEA 092-712-4221 (平日12:00〜16:00)"
+        },
+        {
+          "date": "2026-08-02",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "大分 iichikoグランシアタ SOLD OUT BEA 092-712-4221 (平日12:00〜16:00)"
+        },
+        {
+          "date": "2026-08-09",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "山形 やまぎん県民ホール (協賛:山形銀行) SOLD OUT GIP https://www.gip-web.co.j"
+        },
+        {
+          "date": "2026-08-29",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "滋賀 大津市民会館 大ホール SOLD OUT キョードーインフォメーション 0570-200-888 (平日12:00"
+        },
+        {
+          "date": "2026-10-03",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "島根 島根県芸術文化センターグラントワ SOLD OUT キャンディープロモーション広島 082-249-8334"
+        },
+        {
+          "date": "2026-10-04",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "広島 広島文化学園HBGホール SOLD OUT キャンディープロモーション広島 082-249-8334"
+        },
+        {
+          "date": "2026-10-10",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "香川 レクザムホール・大ホール SOLD OUT デューク高松 087-822-2520"
+        },
+        {
+          "date": "2026-10-11",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "愛媛 松山市民会館・大ホール SOLD OUT デューク松山 089-947-3535"
+        },
+        {
+          "date": "2026-10-17",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "青森 リンクステーションホール青森 SOLD OUT GIP https://www.gip-web.co.jp/t/i"
+        },
+        {
+          "date": "2026-08-22",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "山口 周南市文化会館 キャンディープロモーション広島 082-249-8334"
+        },
+        {
+          "date": "2026-11-15",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "新潟 新潟県民会館 大ホール FOB新潟 025-229-5000 (平日11:00-17:00)"
+        },
+        {
+          "date": "2027-02-07",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "宮城 仙台サンプラザホール GIP https://www.gip-web.co.jp/t/info"
+        },
+        {
+          "date": "2027-02-27",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "福井 フェニックス・プラザ エルピス 大ホール FOB金沢 076-232-2424 (平日11:00-17:00)"
+        },
+        {
+          "date": "2027-02-28",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "富山 高周波文化ホール 大ホール FOB金沢 076-232-2424 (平日11:00-17:00)"
+        },
+        {
+          "date": "2027-03-06",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "奈良 なら100年会館 大ホール キョードーインフォメーション 0570-200-888 (平日12:00-17:00)"
+        },
+        {
+          "date": "2027-03-07",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "京都 ロームシアター京都 メインホール キョードーインフォメーション 0570-200-888 (平日12:00-17:"
+        },
+        {
+          "date": "2027-03-20",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "愛知 愛知県芸術劇場 大ホール サンデーフォークプロモーション https://www.sundayfolk.com"
+        },
+        {
+          "date": "2027-03-21",
+          "openTime": "16:00",
+          "startTime": "17:00",
+          "locationRaw": "愛知 愛知県芸術劇場 大ホール サンデーフォークプロモーション https://www.sundayfolk.com"
+        },
+        {
+          "date": "2027-03-27",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "沖縄 沖縄コンベンションセンター 劇場棟 BEA http://www.bea-net.com/"
+        },
+        {
+          "date": "2027-04-03",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "石川 本多の森 北電ホール FOB金沢 076-232-2424 (平日11:00-17:00)"
+        },
+        {
+          "date": "2027-04-04",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "長野 長野市芸術館 メインホール FOB新潟 025-229-5000 (平日11:00-17:00)"
+        },
+        {
+          "date": "2027-04-10",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "東京 SGC HALL ARIAKE DISK GARAGE https://info.diskgarage.com/"
+        },
+        {
+          "date": "2027-04-24",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "栃木 栃木県総合文化センター メインホール DISK GARAGE https://info.diskgarage.co"
+        },
+        {
+          "date": "2027-04-25",
+          "openTime": "17:00",
+          "startTime": "18:00",
+          "locationRaw": "埼玉 大宮ソニックシティ 大ホール DISK GARAGE https://info.diskgarage.com/"
+        }
+      ],
+      "originalUrl": "https://ikimonogakari.com/tour2026-2027/",
+      "description": "いきものがかり の全国ツアー（全30公演）。チケット取扱: Ticket Pia。本データは公式サイトから自動取得（2026-05-24）。",
+      "category": "J-Pop",
+      "tags": [
+        "自動取得",
+        "Ticket Pia"
+      ]
+    }
+  ],
+  "artists": [
+    {
+      "id": "art-ikimonogakari",
+      "name": "いきものがかり",
+      "avatarUrl": "https://images.unsplash.com/photo-1549417229-aa67d3263c09?auto=format&fit=crop&w=150&q=80",
+      "category": "J-Pop",
+      "description": "いきものがかり の最新ツアー情報（公式サイトから自動取得）",
+      "followerCount": 0,
+      "tags": [
+        "自動取得"
+      ]
+    }
+  ],
+  "venues": [
+    {
+      "id": "ven-ikimonogakari-tour",
+      "name": "全国ツアー（複数会場）",
+      "capacity": 0,
+      "region": "全国",
+      "address": "山口 周南市文化会館 キャンディープロモーション広島 082-249-8334",
+      "accessInfo": "全30公演",
+      "imageUrl": "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=600&q=80"
+    }
+  ]
+}
