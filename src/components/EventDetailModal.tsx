@@ -1,0 +1,474 @@
+import React, { useState, useEffect } from 'react';
+import { ActivityEvent, Artist, Venue, NotificationAlert } from '../types';
+import { 
+  X, Calendar, Clock, MapPin, Tag, ExternalLink, 
+  Sparkles, Bell, Heart, Check, Building, CreditCard 
+} from 'lucide-react';
+import { downloadEventIcs, formatDisplayDate, getDaysRemaining } from '../utils';
+
+interface EventDetailModalProps {
+  event: ActivityEvent;
+  artists: Artist[];
+  venues: Venue[];
+  onClose: () => void;
+  isFavorited: boolean;
+  onToggleFavorite: (eventId: string) => void;
+  isArtistFollowed: boolean;
+  onToggleFollowArtist: (artistId: string) => void;
+  isVenueFollowed: boolean;
+  onToggleFollowVenue: (venueId: string) => void;
+  activeAlerts: NotificationAlert[];
+  onToggleAlert: (eventId: string, alertType: any, alertDate: string) => void;
+  oshiColor: string; // Hex code
+}
+
+export function EventDetailModal({
+  event,
+  artists,
+  venues,
+  onClose,
+  isFavorited,
+  onToggleFavorite,
+  isArtistFollowed,
+  onToggleFollowArtist,
+  isVenueFollowed,
+  onToggleFollowVenue,
+  activeAlerts,
+  onToggleAlert,
+  oshiColor
+}: EventDetailModalProps) {
+  const artist = artists.find(a => a.id === event.artistId);
+  const venue = venues.find(v => v.id === event.venueId);
+
+  // Reminders tracking state
+  const hasLotteryStartAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'lottery_start');
+  const hasLotteryEndAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'lottery_end');
+  const hasGeneralStartAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'general_start');
+  const hasPaymentDeadlineAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'payment_deadline');
+
+  const [activeTab, setActiveTab] = useState<'info' | 'timeline' | 'reminders'>('info');
+
+  return (
+    <div id={`modal-${event.id}`} className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end justify-center z-50">
+      
+      {/* Background click dismiss */}
+      <div className="absolute inset-0" onClick={onClose}></div>
+
+      {/* Slide-up Container Panel representing a mobile-native Bottom Sheet */}
+      <div 
+        id="bottom-sheet-container" 
+        className="w-full bg-white rounded-t-[32px] max-h-[85%] overflow-y-auto flex flex-col z-10 shadow-2xl relative transition-transform duration-300 transform translate-y-0"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {/* Styled Pinch Drag Handle Indicator */}
+        <div className="flex justify-center py-2.5">
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+        </div>
+
+        {/* Modal Close Action Header Row */}
+        <div className="px-5 pb-3 flex items-center justify-between border-b border-slate-100">
+          <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+            {event.category}
+          </span>
+          <div className="flex items-center gap-2">
+            {/* Quick Favorite Star Button */}
+            <button
+              id={`btn-fav-modal-${event.id}`}
+              onClick={() => onToggleFavorite(event.id)}
+              className="p-1 px-3 rounded-full flex items-center gap-1.5 text-xs font-medium transition-all"
+              style={{
+                color: isFavorited ? '#ffffff' : oshiColor,
+                backgroundColor: isFavorited ? oshiColor : `${oshiColor}15`
+              }}
+            >
+              <Heart className="w-3.5 h-3.5 fill-current" />
+              <span>{isFavorited ? '已添加' : '收藏入库'}</span>
+            </button>
+
+            <button 
+              id="btn-close-bottom-sheet"
+              onClick={onClose} 
+              className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Event Title Card Hero Section */}
+        <div className="px-5 py-4">
+          <span 
+            className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded text-white"
+            style={{ backgroundColor: oshiColor }}
+          >
+            {event.platform} 源端
+          </span>
+          <h2 className="text-base font-bold text-slate-900 mt-2 leading-snug">
+            {event.title}
+          </h2>
+
+          <div className="flex flex-wrap gap-2 mt-2">
+            {event.tags.map(tag => (
+              <span key={tag} className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Selection Switches (Mobile App Segmented Control Layout) */}
+        <div className="px-5">
+          <div className="p-0.5 bg-slate-100 rounded-xl flex items-center justify-between">
+            <button
+              id="btn-tab-info"
+              onClick={() => setActiveTab('info')}
+              className={`flex-1 text-center py-2 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'info' ? 'bg-white shadow text-slate-950 font-bold' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              公演信息
+            </button>
+            <button
+              id="btn-tab-timeline"
+              onClick={() => setActiveTab('timeline')}
+              className={`flex-1 text-center py-2 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'timeline' ? 'bg-white shadow text-slate-950 font-bold' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              票程Milestones
+            </button>
+            <button
+              id="btn-tab-reminders"
+              onClick={() => setActiveTab('reminders')}
+              className={`flex-1 text-center py-2 rounded-lg text-xs font-semibold  transition-all flex items-center justify-center gap-1 ${
+                activeTab === 'reminders' ? 'bg-white shadow text-slate-950 font-bold' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" style={{ color: activeTab === 'reminders' ? oshiColor : undefined }} />
+              开票开响提醒
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Container Area */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 pb-8 h-4/5 text-slate-800">
+          
+          {activeTab === 'info' && (
+            <div className="space-y-4">
+              
+              {/* Cover concert vibe image */}
+              <div className="w-full h-44 rounded-2xl overflow-hidden relative border border-slate-100">
+                <img 
+                  referrerPolicy="no-referrer"
+                  src={event.imageUrl} 
+                  alt={event.title} 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-4">
+                  <div>
+                    <span className="text-[10px] text-white/80 font-mono">公演日期与时间</span>
+                    <p className="text-white text-sm font-bold flex items-center gap-1.5 mt-0.5">
+                      <Calendar className="w-4 h-4 text-white" />
+                      {formatDisplayDate(event.date)} ({event.time})
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Venue and access list */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+                <div className="flex gap-2.5">
+                  <div className="p-1.5 h-fit bg-slate-200 rounded-lg text-slate-700">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-slate-900">演馆：{event.venueName}</h4>
+                      <button
+                        onClick={() => onToggleFollowVenue(event.venueId)}
+                        className={`text-[9px] px-2 py-0.5 rounded-full font-bold transition-all border ${
+                          isVenueFollowed 
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                            : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                        }`}
+                      >
+                        {isVenueFollowed ? '✓ 关注该馆' : '+ 关注场馆'}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">{venue?.address || '日本'}</p>
+                    <p className="text-[11px] text-slate-500 leading-tight mt-1 bg-white p-1.5 rounded border border-slate-100">
+                      🏢 容纳数: <b className="text-slate-700">{venue?.capacity?.toLocaleString()}人</b>
+                    </p>
+                    <p className="text-[11px] text-slate-400 leading-tight mt-1.5 font-mono">
+                      🚉 {venue?.accessInfo || '换乘信息'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-200/50 pt-2.5 flex gap-2.5">
+                  <div className="p-1.5 h-fit bg-slate-200 rounded-lg text-slate-700">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">参考票价/席位</h4>
+                    <p className="text-sm font-bold text-amber-600 mt-0.5">{event.price}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Performer Oshi description */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-2.5">
+                <div className="flex items-center gap-2.5">
+                  <img 
+                    referrerPolicy="no-referrer"
+                    src={artist?.avatarUrl} 
+                    alt={artist?.name} 
+                    className="w-10 h-10 rounded-full object-cover border-2 border-slate-200"
+                  />
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-slate-900">演职艺人：{event.artistName}</h4>
+                      <button
+                        onClick={() => onToggleFollowArtist(event.artistId)}
+                        className={`text-[9px] px-2 py-0.5 rounded-full font-bold transition-all border ${
+                          isArtistFollowed 
+                            ? 'bg-pink-50 text-pink-600 border-pink-200' 
+                            : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                        }`}
+                      >
+                        {isArtistFollowed ? '♥ 已在推し名单' : '+ 加入推し'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-mono">推心指数: {artist?.followerCount?.toLocaleString()} 粉丝</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed pt-1.5 border-t border-slate-200/50">
+                  {artist?.description || '暂无该艺人详细介绍。'}
+                </p>
+              </div>
+
+              {/* Narrative detailed event explanation */}
+              <div className="space-y-1">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-slate-500" />
+                  公演特色亮点简介
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed bg-slate-100/50 p-3 rounded-xl border border-slate-100">
+                  {event.description}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'timeline' && (
+            <div className="space-y-4">
+              <p className="text-[11px] text-slate-500 leading-tight">
+                🎫 日本各大票务平台购票一般分为 <b>抽选先行申请</b> 与 <b>一般先到先得发售</b>，中选后务必在 <b>付款截止日</b> 前完成结算。点击以下任意节点可单独生成 ICS 文件！
+              </p>
+
+              {/* Interactive Visual Timeline List */}
+              <div className="relative pl-6 space-y-5 border-l border-slate-200/80 ml-2 pt-2 pb-2">
+                
+                {/* 1. Lottery Start */}
+                {event.timeline.lotteryStartDate && (
+                  <div className="relative">
+                    <div className="absolute -left-8.5 top-0.5 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-sm flex items-center justify-center"></div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">抽选申请首日 (Lottery Open)</span>
+                        <button 
+                          onClick={() => downloadEventIcs(event, 'lottery_end')}
+                          className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition"
+                        >
+                          导出.ics
+                        </button>
+                      </div>
+                      <p className="text-xs font-mono text-slate-605 mt-0.5">{event.timeline.lotteryStartDate} 起</p>
+                      <p className="text-[11px] text-slate-400">先行申票渠道开启，各票仓开始接受会员或特约卡中选取。开票率高。</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Lottery End */}
+                {event.timeline.lotteryEndDate && (
+                  <div className="relative">
+                    <div className="absolute -left-8.5 top-0.5 w-5 h-5 rounded-full bg-amber-500 border-4 border-white shadow-sm flex items-center justify-center"></div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">先期抽选截止 (Lottery Deadline)</span>
+                        <button 
+                          onClick={() => downloadEventIcs(event, 'lottery_end')}
+                          className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded hover:bg-amber-100 transition"
+                        >
+                          导出.ics
+                        </button>
+                      </div>
+                      <p className="text-xs font-mono text-slate-605 mt-0.5">{event.timeline.lotteryEndDate} 23:59止</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500 text-white">重要</span>
+                        <span className="text-[11px] text-amber-700 font-medium">
+                          {getDaysRemaining(event.timeline.lotteryEndDate) > 0 
+                            ? `仅剩 ${getDaysRemaining(event.timeline.lotteryEndDate)} 天申购时间` 
+                            : '已截止申请'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Payment Deadline */}
+                {event.timeline.paymentDeadlineDate && (
+                  <div className="relative">
+                    <div className="absolute -left-8.5 top-0.5 w-5 h-5 rounded-full bg-rose-600 border-4 border-white shadow-sm flex items-center justify-center animate-pulse"></div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                          首轮中选付款截止
+                        </span>
+                        <button 
+                          onClick={() => downloadEventIcs(event, 'payment')}
+                          className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded hover:bg-rose-100 transition"
+                        >
+                          导出.ics
+                        </button>
+                      </div>
+                      <p className="text-xs font-mono text-slate-605 mt-0.5">{event.timeline.paymentDeadlineDate} 23:00</p>
+                      <p className="text-[11px] text-slate-400">中选通知书发放后的第2~3天，未按时通过便利店或国际信用卡付款将自动作废名额。</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. General Sales Start */}
+                {event.timeline.generalStartDate && (
+                  <div className="relative">
+                    <div className="absolute -left-8.5 top-0.5 w-5 h-5 rounded-full bg-emerald-500 border-4 border-white shadow-sm flex items-center justify-center"></div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">一般票先到先得发售 (General Sale)</span>
+                        <button 
+                          onClick={() => downloadEventIcs(event, 'concert')}
+                          className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded hover:bg-emerald-110 transition"
+                        >
+                          导出.ics
+                        </button>
+                      </div>
+                      <p className="text-xs font-mono text-slate-650 mt-0.5">{event.timeline.generalStartDate} 10:00</p>
+                      <p className="text-[11px] text-slate-400">公开一般发售，通常不拼运气而拼网速，瞬间秒空，请预先备好对应票仓认证环境。</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'reminders' && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 text-[11px] text-amber-800 leading-snug">
+                🚨 <b>推送原理</b>：由于Capacitor与本地机制，App将通过本设备系统闹钟与事件轮询进行后台守护。点击以下开关可直接生成/取消本地提醒器。
+              </div>
+
+              <div className="space-y-3">
+                {/* Switch 1: Lottery start reminder */}
+                {event.timeline.lotteryStartDate && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">抽选开始首日提醒</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">开始日期: {event.timeline.lotteryStartDate}</p>
+                    </div>
+                    <button
+                      id="opt-lot-start"
+                      onClick={() => onToggleAlert(event.id, 'lottery_start', event.timeline.lotteryStartDate!)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
+                        hasLotteryStartAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                      }`}
+                    >
+                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Switch 2: Lottery end reminder */}
+                {event.timeline.lotteryEndDate && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">抽选截止前24小时夺秒提醒</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">截止日期: {event.timeline.lotteryEndDate}</p>
+                    </div>
+                    <button
+                      id="opt-lot-end"
+                      onClick={() => onToggleAlert(event.id, 'lottery_end', event.timeline.lotteryEndDate!)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
+                        hasLotteryEndAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                      }`}
+                    >
+                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Switch 3: General sale alarm */}
+                {event.timeline.generalStartDate && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">一般票开抢前2小时（网速戒备）</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">开抢日期: {event.timeline.generalStartDate}</p>
+                    </div>
+                    <button
+                      id="opt-gen-start"
+                      onClick={() => onToggleAlert(event.id, 'general_start', event.timeline.generalStartDate!)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
+                        hasGeneralStartAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                      }`}
+                    >
+                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Switch 4: Payment deadline indicator */}
+                {event.timeline.paymentDeadlineDate && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">付款截止最后3小时警告（信用保护）</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">截止日期: {event.timeline.paymentDeadlineDate}</p>
+                    </div>
+                    <button
+                      id="opt-pay-dead"
+                      onClick={() => onToggleAlert(event.id, 'payment_deadline', event.timeline.paymentDeadlineDate!)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
+                        hasPaymentDeadlineAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                      }`}
+                    >
+                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* Footer Jump Action Panel */}
+        <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center gap-2.5">
+          <div className="flex-1">
+            <span className="text-[9px] text-slate-400 font-mono">Aggregation Protocol Verified</span>
+            <p className="text-[10px] text-slate-600 font-medium">已就绪抓取链接。将代理分发至移动浏览器。</p>
+          </div>
+          <a
+            id={`btn-visit-source-${event.id}`}
+            href={event.originalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition pulse-primary shadow-md"
+            style={{ backgroundColor: oshiColor }}
+          >
+            <span>直接前往 {event.platform} 购票</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+
+      </div>
+    </div>
+  );
+}

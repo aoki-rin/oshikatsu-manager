@@ -1,0 +1,6 @@
+{
+  "name": "推し活マネージャー",
+  "description": "日本全国的Live/演出/票务（Pia, e+, LivePocket等）一站式聚合管理与开票提醒工具。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
