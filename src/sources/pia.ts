@@ -83,6 +83,42 @@ export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
   return events;
 }
 
+// ---- getDetails: 详情页(ticketInformation.do)取精确受付期間 + 結果発表 ----
+const PIA_D = '(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})\\([^)]*\\)\\s*(?:昼|夜|朝|午前|午後)?\\s*(\\d{1,2}:\\d{2})';
+function piaIso(y: string, mo: string, d: string, hm: string): string {
+  const [H, M] = hm.split(':');
+  const p = (n: string) => n.padStart(2, '0');
+  return `${y}-${p(mo)}-${p(d)}T${p(H)}:${p(M)}:00+09:00`;
+}
+export interface PiaDetail { applyStart: string | null; applyEnd: string | null; resultStart: string | null }
+
+// 纯函数：从详情页 HTML 解析受付/結果発表日期
+export function parsePiaDetailDates(html: string): PiaDetail {
+  const t = html
+    .replace(/<script[\s\S]*?<\/script>/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ');
+  const a = t.match(new RegExp('受付期間\\s*' + PIA_D + '\\s*[~～〜]\\s*' + PIA_D));
+  const r = t.match(new RegExp('結果発表開始日時\\s*' + PIA_D));
+  return {
+    applyStart: a ? piaIso(a[1], a[2], a[3], a[4]) : null,
+    applyEnd: a ? piaIso(a[5], a[6], a[7], a[8]) : null,
+    resultStart: r ? piaIso(r[1], r[2], r[3], r[4]) : null,
+  };
+}
+
+export async function getPiaDetail(url: string): Promise<PiaDetail | null> {
+  try {
+    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': UA } });
+    const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+    return parsePiaDetailDates(html);
+  } catch {
+    return null;
+  }
+}
+
 export async function searchPia(artist: string): Promise<ActivityEvent[]> {
   // 1) 搜艺人拿 artistCd
   const s = await CapacitorHttp.get({
@@ -102,5 +138,22 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
     headers: { 'User-Agent': UA },
   });
   const html = typeof r.data === 'string' ? r.data : String(r.data ?? '');
-  return parsePiaRlsInfo(html, artist);
+  const events = parsePiaRlsInfo(html, artist);
+
+  // 3) getDetails 富集：对【受付中】轮次抓详情页拿精确受付締切/結果発表（限量并发控延迟）
+  const active: TicketWindow[] = [];
+  for (const e of events)
+    for (const w of e.ticketWindows)
+      if (active.length < 4 && w.applyUrl && w.statusText && /受付中/.test(w.statusText)) active.push(w);
+  await Promise.allSettled(
+    active.map(async (w) => {
+      const d = await getPiaDetail(w.applyUrl!);
+      if (d && (d.applyStart || d.applyEnd)) {
+        w.applyStart = d.applyStart;
+        w.applyEnd = d.applyEnd;
+        w.resultStart = d.resultStart;
+      }
+    })
+  );
+  return events;
 }

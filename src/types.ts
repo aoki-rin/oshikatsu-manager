@@ -1,4 +1,4 @@
-export type TicketPlatform = 'Ticket Pia' | 'eplus' | 'LivePocket' | 'Lawson Ticket';
+export type TicketPlatform = 'Ticket Pia' | 'eplus' | 'LivePocket' | 'Lawson Ticket' | 'TicketDive';
 
 export interface TicketTimeline {
   lotteryStartDate?: string; // ISO Date YYYY-MM-DD

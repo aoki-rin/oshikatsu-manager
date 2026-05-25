@@ -329,6 +329,20 @@ export const INITIAL_EVENTS: ActivityEvent[] = [
 
 export const INITIAL_EXTENSIONS: ExtensionSource[] = [
   {
+    id: 'ext-ticketdive',
+    name: 'TicketDive Source',
+    platform: 'TicketDive',
+    version: 'v1.0.0',
+    author: 'Oshikatsu-Dev',
+    isEnabled: true,
+    isInstalled: true,
+    updateAvailable: false,
+    rating: 4.7,
+    iconType: 'all',
+    description: 'TicketDive（地下/indie live 专门）实时搜索：イベント/出演者/会場名。',
+    latencyMs: 120
+  },
+  {
     id: 'ext-pia',
     name: 'Ticket Pia Source',
     platform: 'Ticket Pia',

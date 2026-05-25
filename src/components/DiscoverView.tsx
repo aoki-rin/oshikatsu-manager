@@ -263,7 +263,7 @@ export function DiscoverView({
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
-            {['Ticket Pia', 'eplus', 'LivePocket', 'Lawson Ticket'].map((platName) => {
+            {['Ticket Pia', 'eplus', 'TicketDive', 'LivePocket', 'Lawson Ticket'].map((platName) => {
               const config = extensions.find(ext => ext.platform === platName);
               const isActive = config?.isEnabled && config?.isInstalled;
               return (

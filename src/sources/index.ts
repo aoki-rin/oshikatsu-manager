@@ -3,6 +3,8 @@
 import type { ActivityEvent } from '../types';
 import { searchEplus } from './eplus';
 import { searchPia } from './pia';
+import { searchTicketDive } from './ticketdive';
+import { searchLivePocket } from './livepocket';
 
 type PlatformSearch = (artist: string) => Promise<ActivityEvent[]>;
 
@@ -10,7 +12,8 @@ type PlatformSearch = (artist: string) => Promise<ActivityEvent[]>;
 const REGISTRY: Record<string, PlatformSearch> = {
   eplus: searchEplus,
   'Ticket Pia': searchPia,
-  // 'LivePocket': searchLivePocket, // 待做(JS/XHR)
+  TicketDive: searchTicketDive,
+  LivePocket: searchLivePocket,
   // 'Lawson Ticket': searchLawson,  // 押后(反爬硬)
 };
 
