@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Smartphone, Monitor, Wifi, Signal, Battery } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 
 interface PhoneFrameProps {
   children: React.ReactNode;
@@ -11,6 +12,20 @@ export function PhoneFrame({ children, oshiColorHex }: PhoneFrameProps) {
 
   // Get current mobile system hours
   const systemTime = "14:45";
+
+  // 真机（Capacitor 原生）：去掉假手机边框/工作台条，直接全屏填满设备屏幕。
+  // 浏览器端仍保留下面的手机外壳，方便桌面预览。
+  if (Capacitor.isNativePlatform()) {
+    return (
+      <div
+        id="app-native-fullscreen"
+        className="h-screen w-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden relative"
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div id="phone-frame-root" className="min-h-screen bg-[#121212] text-slate-100 flex flex-col items-center justify-start p-2 sm:p-6 transition-colors duration-300 relative overflow-hidden">
