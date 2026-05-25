@@ -101,6 +101,11 @@ function main() {
   const venues = [];
   for (const f of files) {
     const raw = JSON.parse(readFileSync(new URL(f, OUT_DIR), 'utf8'));
+    // 只处理官网解析(spike)产物；平台搜索插件(eplus.mjs 等)是另一种 shape，跳过
+    if (!raw.artistSlug || !Array.isArray(raw.performances)) {
+      console.log(`  skip ${f}（非官网解析产物，平台插件输出由 app 内消费）`);
+      continue;
+    }
     const { artist, venue, event } = buildFromSource(raw);
     artists.push(artist);
     venues.push(venue);

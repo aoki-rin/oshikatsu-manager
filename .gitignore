@@ -9,3 +9,5 @@ coverage/
 # 爬虫生成的数据快照（可重新抓取，不入库）
 scraper/output/
 .gstack/
+# Claude agent 本地配置（保留 launch.json 入库，排除 local settings）
+.claude/settings.local.json
