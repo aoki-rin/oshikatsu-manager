@@ -20,6 +20,7 @@ export interface TicketWindow {
   applyEnd: string | null;   // 申込締切 ISO+09:00
   resultStart?: string | null; // 当落発表・入金 開始
   resultEnd?: string | null;   // 当落発表・入金 締切
+  statusText?: string;       // 平台给的状态文案（如 抽選受付中/予定枚数終了），当无精确日期时显示
   sourceUrl?: string;        // 抓取来源页（信任：可点开自验）
   applyUrl?: string | null;  // 申込链接（跳转购票）
   scrapedAt?: string;        // 抓取时间

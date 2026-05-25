@@ -2,13 +2,14 @@
 // 每个平台一个 search(artist) → ActivityEvent[]。搜索框只调【已启用】的插件。
 import type { ActivityEvent } from '../types';
 import { searchEplus } from './eplus';
+import { searchPia } from './pia';
 
 type PlatformSearch = (artist: string) => Promise<ActivityEvent[]>;
 
 // platform 名（与 ExtensionSource.platform / TicketPlatform 对齐）→ 插件 search
 const REGISTRY: Record<string, PlatformSearch> = {
   eplus: searchEplus,
-  // 'Ticket Pia': searchPia,        // 待做
+  'Ticket Pia': searchPia,
   // 'LivePocket': searchLivePocket, // 待做(JS/XHR)
   // 'Lawson Ticket': searchLawson,  // 押后(反爬硬)
 };

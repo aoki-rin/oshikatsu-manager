@@ -299,10 +299,12 @@ export function EventDetailModal({
                             <span className="text-[10px] font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: oshiColor }}>{w.platform}</span>
                             <span className="text-xs font-bold text-slate-900">{w.roundType}</span>
                           </div>
-                          <span className={`text-[9px] font-bold text-white px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                          <span className={`text-[9px] font-bold text-white px-2 py-0.5 rounded-full ${w.statusText ? (/終了|完売/.test(w.statusText) ? 'bg-slate-400' : 'bg-emerald-500') : st.cls}`}>{w.statusText || st.label}</span>
                         </div>
                         <div className="mt-2 space-y-1">
-                          <p className="text-[11px] text-slate-700"><span className="text-slate-400">受付</span> {fmtJst(w.applyStart)} → {fmtJst(w.applyEnd)}</p>
+                          {(w.applyStart || w.applyEnd) && (
+                            <p className="text-[11px] text-slate-700"><span className="text-slate-400">受付</span> {fmtJst(w.applyStart)} → {fmtJst(w.applyEnd)}</p>
+                          )}
                           {(w.resultStart || w.resultEnd) && (
                             <p className="text-[11px] text-slate-700"><span className="text-slate-400">当落・入金</span> {fmtJst(w.resultStart)} → {fmtJst(w.resultEnd)}</p>
                           )}
