@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "cap:build": "vite build && cap sync ios",
-    "cap:sync": "cap sync ios",
+    "cap:build": "vite build && cap sync",
+    "cap:sync": "cap sync",
+    "android": "cap open android",
     "ios": "cap open ios"
   },
   "dependencies": {

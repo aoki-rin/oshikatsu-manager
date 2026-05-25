@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">推し活マネージャー</string>
+    <string name="title_activity_main">推し活マネージャー</string>
+    <string name="package_name">com.aoki.oshikatsumgr</string>
+    <string name="custom_url_scheme">com.aoki.oshikatsumgr</string>
+</resources>

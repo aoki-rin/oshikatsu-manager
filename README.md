@@ -35,7 +35,7 @@
 
 ## 当前状态
 - ✅ **eplus 平台搜索插件**（`scraper/sources/eplus.mjs`）：search(艺人) → 事件 + 多轮受付窗口（プレオーダー/抽選/先着, JST）。通用、非写死。
-- ✅ **Capacitor iOS** 已搭好（`capacitor.config.ts` + `ios/`，CapacitorHttp 已启用）。
+- ✅ **Capacitor Android**（+iOS）已搭好（`capacitor.config.ts`，CapacitorHttp 已启用）；Android 用 Android Studio JBR 21 构建，真机 USB 调试。
 - ✅ R3 多轮 `ticket_window` 类型 + EventDetailModal 多轮渲染（目前读静态 `src/data/events.json`）。
 - ⬜ 把平台插件接进 app 内（搜索框 → 实时调插件，替代静态 events.json）。
 - ⬜ Pia 插件 / LivePocket(API) / Lawson(押后)。
@@ -50,7 +50,7 @@
 自带 fixture 测试（存一份响应快照断言解析结果，平台改版第一时间发现）。
 > 旧的 `scraper/parse-ikimonogakari.mjs`（按官网解析）+ `build-events.mjs` 是早期 spike，已被平台搜索插件取代，保留作参考/兜底源。
 
-## 运行
+## 运行（安卓真机为主）
 ```bash
 npm install
 
@@ -60,10 +60,16 @@ node scraper/sources/eplus.mjs いきものがかり
 # 开发预览（浏览器，注意下方 node 说明）
 npm run dev                 # http://localhost:3000
 
-# 构建 + 同步到 iOS，再用 Xcode 跑真机/模拟器
-npm run cap:build           # = vite build && cap sync ios
-npm run ios                 # cap open ios（在 Xcode 里 Run）
+# 安卓真机：构建 + 同步，再用 Android Studio 跑到手机
+npm run cap:build           # = vite build && cap sync（android + ios）
+npm run android             # cap open android（在 Android Studio 里 Run）
 ```
+**安卓真机调试**（不用模拟器）：
+1. 手机：设置 → 开发者选项 → 打开 **USB 调试**，USB 连电脑（首次弹窗点「允许」）。`adb devices` 能看到设备即可。
+2. `npm run android` 打开 Android Studio → 顶部设备下拉选你的手机 → ▶ Run。
+- **Gradle JDK 自动用 Android Studio 自带的 JBR 21**（满足 Capacitor 8），命令行的 Java 11 不影响。
+- 改完前端：`npm run cap:build` 再在 Studio Run（或配 Live Reload，见 Capacitor 文档）。
+- iOS 工程也已 scaffold（`ios/`），你用安卓可忽略；不想要可 `git rm -r ios`。
 
 ## 法务（自用诚实版）
 仅抓**公开页/接口**、**不碰登录态/账号区**、低频、自用、不重新发布。各平台 ToS 仍可能限制自动化（LivePocket 明文禁 bot），实际风险仅限自己被限流/封 IP。
