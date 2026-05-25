@@ -5,6 +5,7 @@ import {
   Sparkles, Calendar, PlusCircle, AlertCircle, RefreshCw, Star 
 } from 'lucide-react';
 import { formatDisplayDate, getDaysRemaining } from '../utils';
+import { searchAllPlatforms } from '../sources';
 
 // Geometric Balance date parsing helpers
 const getMonthAbbr = (dateStr: string) => {
@@ -57,6 +58,11 @@ export function DiscoverView({
   const [activeDeadlineFilter, setActiveDeadlineFilter] = useState<'all' | 'lottery' | 'general' | 'payment'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
 
+  // 平台实时搜索（Mihon 式）：输入艺人名 → 调启用平台插件 search
+  const [liveResults, setLiveResults] = useState<ActivityEvent[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchNote, setSearchNote] = useState('');
+
   // Custom Event Form States
   const [newTitle, setNewTitle] = useState('');
   const [newArtist, setNewArtist] = useState('');
@@ -72,6 +78,24 @@ export function DiscoverView({
   const activePlatforms = extensions
     .filter(ext => ext.isEnabled && ext.isInstalled)
     .map(ext => ext.platform);
+
+  // 调用启用平台插件实时搜索（真机经 CapacitorHttp 绕 CORS）
+  const runPlatformSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) { setLiveResults([]); setSearchNote(''); return; }
+    setSearching(true);
+    setSearchNote('搜索中…');
+    try {
+      const { events: res, perPlatform } = await searchAllPlatforms(q, activePlatforms as string[]);
+      setLiveResults(res);
+      const summary = perPlatform.map(p => (p.error ? `${p.platform}:错误` : `${p.platform}:${p.count}`)).join(' · ');
+      setSearchNote(res.length ? `平台实时 ${res.length} 条（${summary}）` : `平台无结果（${summary || '无启用插件'}）`);
+    } catch (e: any) {
+      setSearchNote('搜索失败：' + (e?.message || String(e)));
+    } finally {
+      setSearching(false);
+    }
+  };
 
   // Filter events
   const filteredEvents = events.filter(event => {
@@ -153,6 +177,10 @@ export function DiscoverView({
     setNewVenue('');
   };
 
+  // 合并：平台实时结果在前，本地静态匹配在后（去重）
+  const liveIds = new Set(liveResults.map(e => e.id));
+  const displayEvents = [...liveResults, ...filteredEvents.filter(e => !liveIds.has(e.id))];
+
   return (
     <div id="discover-view-root" className="flex-1 flex flex-col overflow-hidden">
       
@@ -191,17 +219,32 @@ export function DiscoverView({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜艺人/Livehouse/周边/标签..."
+            onKeyDown={(e) => { if (e.key === 'Enter') runPlatformSearch(); }}
+            placeholder="搜艺人名 → 实时搜各平台..."
             className="w-full text-xs pl-9 pr-8 py-2.5 bg-slate-100 rounded-xl border border-slate-200/50 focus:outline-none focus:border-slate-300 focus:bg-white transition"
           />
           {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
+            <button
+              onClick={() => { setSearchQuery(''); setLiveResults([]); setSearchNote(''); }}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
             >
               ✕
             </button>
           )}
+        </div>
+        {/* 平台实时搜索触发 + 状态 */}
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            id="btn-platform-search"
+            onClick={runPlatformSearch}
+            disabled={searching || !searchQuery.trim()}
+            className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white disabled:opacity-40 flex items-center gap-1.5 shrink-0"
+            style={{ backgroundColor: oshiColor }}
+          >
+            <Search className="w-3 h-3" />
+            {searching ? '搜索中…' : '搜平台'}
+          </button>
+          {searchNote && <span className="text-[10px] text-slate-500 truncate flex-1">{searchNote}</span>}
         </div>
       </div>
 
@@ -296,11 +339,11 @@ export function DiscoverView({
         <div className="space-y-3.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-slate-700">
-              匹配库藏 ({filteredEvents.length} 场)
+              匹配库藏 ({displayEvents.length} 场)
             </span>
           </div>
 
-          {filteredEvents.length === 0 ? (
+          {displayEvents.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl border border-slate-100 p-5 space-y-2">
               <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
               <p className="text-xs font-semibold text-slate-600">未找到对应要求的购票信息</p>
@@ -309,7 +352,7 @@ export function DiscoverView({
               </p>
             </div>
           ) : (
-            filteredEvents.map(event => {
+            displayEvents.map(event => {
               const daysLeft = event.timeline.lotteryEndDate ? getDaysRemaining(event.timeline.lotteryEndDate) : -1;
               const isFav = favorites.includes(event.id);
 
