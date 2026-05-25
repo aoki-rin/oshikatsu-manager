@@ -11,3 +11,5 @@ scraper/output/
 .gstack/
 # Claude agent 本地配置（保留 launch.json 入库，排除 local settings）
 .claude/settings.local.json
+# IDE
+.idea/
