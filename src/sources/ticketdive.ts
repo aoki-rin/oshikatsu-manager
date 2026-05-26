@@ -3,6 +3,7 @@
 // 按 イベント/出演者/会場名 搜索；indie/地下偶像为主。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
+import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -43,7 +44,7 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
       sourceUrl: url,
       applyUrl: url,
     };
-    return {
+    return normalizeLiveEvent({
       id: `td-${e.id}`,
       title: e.title || artist,
       artistId: `td-artist-${artist}`,
@@ -56,13 +57,13 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
       platform: 'TicketDive',
       price: '—',
       imageUrl: e.imageSource || PLACEHOLDER_IMG,
-      timeline: {},
+      timeline: deriveTimelineFromWindows([win]),
       ticketWindows: [win],
       originalUrl: url,
       description: `${e.title}（TicketDive 平台实时搜索）`,
       category: 'Idol',
       tags: ['TicketDive', '实时'],
-    };
+    }, 'ticketdive');
   });
 }
 
@@ -71,6 +72,8 @@ export async function searchTicketDive(artist: string): Promise<ActivityEvent[]>
     url: SEARCH_URL,
     params: { q: artist },
     headers: { 'User-Agent': UA },
+    connectTimeout: 10000,
+    readTimeout: 20000,
   });
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
   return parseTicketDiveSearch(html, artist);

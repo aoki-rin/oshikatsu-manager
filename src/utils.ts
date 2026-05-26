@@ -1,59 +1,129 @@
 import { ActivityEvent, TicketPlatform } from './types';
 
-// Convert simple YYYY-MM-DD and HH:MM to ICS-compatible UTC or Local time string
+const JST_TIME_ZONE = 'Asia/Tokyo';
+
+// Convert simple YYYY-MM-DD and HH:MM to ICS-compatible local time string
 export function formatToIcsDate(dateStr: string, timeStr: string = '00:00'): string {
   const cleanDate = dateStr.replace(/-/g, '');
   const cleanTime = timeStr.replace(/:/g, '');
   return `${cleanDate}T${cleanTime}00`;
 }
 
-// Generate an ICS string and trigger a download for a clean Japanese Live Event
-export function downloadEventIcs(event: ActivityEvent, targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert') {
-  let summary = event.title;
-  let dateToUse = event.date;
-  let timeToUse = event.time;
-  let description = `${event.description}\n\n平台 (Platform): ${event.platform}\n票价 (Price): ${event.price}\n购票链接 (Ticket Links): ${event.originalUrl}`;
+function escapeIcs(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+}
 
+function utcStamp(date: Date = new Date()): string {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+export function getJstDateKey(date: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: JST_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce<Record<string, string>>((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function jstParts(date: Date): Record<string, string> {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: JST_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date).reduce<Record<string, string>>((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+}
+
+function addMinutesAsJstIcs(dateStr: string, timeStr: string, minutes: number): string {
+  const source = new Date(`${dateStr}T${timeStr || '00:00'}:00+09:00`);
+  const shifted = new Date(source.getTime() + minutes * 60000);
+  const parts = jstParts(shifted);
+  return `${parts.year}${parts.month}${parts.day}T${parts.hour}${parts.minute}00`;
+}
+
+function targetDateFor(event: ActivityEvent, targetDateType: 'concert' | 'lottery_end' | 'payment'): { summary: string; date: string; time: string; durationMinutes: number; description: string } {
   if (targetDateType === 'lottery_end') {
-    summary = `【抽选截止】${event.title}`;
-    dateToUse = event.timeline.lotteryEndDate || event.date;
-    timeToUse = '23:59';
-    description = `💡 抽选截止提醒！请务必在此时间前完成票源平台申请。\n\n名额抓取平台: ${event.platform}\n原链接: ${event.originalUrl}`;
-  } else if (targetDateType === 'payment') {
-    summary = `【付款截止】${event.title}`;
-    dateToUse = event.timeline.paymentDeadlineDate || event.date;
-    timeToUse = '23:00';
-    description = `💰 付款倒计时提醒！抽中资格如果不及时付款将作废并可能降低账号信用度。\n\n交易平台: ${event.platform}`;
+    return {
+      summary: `【抽选截止】${event.title}`,
+      date: event.timeline.lotteryEndDate || event.date,
+      time: '23:59',
+      durationMinutes: 15,
+      description: `抽选截止提醒。平台: ${event.platform}\n链接: ${event.purchaseUrl || event.originalUrl}`,
+    };
   }
+  if (targetDateType === 'payment') {
+    return {
+      summary: `【付款截止】${event.title}`,
+      date: event.timeline.paymentDeadlineDate || event.date,
+      time: '23:00',
+      durationMinutes: 15,
+      description: `付款截止提醒。平台: ${event.platform}\n链接: ${event.purchaseUrl || event.originalUrl}`,
+    };
+  }
+  return {
+    summary: event.title,
+    date: event.date,
+    time: event.time || '18:00',
+    durationMinutes: 180,
+    description: `${event.description}\n\n平台: ${event.platform}\n票价: ${event.price}\n购票链接: ${event.purchaseUrl || event.originalUrl}`,
+  };
+}
 
-  const startFormatted = formatToIcsDate(dateToUse, timeToUse);
-  
-  // End is typically 3 hours later
-  const hour = parseInt(timeToUse.split(':')[0]) || 18;
-  const minute = parseInt(timeToUse.split(':')[1]) || 0;
-  const endHourStr = String((hour + 3) % 24).padStart(2, '0');
-  const endFormatted = formatToIcsDate(dateToUse, `${endHourStr}:${String(minute).padStart(2, '0')}`);
-
-  const icsLines = [
+export function buildEventIcs(
+  event: ActivityEvent,
+  targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert',
+  now: Date = new Date(),
+): string {
+  const target = targetDateFor(event, targetDateType);
+  const startFormatted = formatToIcsDate(target.date, target.time);
+  const endFormatted = addMinutesAsJstIcs(target.date, target.time, target.durationMinutes);
+  return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//OshikatsuManager//JA_LIVE_AGGREGATOR//EN',
     'CALSCALE:GREGORIAN',
+    'BEGIN:VTIMEZONE',
+    `TZID:${JST_TIME_ZONE}`,
+    'BEGIN:STANDARD',
+    'DTSTART:19700101T000000',
+    'TZOFFSETFROM:+0900',
+    'TZOFFSETTO:+0900',
+    'TZNAME:JST',
+    'END:STANDARD',
+    'END:VTIMEZONE',
     'BEGIN:VEVENT',
     `UID:${event.id}-${targetDateType}@oshikatsu.manager`,
-    `DTSTAMP:${formatToIcsDate('2026-05-24', '05:45')}`, // May 24, 2026 context
-    `DTSTART:${startFormatted}`,
-    `DTEND:${endFormatted}`,
-    `SUMMARY:${summary}`,
-    `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
-    `LOCATION:${event.venueName}`,
-    `URL:${event.originalUrl}`,
+    `DTSTAMP:${utcStamp(now)}`,
+    `DTSTART;TZID=${JST_TIME_ZONE}:${startFormatted}`,
+    `DTEND;TZID=${JST_TIME_ZONE}:${endFormatted}`,
+    `SUMMARY:${escapeIcs(target.summary)}`,
+    `DESCRIPTION:${escapeIcs(target.description)}`,
+    `LOCATION:${escapeIcs(event.venueName)}`,
+    `URL:${event.purchaseUrl || event.originalUrl}`,
     'STATUS:CONFIRMED',
     'END:VEVENT',
-    'END:VCALENDAR'
-  ];
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
 
-  const icsString = icsLines.join('\r\n');
+// Generate an ICS string and trigger a download for a clean Japanese Live Event
+export function downloadEventIcs(event: ActivityEvent, targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert') {
+  const icsString = buildEventIcs(event, targetDateType);
   const blob = new Blob([icsString], { type: 'text/calendar;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   
@@ -67,42 +137,52 @@ export function downloadEventIcs(event: ActivityEvent, targetDateType: 'concert'
 
 // Generate dynamic ICS Calendar comprising all followed items
 export function downloadAllFollowedEventsIcs(events: ActivityEvent[]) {
-  const icsLines = [
+  const icsLines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//OshikatsuManager//ALL_FOLLOWED_CALENDAR//EN',
-    'CALSCALE:GREGORIAN'
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VTIMEZONE',
+    `TZID:${JST_TIME_ZONE}`,
+    'BEGIN:STANDARD',
+    'DTSTART:19700101T000000',
+    'TZOFFSETFROM:+0900',
+    'TZOFFSETTO:+0900',
+    'TZNAME:JST',
+    'END:STANDARD',
+    'END:VTIMEZONE',
   ];
 
-  events.forEach((event, idx) => {
+  events.forEach((event) => {
     // 1. Live Concert Event
     const liveStart = formatToIcsDate(event.date, event.time);
-    const liveEnd = formatToIcsDate(event.date, '21:30');
+    const liveEnd = addMinutesAsJstIcs(event.date, event.time || '18:00', 180);
     icsLines.push(
       'BEGIN:VEVENT',
       `UID:${event.id}-concert-all@oshikatsu.manager`,
-      `DTSTAMP:${formatToIcsDate('2026-05-24', '05:45')}`,
-      `DTSTART:${liveStart}`,
-      `DTEND:${liveEnd}`,
-      `SUMMARY:【公演】${event.title}`,
-      `DESCRIPTION:${event.description.slice(0, 100).replace(/\n/g, '\\n')}`,
-      `LOCATION:${event.venueName}`,
-      `URL:${event.originalUrl}`,
+      `DTSTAMP:${utcStamp()}`,
+      `DTSTART;TZID=${JST_TIME_ZONE}:${liveStart}`,
+      `DTEND;TZID=${JST_TIME_ZONE}:${liveEnd}`,
+      `SUMMARY:${escapeIcs(`【公演】${event.title}`)}`,
+      `DESCRIPTION:${escapeIcs(event.description.slice(0, 100))}`,
+      `LOCATION:${escapeIcs(event.venueName)}`,
+      `URL:${event.purchaseUrl || event.originalUrl}`,
       'END:VEVENT'
     );
 
     // 2. Lottery End Alert if exists
     if (event.timeline.lotteryEndDate) {
       const lotStart = formatToIcsDate(event.timeline.lotteryEndDate, '23:59');
+      const lotEnd = addMinutesAsJstIcs(event.timeline.lotteryEndDate, '23:59', 15);
       icsLines.push(
         'BEGIN:VEVENT',
         `UID:${event.id}-lottery-all@oshikatsu.manager`,
-        `DTSTAMP:${formatToIcsDate('2026-05-24', '05:45')}`,
-        `DTSTART:${lotStart}`,
-        `DTEND:${lotStart}`,
-        `SUMMARY:【推し活】抽选截止: ${event.artistName}`,
-        `DESCRIPTION:购票平台: ${event.platform}\\n原链接: ${event.originalUrl}`,
-        `LOCATION:${event.venueName}`,
+        `DTSTAMP:${utcStamp()}`,
+        `DTSTART;TZID=${JST_TIME_ZONE}:${lotStart}`,
+        `DTEND;TZID=${JST_TIME_ZONE}:${lotEnd}`,
+        `SUMMARY:${escapeIcs(`【推し活】抽选截止: ${event.artistName}`)}`,
+        `DESCRIPTION:${escapeIcs(`购票平台: ${event.platform}\n原链接: ${event.purchaseUrl || event.originalUrl}`)}`,
+        `LOCATION:${escapeIcs(event.venueName)}`,
         'END:VEVENT'
       );
     }
@@ -129,9 +209,9 @@ export function formatDisplayDate(dateStr: string): string {
 }
 
 // Calculate days remaining to a future date
-export function getDaysRemaining(targetDateStr: string, currentDateStr: string = '2026-05-24'): number {
-  const target = new Date(targetDateStr);
-  const current = new Date(currentDateStr);
+export function getDaysRemaining(targetDateStr: string, currentDateStr: string = getJstDateKey()): number {
+  const target = new Date(`${targetDateStr}T00:00:00+09:00`);
+  const current = new Date(`${currentDateStr}T00:00:00+09:00`);
   const diffTime = target.getTime() - current.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;

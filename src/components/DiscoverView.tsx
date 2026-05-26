@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue } from '../types';
+import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
 import { 
   Search, SlidersHorizontal, MapPin, Grid, Ticket, 
   Sparkles, Calendar, PlusCircle, AlertCircle, RefreshCw, Star 
 } from 'lucide-react';
 import { formatDisplayDate, getDaysRemaining } from '../utils';
-import { searchAllPlatforms } from '../sources';
+import { openPurchaseUrl } from '../native';
+import { AppSelect } from './AppSelect';
 
 // Geometric Balance date parsing helpers
 const getMonthAbbr = (dateStr: string) => {
@@ -28,8 +29,27 @@ const getDayNumStr = (dateStr: string) => {
   }
 };
 
+const reportStatusLabel = (report: TicketSearchReport) => {
+  if (report.status === 'ok') return `${report.count} 件`;
+  if (report.status === 'empty') return '无结果';
+  if (report.status === 'blocked') return '受限';
+  if (report.status === 'skipped') return '已跳过';
+  return '搜索失败';
+};
+
+const reportDotClass = (status: TicketSearchReport['status']) => {
+  if (status === 'ok') return 'bg-emerald-500';
+  if (status === 'blocked') return 'bg-amber-500';
+  if (status === 'error') return 'bg-rose-500';
+  return 'bg-slate-300';
+};
+
 interface DiscoverViewProps {
   events: ActivityEvent[];
+  searchResults: ActivityEvent[];
+  searchReports: TicketSearchReport[];
+  recentSearches: string[];
+  searching: boolean;
   extensions: ExtensionSource[];
   artists: Artist[];
   venues: Venue[];
@@ -37,11 +57,17 @@ interface DiscoverViewProps {
   favorites: string[];
   onToggleFavorite: (eventId: string) => void;
   onAddCustomEvent: (newEvent: ActivityEvent) => void;
+  onRunPlatformSearch: (query: string, activePlatforms: string[]) => Promise<{ events: ActivityEvent[]; reports: TicketSearchReport[] }>;
+  onClearSearchResults: () => void;
   oshiColor: string; // hex
 }
 
 export function DiscoverView({
   events,
+  searchResults,
+  searchReports,
+  recentSearches,
+  searching,
   extensions,
   artists,
   venues,
@@ -49,6 +75,8 @@ export function DiscoverView({
   favorites,
   onToggleFavorite,
   onAddCustomEvent,
+  onRunPlatformSearch,
+  onClearSearchResults,
   oshiColor
 }: DiscoverViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,16 +86,13 @@ export function DiscoverView({
   const [activeDeadlineFilter, setActiveDeadlineFilter] = useState<'all' | 'lottery' | 'general' | 'payment'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // 平台实时搜索（Mihon 式）：输入艺人名 → 调启用平台插件 search
-  const [liveResults, setLiveResults] = useState<ActivityEvent[]>([]);
-  const [searching, setSearching] = useState(false);
   const [searchNote, setSearchNote] = useState('');
 
   // Custom Event Form States
   const [newTitle, setNewTitle] = useState('');
   const [newArtist, setNewArtist] = useState('');
   const [newVenue, setNewVenue] = useState('');
-  const [newDate, setNewDate] = useState('2026-06-10');
+  const [newDate, setNewDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }));
   const [newTime, setNewTime] = useState('18:00');
   const [newRegion, setNewRegion] = useState('关东 (东京)');
   const [newPlatform, setNewPlatform] = useState<TicketPlatform>('Ticket Pia');
@@ -82,23 +107,19 @@ export function DiscoverView({
   // 调用启用平台插件实时搜索（真机经 CapacitorHttp 绕 CORS）
   const runPlatformSearch = async () => {
     const q = searchQuery.trim();
-    if (!q) { setLiveResults([]); setSearchNote(''); return; }
-    setSearching(true);
+    if (!q) { onClearSearchResults(); setSearchNote(''); return; }
     setSearchNote('搜索中…');
     try {
-      const { events: res, perPlatform } = await searchAllPlatforms(q, activePlatforms as string[]);
-      setLiveResults(res);
-      const summary = perPlatform.map(p => (p.error ? `${p.platform}:错误` : `${p.platform}:${p.count}`)).join(' · ');
-      setSearchNote(res.length ? `平台实时 ${res.length} 条（${summary}）` : `平台无结果（${summary || '无启用插件'}）`);
+      const { events: res, reports } = await onRunPlatformSearch(q, activePlatforms as string[]);
+      const summary = reports.map(p => `${p.platform}:${reportStatusLabel(p)}`).join(' · ');
+      setSearchNote(res.length ? `平台实时 ${res.length} 条（${summary}）` : `没有可直接聚合的结果（${summary || '无启用插件'}）`);
     } catch (e: any) {
       setSearchNote('搜索失败：' + (e?.message || String(e)));
-    } finally {
-      setSearching(false);
     }
   };
 
   // Filter events
-  const filteredEvents = events.filter(event => {
+  const filterEvent = (event: ActivityEvent) => {
     // 1. Text Search matching title, artistName, or venueName
     const matchesSearch = 
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -132,7 +153,11 @@ export function DiscoverView({
     }
 
     return matchesSearch && matchesPlatform && matchesCategory && matchesRegion && matchesDeadline;
-  });
+  };
+  const filteredSavedEvents = events
+    .filter(event => event.sourceKind === 'manual' || favorites.includes(event.id))
+    .filter(filterEvent);
+  const filteredSearchResults = searchResults.filter(filterEvent);
 
   const handleCreateCustomEvent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,6 +191,8 @@ export function DiscoverView({
       description: '用户自主同步生成的本地推し巡演！数据保存在您本地，已建立全套开票警告时钟。',
       category: newCategory,
       tags: ['本地定制', '我推的主场', 'LiveHouse']
+      ,
+      sourceKind: 'manual'
     };
 
     onAddCustomEvent(customEvent);
@@ -177,9 +204,9 @@ export function DiscoverView({
     setNewVenue('');
   };
 
-  // 合并：平台实时结果在前，本地静态匹配在后（去重）
-  const liveIds = new Set(liveResults.map(e => e.id));
-  const displayEvents = [...liveResults, ...filteredEvents.filter(e => !liveIds.has(e.id))];
+  const displayEvents = filteredSearchResults.length > 0 || searchQuery.trim()
+    ? filteredSearchResults
+    : filteredSavedEvents;
 
   return (
     <div id="discover-view-root" className="flex-1 flex flex-col overflow-hidden">
@@ -217,15 +244,15 @@ export function DiscoverView({
           <input
             id="search-input-field"
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') runPlatformSearch(); }}
             placeholder="搜艺人名 → 实时搜各平台..."
             className="w-full text-xs pl-9 pr-8 py-2.5 bg-slate-100 rounded-xl border border-slate-200/50 focus:outline-none focus:border-slate-300 focus:bg-white transition"
           />
           {searchQuery && (
             <button
-              onClick={() => { setSearchQuery(''); setLiveResults([]); setSearchNote(''); }}
+              onClick={() => { setSearchQuery(''); onClearSearchResults(); setSearchNote(''); }}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
             >
               ✕
@@ -287,6 +314,43 @@ export function DiscoverView({
           </div>
         </div>
 
+        {searchReports.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase">
+                平台搜索报告
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {searchReports.map((report) => (
+                <div key={report.platform} className="bg-white border border-slate-100 rounded-xl p-2.5 flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${reportDotClass(report.status)}`}></span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold text-slate-800">
+                      {report.platform} · {reportStatusLabel(report)}
+                      {report.runtime && <span className="text-[9px] text-slate-400 font-mono"> · {report.runtime}</span>}
+                    </p>
+                    {(report.parserVersion || typeof report.elapsedMs === 'number') && (
+                      <p className="text-[9px] text-slate-400 font-mono truncate">
+                        {report.parserVersion || 'parser'}{typeof report.elapsedMs === 'number' ? ` · ${report.elapsedMs}ms` : ''}
+                      </p>
+                    )}
+                    {report.error && <p className="text-[10px] text-rose-500 truncate">{report.error}</p>}
+                  </div>
+                  {report.handoffUrl && (
+                    <button
+                      onClick={() => openPurchaseUrl(report.handoffUrl!)}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600 shrink-0"
+                    >
+                      {report.platform === 'Lawson Ticket' ? '打开ローチケ' : '打开平台'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Categories Chips */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
           {['All', 'J-Pop', 'Idol', 'VTuber', 'Anime/Seiyuu', 'Rock/Metal'].map((cat) => (
@@ -310,28 +374,34 @@ export function DiscoverView({
         {/* Advanced quick toggle filters: Region & Status */}
         <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200/30">
           <div>
-            <select
+            <AppSelect
               value={selectedRegion}
-              onChange={(e) => setSelectedRegion(e.target.value)}
-              className="w-full text-[11px] font-semibold bg-white border border-slate-200 p-1.5 rounded-lg focus:outline-none"
-            >
-              <option value="All">📍 日本全地区</option>
-              <option value="东京">东京 (Kanto)</option>
-              <option value="大阪">大阪 (Kansai)</option>
-              <option value="埼玉">埼玉 (Saitama)</option>
-            </select>
+              onChange={setSelectedRegion}
+              oshiColor={oshiColor}
+              title="选择地区"
+              ariaLabel="地区筛选"
+              options={[
+                { value: 'All', label: '📍 日本全地区' },
+                { value: '东京', label: '东京 (Kanto)' },
+                { value: '大阪', label: '大阪 (Kansai)' },
+                { value: '埼玉', label: '埼玉 (Saitama)' },
+              ]}
+            />
           </div>
           <div>
-            <select
+            <AppSelect
               value={activeDeadlineFilter}
-              onChange={(e: any) => setActiveDeadlineFilter(e.target.value)}
-              className="w-full text-[11px] font-semibold bg-white border border-slate-200 p-1.5 rounded-lg focus:outline-none"
-            >
-              <option value="all">⏰ 所有开票阶段</option>
-              <option value="lottery">正在抽选之中</option>
-              <option value="general">一般发售预告</option>
-              <option value="payment">付款倒计时告急</option>
-            </select>
+              onChange={setActiveDeadlineFilter}
+              oshiColor={oshiColor}
+              title="开票阶段"
+              ariaLabel="开票阶段筛选"
+              options={[
+                { value: 'all', label: '⏰ 所有开票阶段' },
+                { value: 'lottery', label: '正在抽选之中' },
+                { value: 'general', label: '一般发售预告' },
+                { value: 'payment', label: '付款倒计时告急' },
+              ]}
+            />
           </div>
         </div>
 
@@ -339,7 +409,7 @@ export function DiscoverView({
         <div className="space-y-3.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-slate-700">
-              匹配库藏 ({displayEvents.length} 场)
+              {searchResults.length > 0 ? '实时搜索结果' : '已保存票务'} ({displayEvents.length} 场)
             </span>
           </div>
 
@@ -348,8 +418,21 @@ export function DiscoverView({
               <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
               <p className="text-xs font-semibold text-slate-600">未找到对应要求的购票信息</p>
               <p className="text-[10px] text-slate-400">
-                请检查搜索字词词条，或前往 <b>Tachiyomi 插件页</b> 开启并更新您所需的相关平台爬虫插件源。
+                输入艺人名后点击“搜平台”。若某个平台失败，可在平台搜索报告里打开对应搜索页继续购票。
               </p>
+              {recentSearches.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-1.5 pt-2">
+                  {recentSearches.map((term) => (
+                    <button
+                      key={term}
+                      onClick={() => setSearchQuery(term)}
+                      className="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-500 font-bold"
+                    >
+                      {term}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             displayEvents.map(event => {
@@ -537,30 +620,38 @@ export function DiscoverView({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase">地区</label>
-                  <select
+                  <AppSelect
                     id="form-region"
                     value={newRegion}
-                    onChange={(e) => setNewRegion(e.target.value)}
-                    className="w-full border border-slate-200 p-1.5 rounded-lg mt-1"
-                  >
-                    <option value="关东 (东京)">东京 (Kanto)</option>
-                    <option value="关西 (大阪)">大阪 (Kansai)</option>
-                    <option value="中部 (名古屋)">名古屋 (Chubu)</option>
-                  </select>
+                    onChange={setNewRegion}
+                    oshiColor={oshiColor}
+                    title="选择地区"
+                    ariaLabel="地区"
+                    className="w-full bg-white text-sm border border-slate-200 p-1.5 rounded-lg mt-1"
+                    options={[
+                      { value: '关东 (东京)', label: '东京 (Kanto)' },
+                      { value: '关西 (大阪)', label: '大阪 (Kansai)' },
+                      { value: '中部 (名古屋)', label: '名古屋 (Chubu)' },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase">抓取源分类</label>
-                  <select
+                  <AppSelect
                     id="form-platform"
                     value={newPlatform}
-                    onChange={(e: any) => setNewPlatform(e.target.value)}
-                    className="w-full border border-slate-200 p-1.5 rounded-lg mt-1"
-                  >
-                    <option value="Ticket Pia">Ticket Pia</option>
-                    <option value="eplus">eplus</option>
-                    <option value="LivePocket">LivePocket</option>
-                    <option value="Lawson Ticket">Lawson Ticket</option>
-                  </select>
+                    onChange={setNewPlatform}
+                    oshiColor={oshiColor}
+                    title="抓取源分类"
+                    ariaLabel="抓取源分类"
+                    className="w-full bg-white text-sm border border-slate-200 p-1.5 rounded-lg mt-1"
+                    options={[
+                      { value: 'Ticket Pia', label: 'Ticket Pia' },
+                      { value: 'eplus', label: 'eplus' },
+                      { value: 'LivePocket', label: 'LivePocket' },
+                      { value: 'Lawson Ticket', label: 'Lawson Ticket' },
+                    ]}
+                  />
                 </div>
               </div>
 

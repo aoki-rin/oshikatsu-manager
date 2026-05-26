@@ -56,7 +56,7 @@ export function ExtensionView({
             </div>
             <div>
               <h1 className="text-base font-bold font-display text-slate-900">数据源插件</h1>
-              <p className="text-[10px] text-slate-400">类似Tachiyomi形式的外部票源拓展库</p>
+              <p className="text-[10px] text-slate-400">Mihon 式票源规则与代理状态管理</p>
             </div>
           </div>
 
@@ -90,13 +90,13 @@ export function ExtensionView({
         {/* Concept Introduction banner */}
         <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-4 space-y-2 border border-slate-800 shadow-lg">
           <p className="text-[11px] font-mono text-slate-400 uppercase tracking-widest">插件机制说明</p>
-          <h3 className="text-xs font-bold leading-snug">为什么是类似 Tachiyomi 的拓展组件？</h3>
+          <h3 className="text-xs font-bold leading-snug">为什么是 Mihon 式票源组件？</h3>
           <p className="text-[10.5px] text-slate-300 leading-normal">
-            日本各票仓（Pia、eplus、LivePocket）的防机器反爬和规则异动极为频繁。通过<b>插件模式</b>，各平台网页结构规则被独立维护：
+            各票务平台的页面结构会变动。App 通过统一规则接口和轻量代理运行时，把搜索、解析、失败报告与官方跳转分开维护：
           </p>
           <ul className="text-[10px] text-slate-400 space-y-1 list-disc pl-4 leading-normal">
-            <li>单独升级指定平台抓取脚本无需更新整包App。</li>
-            <li>用户可以按自己关注的组合，开启对应票务插件，精简内存与网络负荷。</li>
+            <li>每个平台有独立解析版本和启用状态。</li>
+            <li>遇到反爬或结构异常时显示原因，并提供官方搜索跳转。</li>
           </ul>
         </div>
 
@@ -133,7 +133,7 @@ export function ExtensionView({
                   <div className="flex items-center gap-3 mt-3">
                     <span className="text-[9px] text-slate-400 flex items-center gap-1 font-mono">
                       <Server className="w-3 h-3" />
-                      延迟: {ext.isEnabled ? <b className="text-emerald-500">{ext.latencyMs}ms</b> : <span className="text-slate-300">未启用</span>}
+                      状态: {ext.isEnabled ? <b className="text-emerald-500">启用</b> : <span className="text-slate-300">未启用</span>}
                     </span>
                     <span className="text-[9px] text-slate-400 font-mono">作者: {ext.author}</span>
                   </div>

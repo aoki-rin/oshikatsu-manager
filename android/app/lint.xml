@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <issue id="IconDipSize" severity="ignore" />
+    <issue id="IconDuplicatesConfig" severity="ignore" />
+    <issue id="IconLocation" severity="ignore" />
+</lint>

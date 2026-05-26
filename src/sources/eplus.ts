@@ -3,6 +3,7 @@
 // 解析逻辑与 scraper/sources/eplus.mjs 同源：eplus 搜索页内嵌 application/json，data.record_list 直接含多轮受付。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
+import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const SEARCH_URL = 'https://eplus.jp/sf/search';
 const DESKTOP_UA =
@@ -76,34 +77,28 @@ export function parseEplusSearch(html: string, query: string): EplusEvent[] {
 
 // 把 eplus 事件映射成 app 的 ActivityEvent（含派生 timeline 给卡片倒计时用）
 function toActivityEvent(e: EplusEvent, query: string): ActivityEvent {
-  const now = Date.now();
-  const open = e.ticketWindows
-    .filter((w) => w.applyEnd && new Date(w.applyEnd).getTime() >= now)
-    .sort((a, b) => (a.applyEnd! < b.applyEnd! ? -1 : 1));
-  const next = open[0] || e.ticketWindows[0];
-  const dp = (iso?: string | null) => (iso ? iso.slice(0, 10) : undefined);
-  return {
+  const fallbackDate = e.ticketWindows.find((window) => window.applyEnd)?.applyEnd?.slice(0, 10) || '';
+  const base: ActivityEvent = {
     id: e.eventId,
     title: e.title,
     artistId: `eplus-artist-${query}`,
     artistName: query,
     venueId: `eplus-venue-${e.eventId}`,
     venueName: e.venue,
-    date: e.date || dp(next?.applyEnd) || '',
+    date: e.date || fallbackDate,
     time: e.time || '18:00',
     region: e.prefecture,
     platform: 'eplus',
     price: '—',
     imageUrl: PLACEHOLDER_IMG,
-    timeline: next
-      ? { lotteryStartDate: dp(next.applyStart), lotteryEndDate: dp(next.applyEnd), paymentDeadlineDate: dp(next.resultEnd) }
-      : {},
+    timeline: deriveTimelineFromWindows(e.ticketWindows),
     ticketWindows: e.ticketWindows,
     originalUrl: e.detailUrl || 'https://eplus.jp/',
     description: `${e.title}（eplus 平台实时搜索结果）`,
     category: 'J-Pop',
     tags: ['eplus', '实时'],
   };
+  return normalizeLiveEvent(base, 'eplus');
 }
 
 // 入口：search(artist) → ActivityEvent[]
@@ -112,6 +107,8 @@ export async function searchEplus(artist: string): Promise<ActivityEvent[]> {
     url: SEARCH_URL,
     params: { keyword: artist },
     headers: { 'User-Agent': DESKTOP_UA },
+    connectTimeout: 10000,
+    readTimeout: 20000,
   });
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
   return parseEplusSearch(html, artist).map((e) => toActivityEvent(e, artist));

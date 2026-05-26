@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityEvent, Artist, Venue, NotificationAlert } from '../types';
+import { ActivityEvent, Artist, Venue, NotificationAlert, ReminderTarget } from '../types';
 import { 
   X, Calendar, Clock, MapPin, Tag, ExternalLink, 
   Sparkles, Bell, Heart, Check, Building, CreditCard 
 } from 'lucide-react';
 import { downloadEventIcs, formatDisplayDate, getDaysRemaining } from '../utils';
+import { buildReminderTargets } from '../notifications';
+import { openPurchaseUrl } from '../native';
 
 // Display an ISO (+09:00) instant in JST regardless of the viewer's timezone (R2 principle).
 function fmtJst(iso?: string | null): string {
@@ -39,7 +41,7 @@ interface EventDetailModalProps {
   isVenueFollowed: boolean;
   onToggleFollowVenue: (venueId: string) => void;
   activeAlerts: NotificationAlert[];
-  onToggleAlert: (eventId: string, alertType: any, alertDate: string) => void;
+  onToggleAlert: (target: ReminderTarget) => void;
   oshiColor: string; // Hex code
 }
 
@@ -61,11 +63,8 @@ export function EventDetailModal({
   const artist = artists.find(a => a.id === event.artistId);
   const venue = venues.find(v => v.id === event.venueId);
 
-  // Reminders tracking state
-  const hasLotteryStartAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'lottery_start');
-  const hasLotteryEndAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'lottery_end');
-  const hasGeneralStartAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'general_start');
-  const hasPaymentDeadlineAlert = activeAlerts.some(a => a.eventId === event.id && a.type === 'payment_deadline');
+  const reminderTargets = buildReminderTargets(event);
+  const isReminderActive = (target: ReminderTarget) => activeAlerts.some(a => a.notificationId === target.notificationId);
 
   const [activeTab, setActiveTab] = useState<'info' | 'timeline' | 'reminders'>('info');
 
@@ -314,10 +313,10 @@ export function EventDetailModal({
                         </div>
                         <div className="mt-2.5 flex items-center gap-2">
                           {w.applyUrl && (
-                            <a href={w.applyUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: oshiColor }}>申込はこちら ↗</a>
+                            <button onClick={() => openPurchaseUrl(w.applyUrl!)} className="text-[10px] font-bold text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: oshiColor }}>申込はこちら ↗</button>
                           )}
                           {w.sourceUrl && (
-                            <a href={w.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-slate-500 underline">来源核对</a>
+                            <button onClick={() => openPurchaseUrl(w.sourceUrl!)} className="text-[10px] text-slate-500 underline">来源核对</button>
                           )}
                         </div>
                       </div>
@@ -433,85 +432,35 @@ export function EventDetailModal({
           {activeTab === 'reminders' && (
             <div className="space-y-4">
               <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 text-[11px] text-amber-800 leading-snug">
-                🚨 <b>推送原理</b>：由于Capacitor与本地机制，App将通过本设备系统闹钟与事件轮询进行后台守护。点击以下开关可直接生成/取消本地提醒器。
+                🚨 <b>本地通知</b>：这些开关会向 Android/iOS 系统登记本地通知。若系统权限关闭，App 会提示你打开通知权限。
               </div>
 
               <div className="space-y-3">
-                {/* Switch 1: Lottery start reminder */}
-                {event.timeline.lotteryStartDate && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">抽选开始首日提醒</h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5">开始日期: {event.timeline.lotteryStartDate}</p>
-                    </div>
-                    <button
-                      id="opt-lot-start"
-                      onClick={() => onToggleAlert(event.id, 'lottery_start', event.timeline.lotteryStartDate!)}
-                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
-                        hasLotteryStartAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
-                      }`}
-                    >
-                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
-                    </button>
+                {reminderTargets.length === 0 ? (
+                  <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-600">这个结果还没有可提醒的票务时间</p>
+                    <p className="text-[10px] text-slate-400 mt-1">请打开来源核对；平台补全受付期間后再次搜索会自动更新。</p>
                   </div>
-                )}
-
-                {/* Switch 2: Lottery end reminder */}
-                {event.timeline.lotteryEndDate && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">抽选截止前24小时夺秒提醒</h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5">截止日期: {event.timeline.lotteryEndDate}</p>
+                ) : reminderTargets.map((target) => {
+                  const active = isReminderActive(target);
+                  return (
+                    <div key={`${target.windowId}-${target.type}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                      <div className="min-w-0 pr-3">
+                        <h4 className="text-xs font-bold text-slate-800 truncate">{target.label}</h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{fmtJst(target.scheduleAt)}</p>
+                      </div>
+                      <button
+                        id={`opt-${target.notificationId}`}
+                        onClick={() => onToggleAlert(target)}
+                        className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all shrink-0 ${
+                          active ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                        }`}
+                      >
+                        <div className="w-4 h-4 rounded-full bg-white shadow"></div>
+                      </button>
                     </div>
-                    <button
-                      id="opt-lot-end"
-                      onClick={() => onToggleAlert(event.id, 'lottery_end', event.timeline.lotteryEndDate!)}
-                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
-                        hasLotteryEndAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
-                      }`}
-                    >
-                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
-                    </button>
-                  </div>
-                )}
-
-                {/* Switch 3: General sale alarm */}
-                {event.timeline.generalStartDate && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">一般票开抢前2小时（网速戒备）</h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5">开抢日期: {event.timeline.generalStartDate}</p>
-                    </div>
-                    <button
-                      id="opt-gen-start"
-                      onClick={() => onToggleAlert(event.id, 'general_start', event.timeline.generalStartDate!)}
-                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
-                        hasGeneralStartAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
-                      }`}
-                    >
-                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
-                    </button>
-                  </div>
-                )}
-
-                {/* Switch 4: Payment deadline indicator */}
-                {event.timeline.paymentDeadlineDate && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">付款截止最后3小时警告（信用保护）</h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5">截止日期: {event.timeline.paymentDeadlineDate}</p>
-                    </div>
-                    <button
-                      id="opt-pay-dead"
-                      onClick={() => onToggleAlert(event.id, 'payment_deadline', event.timeline.paymentDeadlineDate!)}
-                      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all ${
-                        hasPaymentDeadlineAlert ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
-                      }`}
-                    >
-                      <div className="w-4 h-4 rounded-full bg-white shadow"></div>
-                    </button>
-                  </div>
-                )}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -524,17 +473,15 @@ export function EventDetailModal({
             <span className="text-[9px] text-slate-400 font-mono">Aggregation Protocol Verified</span>
             <p className="text-[10px] text-slate-600 font-medium">已就绪抓取链接。将代理分发至移动浏览器。</p>
           </div>
-          <a
+          <button
             id={`btn-visit-source-${event.id}`}
-            href={event.originalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={() => openPurchaseUrl(event.purchaseUrl || event.originalUrl)}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition pulse-primary shadow-md"
             style={{ backgroundColor: oshiColor }}
           >
             <span>直接前往 {event.platform} 购票</span>
             <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          </button>
         </div>
 
       </div>

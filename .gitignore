@@ -4,6 +4,7 @@ dist/
 coverage/
 .DS_Store
 *.log
+server.js
 .env*
 !.env.example
 # 爬虫生成的数据快照（可重新抓取，不入库）

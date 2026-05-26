@@ -367,7 +367,7 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     updateAvailable: false,
     rating: 4.9,
     iconType: 'eplus',
-    description: 'eplus 核心引擎扩展。具有极强的防机器人抓取逆抗性，能够稳定获取抽选中活动与先行购票入口。',
+    description: 'eplus 代理规则。读取公开搜索结果与受付窗口，失败时返回平台报告和官方跳转。',
     latencyMs: 198
   },
   {
@@ -390,12 +390,12 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     platform: 'Lawson Ticket',
     version: 'v2.0.0',
     author: 'Oshikatsu-Dev',
-    isEnabled: false,
+    isEnabled: true,
     isInstalled: true,
     updateAvailable: false,
     rating: 4.5,
     iconType: 'lawson',
-    description: '罗森票务专门接口。抓取联名便利店限量特惠票以及大型坂道偶像组合的专用活动排期。',
+    description: 'ローチケ代理规则。优先解析官方搜索页；遇到反爬或结构变化时明确提示并提供官方搜索跳转。',
     latencyMs: 121
   },
   {
