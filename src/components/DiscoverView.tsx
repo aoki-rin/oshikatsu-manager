@@ -44,6 +44,11 @@ const reportDotClass = (status: TicketSearchReport['status']) => {
   return 'bg-slate-300';
 };
 
+// 真实抓取的 region 是日文（如「東京都」「（東京都）」），跟旧的简体「东京」码点不同永不匹配。
+// 用日文都道府县关键词做归一(NFKC)子串匹配，且只展示当前结果里实际出现的地区。
+const JP_REGION_PRESETS = ['東京', '大阪', '愛知', '神奈川', '埼玉', '千葉', '北海道', '福岡', '兵庫', '京都', '宮城', '広島', '沖縄'];
+const normalizeRegion = (value: string) => (value || '').normalize('NFKC');
+
 interface DiscoverViewProps {
   events: ActivityEvent[];
   searchResults: ActivityEvent[];
@@ -81,7 +86,6 @@ export function DiscoverView({
 }: DiscoverViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState<TicketPlatform | 'All'>('All');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedRegion, setSelectedRegion] = useState<string>('All');
   const [activeDeadlineFilter, setActiveDeadlineFilter] = useState<'all' | 'lottery' | 'general' | 'payment'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -134,11 +138,8 @@ export function DiscoverView({
     // 3. Platform filter
     const matchesPlatform = selectedPlatform === 'All' || event.platform === selectedPlatform;
 
-    // 4. Category filter
-    const matchesCategory = selectedCategory === 'All' || event.category === selectedCategory;
-
-    // 5. Region filter
-    const matchesRegion = selectedRegion === 'All' || event.region.includes(selectedRegion);
+    // 4. Region filter (NFKC-normalized substring; real region is Japanese kanji)
+    const matchesRegion = selectedRegion === 'All' || normalizeRegion(event.region).includes(selectedRegion);
 
     // 6. Deadline specific filter
     let matchesDeadline = true;
@@ -152,8 +153,17 @@ export function DiscoverView({
       matchesDeadline = daysLeft >= 0 && daysLeft <= 2; // closing critical
     }
 
-    return matchesSearch && matchesPlatform && matchesCategory && matchesRegion && matchesDeadline;
+    return matchesSearch && matchesPlatform && matchesRegion && matchesDeadline;
   };
+
+  // 地区下拉：只列当前结果里实际出现的日文都道府县（无则仅「全部」）。
+  const presentRegions = JP_REGION_PRESETS.filter(pref =>
+    events.some(event => normalizeRegion(event.region).includes(pref)),
+  );
+  const regionOptions = [
+    { value: 'All', label: '📍 日本全地区' },
+    ...presentRegions.map(pref => ({ value: pref, label: pref })),
+  ];
   const filteredSavedEvents = events
     .filter(event => event.sourceKind === 'manual' || favorites.includes(event.id))
     .filter(filterEvent);
@@ -351,26 +361,6 @@ export function DiscoverView({
           </div>
         )}
 
-        {/* Categories Chips */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-          {['All', 'J-Pop', 'Idol', 'VTuber', 'Anime/Seiyuu', 'Rock/Metal'].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-full text-[10px] font-bold shrink-0 transition-all ${
-                selectedCategory === cat
-                  ? 'text-white'
-                  : 'bg-slate-200/65 text-slate-650 hover:bg-slate-200'
-              }`}
-              style={{
-                backgroundColor: selectedCategory === cat ? oshiColor : undefined
-              }}
-            >
-              {cat === 'All' ? '✨ 全部品类' : cat}
-            </button>
-          ))}
-        </div>
-
         {/* Advanced quick toggle filters: Region & Status */}
         <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200/30">
           <div>
@@ -380,12 +370,7 @@ export function DiscoverView({
               oshiColor={oshiColor}
               title="选择地区"
               ariaLabel="地区筛选"
-              options={[
-                { value: 'All', label: '📍 日本全地区' },
-                { value: '东京', label: '东京 (Kanto)' },
-                { value: '大阪', label: '大阪 (Kansai)' },
-                { value: '埼玉', label: '埼玉 (Saitama)' },
-              ]}
+              options={regionOptions}
             />
           </div>
           <div>
