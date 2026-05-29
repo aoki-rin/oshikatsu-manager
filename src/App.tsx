@@ -19,11 +19,12 @@ import {
 } from 'lucide-react';
 import { searchAllPlatforms } from './sources';
 import { dedupeEvents } from './sources/shared';
+import { aggregateConcerts } from './sources/aggregate';
 import { cancelReminderTarget, scheduleReminderTarget } from './notifications';
 
 export type OShiColorId = 'pink' | 'blue' | 'green' | 'yellow' | 'purple' | 'red' | 'black' | 'orange';
 
-const LIVE_ID_PREFIXES = ['eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
+const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
 
 function loadPersistedEvents(raw: string | null): ActivityEvent[] {
   if (!raw) return [];
@@ -84,7 +85,8 @@ export default function App() {
     // 2. Events & Plugins. User-visible event content starts empty and is filled by
     // real platform searches or explicit manual entries only.
     const storedEvents = localStorage.getItem('oshikatsu_events');
-    const loadedEvents = loadPersistedEvents(storedEvents);
+    // Aggregate on load so events persisted before cross-platform merge migrate cleanly.
+    const loadedEvents = aggregateConcerts(loadPersistedEvents(storedEvents));
     setEvents(loadedEvents);
     const validEventIds = new Set(loadedEvents.map(event => event.id));
 
@@ -248,7 +250,9 @@ export default function App() {
       const result = await searchAllPlatforms(q, activePlatforms);
       const ids = result.events.map(event => event.id);
       const recent = [q, ...recentSearches.filter(item => item !== q)].slice(0, 8);
-      const merged = dedupeEvents([...result.events, ...events]);
+      // Re-aggregate the combined set so freshly-fetched results merge with persisted
+      // events of the same concert (stable agg- ids keep searchResultIds valid).
+      const merged = aggregateConcerts(dedupeEvents([...result.events, ...events]));
       setEvents(merged);
       setSearchResultIds(ids);
       setSearchReports(result.reports);

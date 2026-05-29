@@ -7,6 +7,7 @@ import { searchTicketDive } from './ticketdive';
 import { searchLivePocket } from './livepocket';
 import { searchLawson } from './lawson';
 import { buildPlatformSearchUrl, dedupeEvents, PLATFORM_SEARCH_TIMEOUT_MS, withPlatformTimeout, type TicketSource } from './shared';
+import { aggregateConcerts } from './aggregate';
 import { searchWithProxyFallback } from './proxy';
 
 // platform 名（与 ExtensionSource.platform / TicketPlatform 对齐）→ 插件 search
@@ -81,10 +82,13 @@ export async function searchClientPlatforms(query: string, activePlatforms: stri
 }
 
 // 默认入口：代理优先，代理不可达或未配置时退回 CapacitorHttp 直连。
+// 各平台原始结果合并后，做跨平台「同一场演出」聚合（同艺人+日期+会场 → 一张卡，多平台窗口）。
+// 注意：reports 仍是各平台「原始」命中数（聚合只影响展示用的 events 列表）。
 export async function searchAllPlatforms(query: string, activePlatforms: string[]): Promise<TicketSearchResult & AggregateResult> {
   const result = await searchWithProxyFallback(query, activePlatforms, searchClientPlatforms);
   return {
     ...result,
+    events: aggregateConcerts(result.events),
     perPlatform: result.reports.map((report) => ({
       platform: report.platform,
       count: report.count,

@@ -7,6 +7,7 @@ import {
 import { downloadEventIcs, formatDisplayDate, getDaysRemaining } from '../utils';
 import { buildReminderTargets } from '../notifications';
 import { openPurchaseUrl } from '../native';
+import { eventPlatforms } from '../sources/aggregate';
 
 // Display an ISO (+09:00) instant in JST regardless of the viewer's timezone (R2 principle).
 function fmtJst(iso?: string | null): string {
@@ -117,12 +118,18 @@ export function EventDetailModal({
 
         {/* Event Title Card Hero Section */}
         <div className="px-5 py-4">
-          <span 
-            className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded text-white"
-            style={{ backgroundColor: oshiColor }}
-          >
-            {event.platform} 源端
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {eventPlatforms(event).map((p) => (
+              <span
+                key={p}
+                className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded text-white"
+                style={{ backgroundColor: oshiColor }}
+              >
+                {p}
+              </span>
+            ))}
+            <span className="text-[10px] text-slate-400">源端</span>
+          </div>
           <h2 className="text-base font-bold text-slate-900 mt-2 leading-snug">
             {event.title}
           </h2>

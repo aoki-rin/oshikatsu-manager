@@ -3,6 +3,7 @@ import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSe
 import { Search, Sparkles, PlusCircle, AlertCircle, Star } from 'lucide-react';
 import { formatDisplayDate, getDaysRemaining } from '../utils';
 import { openPurchaseUrl } from '../native';
+import { eventPlatforms } from '../sources/aggregate';
 import { AppSelect } from './AppSelect';
 
 // Geometric Balance date parsing helpers
@@ -132,8 +133,8 @@ export function DiscoverView({
     const isExtensionActive = activePlatforms.includes(event.platform) || activePlatforms.includes('All');
     if (!isExtensionActive) return false;
 
-    // 3. Platform filter
-    const matchesPlatform = selectedPlatform === 'All' || event.platform === selectedPlatform;
+    // 3. Platform filter (merged events expose every platform present in their windows)
+    const matchesPlatform = selectedPlatform === 'All' || eventPlatforms(event).includes(selectedPlatform);
 
     // 4. Region filter (NFKC-normalized substring; real region is Japanese kanji)
     const matchesRegion = selectedRegion === 'All' || normalizeRegion(event.region).includes(selectedRegion);
@@ -451,18 +452,21 @@ export function DiscoverView({
                         <span>📍 {event.venueName}</span>
                       </p>
                       
-                      {/* Sub-platform badge layout */}
-                      <div className="flex gap-1.5 pt-0.5">
-                        <span 
-                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-md font-mono border"
-                          style={{ 
-                            color: oshiColor, 
-                            borderColor: `${oshiColor}30`,
-                            backgroundColor: `${oshiColor}08`
-                          }}
-                        >
-                          {event.platform}
-                        </span>
+                      {/* Sub-platform badges (one per platform offering this concert) */}
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {eventPlatforms(event).map((p) => (
+                          <span
+                            key={p}
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded-md font-mono border"
+                            style={{
+                              color: oshiColor,
+                              borderColor: `${oshiColor}30`,
+                              backgroundColor: `${oshiColor}08`
+                            }}
+                          >
+                            {p}
+                          </span>
+                        ))}
                         <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-medium">
                           {event.category}
                         </span>
