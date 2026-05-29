@@ -1,6 +1,5 @@
-import type { TicketWindow } from '../../src/types';
 import { buildPlatformSearchUrl, deriveTimelineFromWindows, normalizeLiveEvent } from '../../src/sources/shared';
-import { parsePiaArtistCd, parsePiaDetailDates, parsePiaRlsInfo } from '../../src/sources/pia';
+import { parsePiaArtistCd, parsePiaRlsInfo } from '../../src/sources/pia';
 import type { ServerTicketSource } from '../types';
 
 function piaRlsInfoUrl(artistCd: string): string {
@@ -20,26 +19,10 @@ export const piaSource: ServerTicketSource = {
     const artistCd = parsePiaArtistCd(searchHtml);
     if (!artistCd) return [];
 
+    // 搜索阶段只取 rlsInfo（轻量、快）。精确受付日期改为点开事件详情时再懒加载，
+    // 避免在搜索时为每个「受付中」轮次额外抓详情页拖慢整体（参考 Mihon：搜索拿列表，详情按需）。
     const rlsHtml = await ctx.fetchText(piaRlsInfoUrl(artistCd));
     const events = parsePiaRlsInfo(rlsHtml, query);
-    const active: TicketWindow[] = [];
-    for (const event of events) {
-      for (const window of event.ticketWindows || []) {
-        if (active.length < 4 && window.applyUrl && window.statusText && /受付中/.test(window.statusText)) {
-          active.push(window);
-        }
-      }
-    }
-    await Promise.allSettled(active.map(async (window) => {
-      const detailHtml = await ctx.fetchText(window.applyUrl!);
-      const detail = parsePiaDetailDates(detailHtml);
-      if (detail.applyStart || detail.applyEnd) {
-        window.applyStart = detail.applyStart;
-        window.applyEnd = detail.applyEnd;
-        window.resultStart = detail.resultStart;
-      }
-    }));
-
     return events.map((event) => normalizeLiveEvent({
       ...event,
       timeline: deriveTimelineFromWindows(event.ticketWindows || []),
