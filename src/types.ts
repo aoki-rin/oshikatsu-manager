@@ -147,9 +147,7 @@ export interface ExtensionSource {
   author: string;
   isEnabled: boolean;
   isInstalled: boolean;
-  updateAvailable: boolean;
   rating: number;
   iconType: 'pia' | 'eplus' | 'livepocket' | 'lawson' | 'all';
   description: string;
-  latencyMs: number;
 }

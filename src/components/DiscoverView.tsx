@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
-import { 
-  Search, SlidersHorizontal, MapPin, Grid, Ticket, 
-  Sparkles, Calendar, PlusCircle, AlertCircle, RefreshCw, Star 
-} from 'lucide-react';
+import { Search, Sparkles, PlusCircle, AlertCircle, Star } from 'lucide-react';
 import { formatDisplayDate, getDaysRemaining } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { AppSelect } from './AppSelect';
@@ -293,10 +290,7 @@ export function DiscoverView({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase">
-              抓取源状态 (ACTIVE CRALWERS)
-            </span>
-            <span className="text-[9px] text-slate-400 flex items-center gap-1">
-              <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 已连接同步
+              可搜索平台 (SOURCES)
             </span>
           </div>
 

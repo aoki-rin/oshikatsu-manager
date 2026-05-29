@@ -327,6 +327,7 @@ export const INITIAL_EVENTS: ActivityEvent[] = [
   }
 ];
 
+// 与 src/sources/index.ts 的 REGISTRY 一一对应的 5 个真实平台插件。
 export const INITIAL_EXTENSIONS: ExtensionSource[] = [
   {
     id: 'ext-ticketdive',
@@ -336,11 +337,9 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     author: 'Oshikatsu-Dev',
     isEnabled: true,
     isInstalled: true,
-    updateAvailable: false,
     rating: 4.7,
     iconType: 'all',
     description: 'TicketDive（地下/indie live 专门）实时搜索：イベント/出演者/会場名。',
-    latencyMs: 120
   },
   {
     id: 'ext-pia',
@@ -350,11 +349,9 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     author: 'Oshikatsu-Dev',
     isEnabled: true,
     isInstalled: true,
-    updateAvailable: false,
     rating: 4.8,
     iconType: 'pia',
     description: '日本第一大票务平台 Ticket Pia 的数据爬取扩展。支持演唱会、话剧、综合演出的抽选与一般发售抓取。',
-    latencyMs: 142
   },
   {
     id: 'ext-eplus',
@@ -364,11 +361,9 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     author: 'Oshikatsu-Dev',
     isEnabled: true,
     isInstalled: true,
-    updateAvailable: false,
     rating: 4.9,
     iconType: 'eplus',
     description: 'eplus 代理规则。读取公开搜索结果与受付窗口，失败时返回平台报告和官方跳转。',
-    latencyMs: 198
   },
   {
     id: 'ext-livepocket',
@@ -378,11 +373,9 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     author: 'Idol-Lover-Net',
     isEnabled: true,
     isInstalled: true,
-    updateAvailable: true,
     rating: 4.6,
     iconType: 'livepocket',
     description: '专为地下偶像和动漫声优见习会等中小型 LiveHub 而设的 LivePocket 接口卡片。获取高精度现场特典消息。',
-    latencyMs: 87
   },
   {
     id: 'ext-lawson',
@@ -392,38 +385,8 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     author: 'Oshikatsu-Dev',
     isEnabled: true,
     isInstalled: true,
-    updateAvailable: false,
     rating: 4.5,
     iconType: 'lawson',
     description: 'ローチケ代理规则。优先解析官方搜索页；遇到反爬或结构变化时明确提示并提供官方搜索跳转。',
-    latencyMs: 121
   },
-  {
-    id: 'ext-tiget',
-    name: 'TIGET Extension (Chika Idol Core)',
-    platform: 'All',
-    version: 'v1.0.5',
-    author: 'Wota-Power',
-    isEnabled: false,
-    isInstalled: false,
-    updateAvailable: false,
-    rating: 4.2,
-    iconType: 'all',
-    description: '抓取日本超小型地下偶像、街头音乐演艺与同人DJ音乐企划首选平台 TIGET 的活动源插件。',
-    latencyMs: 0
-  },
-  {
-    id: 'ext-rakuten',
-    name: 'Rakuten Ticket (楽天チケット) Source',
-    platform: 'All',
-    version: 'v1.1.0',
-    author: 'Rakuten-Fans',
-    isEnabled: false,
-    isInstalled: false,
-    updateAvailable: false,
-    rating: 4.0,
-    iconType: 'all',
-    description: '乐天票务第三方活动聚合源，支持获取特定韩流名流（K-Pop）、日流音乐组合的预售情报。',
-    latencyMs: 0
-  }
 ];

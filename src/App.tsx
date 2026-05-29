@@ -64,7 +64,6 @@ export default function App() {
 
   // System customized ticket notifications list
   const [activeAlerts, setActiveAlerts] = useState<NotificationAlert[]>([]);
-  const [syncInterval, setSyncInterval] = useState<number>(15);
 
   // Focus detail overlays
   const [selectedEvent, setSelectedEvent] = useState<ActivityEvent | null>(null);
@@ -137,11 +136,6 @@ export default function App() {
       setActiveAlerts([]);
     }
 
-    const storedSync = localStorage.getItem('oshikatsu_sync_interval');
-    if (storedSync) {
-      setSyncInterval(parseInt(storedSync));
-    }
-
     const storedResultIds = localStorage.getItem('oshikatsu_search_result_ids');
     if (storedResultIds) setSearchResultIds((JSON.parse(storedResultIds) as string[]).filter(id => validEventIds.has(id)));
 
@@ -164,11 +158,6 @@ export default function App() {
     setOshiColorId(id);
     localStorage.setItem('oshikatsu_color_id', id);
     triggerToast('我推主题切换成功', `已成功挂载「${OSHI_COLORS.find(c=>c.id===id)?.name}」！全场焦点已就绪。`);
-  };
-
-  const handleSyncIntervalChange = (mins: number) => {
-    setSyncInterval(mins);
-    localStorage.setItem('oshikatsu_sync_interval', mins.toString());
   };
 
   // Reset database values
@@ -333,9 +322,9 @@ export default function App() {
         
         // Notify user about what toggled
         if (nextState) {
-          triggerToast('🔌 抓取插件激活', `【${ext.name}】已重新连接，开始同步底层 Pia/e+ HTML 结构域。`);
+          triggerToast('已启用该源', `【${ext.name}】已启用，下次搜索会包含该平台。`);
         } else {
-          triggerToast('🔌 抓取插件休眠', `【${ext.name}】已停止轮询运行。对应门票活动已临时隐藏。`);
+          triggerToast('已停用该源', `【${ext.name}】已停用，搜索时会跳过该平台。`);
         }
 
         return { ...ext, isEnabled: nextState };
@@ -345,46 +334,6 @@ export default function App() {
 
     setExtensions(updated);
     saveToStorage('oshikatsu_extensions', updated);
-  };
-
-  const handleInstallExtension = (id: string) => {
-    const updated = extensions.map(ext => {
-      if (ext.id === id) {
-        triggerToast('⚡ 插件启用成功', `【${ext.name}】已加入真实搜索源。请返回发现页用艺人名搜索。`);
-        return { ...ext, isInstalled: true, isEnabled: true, latencyMs: 110 };
-      }
-      return ext;
-    });
-
-    setExtensions(updated);
-    saveToStorage('oshikatsu_extensions', updated);
-  };
-
-  const handleUpdateExtension = (id: string) => {
-    const updated = extensions.map(ext => {
-      if (ext.id === id) {
-        triggerToast('🔄 脚本防屏蔽热网更新', `【${ext.name}】规则修剪完毕！高抗性爬行引擎已对齐服务器。`);
-        return { ...ext, version: 'v3.2.0', updateAvailable: false, latencyMs: 65 };
-      }
-      return ext;
-    });
-
-    setExtensions(updated);
-    saveToStorage('oshikatsu_extensions', updated);
-  };
-
-  const handlePingExtensions = () => {
-    // Generate new mock latencies randomly representing ticket server load
-    const updated = extensions.map(ext => {
-      if (ext.isInstalled && ext.isEnabled) {
-        const mockPing = Math.floor(Math.random() * 120) + 40;
-        return { ...ext, latencyMs: mockPing };
-      }
-      return ext;
-    });
-    setExtensions(updated);
-    saveToStorage('oshikatsu_extensions', updated);
-    triggerToast('⚡ 核心数据线测速完成', '已刷新前往东京品川与大阪市中心机房的票仓抓取延迟指标。');
   };
 
   return (
@@ -468,9 +417,6 @@ export default function App() {
             <ExtensionView
               extensions={extensions}
               onToggleExtension={handleToggleExtension}
-              onInstallExtension={handleInstallExtension}
-              onUpdateExtension={handleUpdateExtension}
-              onPingExtensions={handlePingExtensions}
               oshiColor={activeColorObj.colorHex}
             />
           )}
@@ -479,8 +425,6 @@ export default function App() {
             <SettingsView
               currentOshiColorId={oshiColorId}
               onSelectOshiColor={handleSelectOshiColor}
-              syncInterval={syncInterval}
-              onSelectSyncInterval={handleSyncIntervalChange}
               onResetDatabase={handleResetDatabase}
               oshiColorHex={activeColorObj.colorHex}
             />

@@ -2,16 +2,11 @@ import React from 'react';
 import { OShiColorId } from '../App';
 import { OshiColor } from '../types';
 import { OSHI_COLORS } from '../data/mockData';
-import { 
-  Settings, Palette, RefreshCcw, ShieldCheck, 
-  Trash2, Flame, Award, Heart, HelpCircle 
-} from 'lucide-react';
+import { Settings, Palette, Trash2, Heart } from 'lucide-react';
 
 interface SettingsViewProps {
   currentOshiColorId: string;
   onSelectOshiColor: (colorId: string) => void;
-  syncInterval: number;
-  onSelectSyncInterval: (minutes: number) => void;
   onResetDatabase: () => void;
   oshiColorHex: string; // hex
 }
@@ -19,8 +14,6 @@ interface SettingsViewProps {
 export function SettingsView({
   currentOshiColorId,
   onSelectOshiColor,
-  syncInterval,
-  onSelectSyncInterval,
   onResetDatabase,
   oshiColorHex
 }: SettingsViewProps) {
@@ -93,37 +86,6 @@ export function SettingsView({
                       style={{ backgroundColor: color.colorHex }}
                     ></span>
                   )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Sync cycle settings */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-150 space-y-3">
-          <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-            <RefreshCcw className="w-4 h-4 text-slate-600" />
-            后台数据轮询频率 (Crawler Frequency)
-          </h3>
-          <p className="text-[10.5px] text-slate-405">
-            与e+、Pia日本票仓API的心跳对齐频率。建议使用默认15分钟。
-          </p>
-
-          <div className="grid grid-cols-3 gap-2 pt-1 text-xs text-center font-semibold">
-            {[15, 30, 60].map(minutes => {
-              const isSelected = syncInterval === minutes;
-              return (
-                <button
-                  key={minutes}
-                  id={`sync-${minutes}`}
-                  onClick={() => onSelectSyncInterval(minutes)}
-                  className={`py-2 rounded-xl transition border ${
-                    isSelected
-                      ? 'bg-slate-900 border-slate-905 text-white'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {minutes} 分钟
                 </button>
               );
             })}
