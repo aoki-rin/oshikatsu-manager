@@ -24,16 +24,31 @@ function toJst(iso: string | null | undefined, slice: [number, number]): string 
 const jstDate = (iso?: string | null) => toJst(iso, [0, 10]);
 const jstTime = (iso?: string | null) => toJst(iso, [11, 16]);
 
+// TicketDive 的 __NEXT_DATA__ 最小结构（仅声明解析用到的字段）。
+interface TicketDiveEvent {
+  id?: string | number;
+  url?: string;
+  title?: string;
+  venueName?: string;
+  salesStatus?: string;
+  startEventDate?: string | null;
+  displayStageDate?: string | null;
+  imageSource?: string;
+}
+interface TicketDiveNextData {
+  props?: { pageProps?: { __superjsonProps?: { json?: { eventList?: TicketDiveEvent[] } } } };
+}
+
 export function parseTicketDiveSearch(html: string, artist: string): ActivityEvent[] {
   const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (!m) return [];
-  let j: any;
-  try { j = JSON.parse(m[1]); } catch { return []; }
-  const list: any[] = j?.props?.pageProps?.__superjsonProps?.json?.eventList ?? [];
+  let parsed: TicketDiveNextData;
+  try { parsed = JSON.parse(m[1]) as TicketDiveNextData; } catch { return []; }
+  const list = parsed.props?.pageProps?.__superjsonProps?.json?.eventList ?? [];
 
   return list.map((e): ActivityEvent => {
-    const url = `https://ticketdive.com/event/${e.url}`;
-    const statusText = STATUS[e.salesStatus] || e.salesStatus || undefined;
+    const url = `https://ticketdive.com/event/${e.url ?? ''}`;
+    const statusText = STATUS[e.salesStatus ?? ''] || e.salesStatus || undefined;
     const win: TicketWindow = {
       id: `td-${e.id}-0`,
       platform: 'TicketDive',
@@ -60,7 +75,7 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
       timeline: deriveTimelineFromWindows([win]),
       ticketWindows: [win],
       originalUrl: url,
-      description: `${e.title}（TicketDive 平台实时搜索）`,
+      description: `${e.title ?? artist}（TicketDive 平台实时搜索）`,
       category: 'Idol',
       tags: ['TicketDive', '实时'],
     }, 'ticketdive');

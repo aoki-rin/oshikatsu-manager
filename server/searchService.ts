@@ -59,13 +59,13 @@ export function createSearchService(options: SearchServiceOptions = {}) {
           elapsedMs: Date.now() - startedAt,
           parserVersion: source.parserVersion,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         const status = error instanceof PlatformSearchError ? error.status : 'error';
         reports.push({
           platform: source.platform,
           status,
           count: 0,
-          error: String(error?.message || error),
+          error: error instanceof Error ? error.message : String(error),
           handoffUrl,
           runtime: 'proxy',
           elapsedMs: Date.now() - startedAt,

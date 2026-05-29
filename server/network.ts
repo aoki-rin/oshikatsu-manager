@@ -77,9 +77,9 @@ export function createPlatformHttpClient(options: PlatformHttpClientOptions = {}
       }
       cache.set(url, { html, expiresAt: now() + cacheTtlMs });
       return html;
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof PlatformSearchError) throw error;
-      if (error?.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new PlatformSearchError('error', `平台请求超时 ${timeoutMs}ms`);
       }
       throw error;

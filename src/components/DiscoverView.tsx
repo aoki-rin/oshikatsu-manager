@@ -115,8 +115,8 @@ export function DiscoverView({
       const { events: res, reports } = await onRunPlatformSearch(q, activePlatforms as string[]);
       const summary = reports.map(p => `${p.platform}:${reportStatusLabel(p)}`).join(' · ');
       setSearchNote(res.length ? `平台实时 ${res.length} 条（${summary}）` : `没有可直接聚合的结果（${summary || '无启用插件'}）`);
-    } catch (e: any) {
-      setSearchNote('搜索失败：' + (e?.message || String(e)));
+    } catch (e: unknown) {
+      setSearchNote('搜索失败：' + (e instanceof Error ? e.message : String(e)));
     }
   };
 

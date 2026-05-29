@@ -10,7 +10,7 @@ interface ProxyOptions {
 }
 
 function configuredProxyBaseUrl(): string | null {
-  const env = (import.meta as any).env;
+  const env = (import.meta as { env?: { VITE_TICKET_PROXY_BASE_URL?: string; DEV?: boolean } }).env;
   const configured = String(env?.VITE_TICKET_PROXY_BASE_URL || '').trim();
   if (configured) return configured;
   if (!Capacitor.isNativePlatform() && env?.DEV) return '';

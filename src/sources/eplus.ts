@@ -36,18 +36,42 @@ interface EplusEvent {
   ticketWindows: TicketWindow[];
 }
 
+// eplus 搜索页内嵌 JSON 的最小结构（仅声明解析用到的字段，其余忽略）。
+interface EplusRound {
+  uketsuke_name_pc?: string;
+  uketsuke_name_mobile?: string;
+  hambai_hoho_label?: string;
+  uketsuke_start_datetime?: string | null;
+  uketsuke_end_datetime?: string | null;
+  info_kokai_start_datetime?: string | null;
+  info_kokai_end_datetime?: string | null;
+}
+interface EplusRecord {
+  kogyo_code?: string;
+  koen_code?: string;
+  koenbi_term?: string;
+  kaien_time?: string;
+  kanren_kogyo_sub?: { kogyo_name_1?: string; kogyo_name_2?: string };
+  kanren_venue?: { venue_name?: string; todofuken_name?: string; venue_code?: string };
+  koen_detail_url_pc?: string | null;
+  kanren_uketsuke_koen_list?: EplusRound[];
+}
+interface EplusSearchJson {
+  data?: { record_list?: EplusRecord[] };
+}
+
 // 纯函数：从 eplus 搜索 HTML(内嵌 JSON) 解析事件 + 多轮窗口
 export function parseEplusSearch(html: string, query: string): EplusEvent[] {
   const m = html.match(/<script[^>]*type="application\/(?:ld\+)?json"[^>]*>([\s\S]*?)<\/script>/);
   if (!m) return [];
-  let j: any;
-  try { j = JSON.parse(m[1]); } catch { return []; }
-  const list: any[] = j?.data?.record_list ?? [];
+  let parsed: EplusSearchJson;
+  try { parsed = JSON.parse(m[1]) as EplusSearchJson; } catch { return []; }
+  const list = parsed.data?.record_list ?? [];
 
   return list.map((r): EplusEvent => {
-    const sub = r.kanren_kogyo_sub || {};
-    const venue = r.kanren_venue || {};
-    const rounds: any[] = r.kanren_uketsuke_koen_list || [];
+    const sub = r.kanren_kogyo_sub ?? {};
+    const venue = r.kanren_venue ?? {};
+    const rounds = r.kanren_uketsuke_koen_list ?? [];
     // 唯一 id：同巡演多场次要区分（加日期 + 场馆 code）
     const eventId = `eplus-${r.kogyo_code}-${r.koenbi_term || ''}-${venue.venue_code || r.koen_code || ''}`;
     const ticketWindows: TicketWindow[] = rounds.map((u, i) => ({
@@ -64,7 +88,7 @@ export function parseEplusSearch(html: string, query: string): EplusEvent[] {
     }));
     return {
       eventId,
-      title: dec(sub.kogyo_name_1 + (sub.kogyo_name_2 ? ` ${sub.kogyo_name_2}` : '')) || query,
+      title: dec(`${sub.kogyo_name_1 ?? ''}${sub.kogyo_name_2 ? ` ${sub.kogyo_name_2}` : ''}`) || query,
       date: ymd(r.koenbi_term),
       time: hm(r.kaien_time),
       venue: dec(venue.venue_name) || '—',
