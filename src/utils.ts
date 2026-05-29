@@ -2,6 +2,21 @@ import { ActivityEvent, TicketPlatform } from './types';
 
 const JST_TIME_ZONE = 'Asia/Tokyo';
 
+// 统一的平台展示短名（各平台的常用品牌名）。内部仍用 TicketPlatform 全名做逻辑/存储，
+// 仅用于界面展示，保证「卡片徽标 / 筛选 chip / 搜索报告 / 打开按钮 / 详情页」叫法一致。
+// 接受任意字符串：抓取来的窗口 platform 可能是 'Fan Club' / 'unknown' 等，原样返回。
+const PLATFORM_LABELS: Record<string, string> = {
+  'Ticket Pia': 'ぴあ',
+  eplus: 'e+',
+  LivePocket: 'LivePocket',
+  'Lawson Ticket': 'ローチケ',
+  TicketDive: 'TicketDive',
+};
+
+export function platformLabel(platform: string): string {
+  return PLATFORM_LABELS[platform] ?? platform;
+}
+
 // Convert simple YYYY-MM-DD and HH:MM to ICS-compatible local time string
 export function formatToIcsDate(dateStr: string, timeStr: string = '00:00'): string {
   const cleanDate = dateStr.replace(/-/g, '');

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
 import { Search, Sparkles, PlusCircle, AlertCircle, Star } from 'lucide-react';
-import { formatDisplayDate, getDaysRemaining } from '../utils';
+import { formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { AppSelect } from './AppSelect';
@@ -312,7 +312,7 @@ export function DiscoverView({
                   }`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'}`}></span>
-                  {platName}
+                  {platformLabel(platName)}
                   {!isActive && <span className="text-[8px] bg-slate-200 text-slate-400 px-1 rounded">Offline</span>}
                 </button>
               );
@@ -333,7 +333,7 @@ export function DiscoverView({
                   <span className={`w-2 h-2 rounded-full shrink-0 ${reportDotClass(report.status)}`}></span>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold text-slate-800">
-                      {report.platform} · {reportStatusLabel(report)}
+                      {platformLabel(report.platform)} · {reportStatusLabel(report)}
                       {report.runtime && <span className="text-[9px] text-slate-400 font-mono"> · {report.runtime}</span>}
                     </p>
                     {(report.parserVersion || typeof report.elapsedMs === 'number') && (
@@ -348,7 +348,7 @@ export function DiscoverView({
                       onClick={() => openPurchaseUrl(report.handoffUrl!)}
                       className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600 shrink-0"
                     >
-                      {report.platform === 'Lawson Ticket' ? '打开ローチケ' : '打开平台'}
+                      打开{platformLabel(report.platform)}
                     </button>
                   )}
                 </div>
@@ -464,7 +464,7 @@ export function DiscoverView({
                               backgroundColor: `${oshiColor}08`
                             }}
                           >
-                            {p}
+                            {platformLabel(p)}
                           </span>
                         ))}
                         <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-medium">

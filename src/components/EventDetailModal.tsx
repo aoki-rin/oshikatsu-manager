@@ -4,7 +4,7 @@ import {
   X, Calendar, Clock, MapPin, Tag, ExternalLink, 
   Sparkles, Bell, Heart, Check, Building, CreditCard 
 } from 'lucide-react';
-import { downloadEventIcs, formatDisplayDate, getDaysRemaining } from '../utils';
+import { downloadEventIcs, formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
 import { buildReminderTargets } from '../notifications';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
@@ -125,7 +125,7 @@ export function EventDetailModal({
                 className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded text-white"
                 style={{ backgroundColor: oshiColor }}
               >
-                {p}
+                {platformLabel(p)}
               </span>
             ))}
             <span className="text-[10px] text-slate-400">源端</span>
@@ -321,7 +321,7 @@ export function EventDetailModal({
                       <div key={w.id} className="rounded-2xl border border-slate-200 p-3.5 bg-white">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: oshiColor }}>{w.platform}</span>
+                            <span className="text-[10px] font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: oshiColor }}>{platformLabel(w.platform)}</span>
                             <span className="text-xs font-bold text-slate-900">{w.roundType}</span>
                           </div>
                           <span className={`text-[9px] font-bold text-white px-2 py-0.5 rounded-full ${w.statusText ? (/終了|完売/.test(w.statusText) ? 'bg-slate-400' : 'bg-emerald-500') : st.cls}`}>{w.statusText || st.label}</span>
@@ -505,7 +505,7 @@ export function EventDetailModal({
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition pulse-primary shadow-md"
             style={{ backgroundColor: oshiColor }}
           >
-            <span>直接前往 {event.platform} 购票</span>
+            <span>直接前往 {platformLabel(event.platform)} 购票</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </button>
         </div>
