@@ -23,7 +23,7 @@ describe('eplus search parser', () => {
             kaien_time: '1800',
             kanren_kogyo_sub: { kogyo_name_1: 'いきものがかり', kogyo_name_2: 'ツアー2026' },
             kanren_venue: { venue_name: '福岡サンパレス', todofuken_name: '福岡県', venue_code: 'V1' },
-            koen_detail_url_pc: 'https://eplus.jp/sf/detail/abc',
+            koen_detail_url_pc: '/sf/detail/abc',
             kanren_uketsuke_koen_list: [
               {
                 uketsuke_name_pc: '先行抽選',
@@ -55,6 +55,10 @@ describe('eplus search parser', () => {
     assert.equal(e.ticketWindows[0].applyStart, '2026-05-20T12:00:00+09:00');
     assert.equal(e.ticketWindows[0].applyEnd, '2026-06-03T23:59:00+09:00');
     assert.equal(e.ticketWindows[0].resultStart, '2026-06-05T15:00:00+09:00');
+    // eplus gives relative detail paths; they MUST be absolutized or the device
+    // opens http://localhost/sf/... instead of the real ticket page.
+    assert.equal(e.detailUrl, 'https://eplus.jp/sf/detail/abc');
+    assert.equal(e.ticketWindows[0].applyUrl, 'https://eplus.jp/sf/detail/abc');
   });
 
   it('returns [] for an empty result page (so_kensu 0)', () => {

@@ -3,8 +3,9 @@
 // 解析逻辑与 scraper/sources/eplus.mjs 同源：eplus 搜索页内嵌 application/json，data.record_list 直接含多轮受付。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { absoluteUrl, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
+const EPLUS_BASE = 'https://eplus.jp';
 const SEARCH_URL = 'https://eplus.jp/sf/search';
 const DESKTOP_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -74,6 +75,9 @@ export function parseEplusSearch(html: string, query: string): EplusEvent[] {
     const rounds = r.kanren_uketsuke_koen_list ?? [];
     // 唯一 id：同巡演多场次要区分（加日期 + 场馆 code）
     const eventId = `eplus-${r.kogyo_code}-${r.koenbi_term || ''}-${venue.venue_code || r.koen_code || ''}`;
+    // eplus 给的 koen_detail_url_pc 是相对路径(/sf/detail/...)，必须补成绝对地址，
+    // 否则真机上 new URL(相对, http://localhost/) 会跳到 localhost 而不是 eplus。
+    const detailUrl = absoluteUrl(r.koen_detail_url_pc, EPLUS_BASE);
     const ticketWindows: TicketWindow[] = rounds.map((u, i) => ({
       id: `${eventId}-${i}`,
       platform: 'eplus',
@@ -83,8 +87,8 @@ export function parseEplusSearch(html: string, query: string): EplusEvent[] {
       applyEnd: dtToIso(u.uketsuke_end_datetime),
       resultStart: dtToIso(u.info_kokai_start_datetime),
       resultEnd: dtToIso(u.info_kokai_end_datetime),
-      sourceUrl: r.koen_detail_url_pc || undefined,
-      applyUrl: r.koen_detail_url_pc || undefined,
+      sourceUrl: detailUrl || undefined,
+      applyUrl: detailUrl || undefined,
     }));
     return {
       eventId,
@@ -93,7 +97,7 @@ export function parseEplusSearch(html: string, query: string): EplusEvent[] {
       time: hm(r.kaien_time),
       venue: dec(venue.venue_name) || '—',
       prefecture: dec(venue.todofuken_name) || '',
-      detailUrl: r.koen_detail_url_pc || null,
+      detailUrl,
       ticketWindows,
     };
   });
