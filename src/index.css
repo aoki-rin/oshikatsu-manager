@@ -32,3 +32,19 @@ body {
 .pulse-primary {
   animation: pulse-gentle 2s infinite ease-in-out;
 }
+
+/* Bottom-sheet picker (AppSelect / 自定义下拉，避免安卓原生丑框) */
+@keyframes sheet-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-backdrop {
+  animation: sheet-fade-in 0.2s ease-out;
+}
+.sheet-panel {
+  animation: sheet-slide-up 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}

@@ -3,6 +3,7 @@
 // 按 イベント/出演者/会場名 搜索；indie/地下偶像为主。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
+import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -23,16 +24,31 @@ function toJst(iso: string | null | undefined, slice: [number, number]): string 
 const jstDate = (iso?: string | null) => toJst(iso, [0, 10]);
 const jstTime = (iso?: string | null) => toJst(iso, [11, 16]);
 
+// TicketDive 的 __NEXT_DATA__ 最小结构（仅声明解析用到的字段）。
+interface TicketDiveEvent {
+  id?: string | number;
+  url?: string;
+  title?: string;
+  venueName?: string;
+  salesStatus?: string;
+  startEventDate?: string | null;
+  displayStageDate?: string | null;
+  imageSource?: string;
+}
+interface TicketDiveNextData {
+  props?: { pageProps?: { __superjsonProps?: { json?: { eventList?: TicketDiveEvent[] } } } };
+}
+
 export function parseTicketDiveSearch(html: string, artist: string): ActivityEvent[] {
   const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (!m) return [];
-  let j: any;
-  try { j = JSON.parse(m[1]); } catch { return []; }
-  const list: any[] = j?.props?.pageProps?.__superjsonProps?.json?.eventList ?? [];
+  let parsed: TicketDiveNextData;
+  try { parsed = JSON.parse(m[1]) as TicketDiveNextData; } catch { return []; }
+  const list = parsed.props?.pageProps?.__superjsonProps?.json?.eventList ?? [];
 
   return list.map((e): ActivityEvent => {
-    const url = `https://ticketdive.com/event/${e.url}`;
-    const statusText = STATUS[e.salesStatus] || e.salesStatus || undefined;
+    const url = `https://ticketdive.com/event/${e.url ?? ''}`;
+    const statusText = STATUS[e.salesStatus ?? ''] || e.salesStatus || undefined;
     const win: TicketWindow = {
       id: `td-${e.id}-0`,
       platform: 'TicketDive',
@@ -43,7 +59,7 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
       sourceUrl: url,
       applyUrl: url,
     };
-    return {
+    return normalizeLiveEvent({
       id: `td-${e.id}`,
       title: e.title || artist,
       artistId: `td-artist-${artist}`,
@@ -56,13 +72,13 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
       platform: 'TicketDive',
       price: '—',
       imageUrl: e.imageSource || PLACEHOLDER_IMG,
-      timeline: {},
+      timeline: deriveTimelineFromWindows([win]),
       ticketWindows: [win],
       originalUrl: url,
-      description: `${e.title}（TicketDive 平台实时搜索）`,
+      description: `${e.title ?? artist}（TicketDive 平台实时搜索）`,
       category: 'Idol',
       tags: ['TicketDive', '实时'],
-    };
+    }, 'ticketdive');
   });
 }
 
@@ -71,6 +87,8 @@ export async function searchTicketDive(artist: string): Promise<ActivityEvent[]>
     url: SEARCH_URL,
     params: { q: artist },
     headers: { 'User-Agent': UA },
+    connectTimeout: 10000,
+    readTimeout: 20000,
   });
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
   return parseTicketDiveSearch(html, artist);

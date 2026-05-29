@@ -54,6 +54,10 @@ export interface ActivityEvent {
   description: string;
   category: 'Idol' | 'Anime/Seiyuu' | 'J-Pop' | 'Rock/Metal' | 'VTuber' | 'Dance/Club' | 'VTuber / Vocaloid' | 'Rock/J-Pop';
   tags: string[];
+  sourceKind?: 'live' | 'manual';
+  sourcePlatformId?: string;
+  lastFetchedAt?: string;
+  purchaseUrl?: string;
 }
 
 export interface Artist {
@@ -76,7 +80,7 @@ export interface Venue {
   imageUrl: string;
 }
 
-export type AlertType = 'lottery_start' | 'lottery_end' | 'general_start' | 'payment_deadline';
+export type AlertType = 'lottery_start' | 'lottery_end' | 'general_start' | 'result_start' | 'payment_deadline' | 'concert';
 
 export interface NotificationAlert {
   id: string;
@@ -87,6 +91,42 @@ export interface NotificationAlert {
   alertDate: string; // YYYY-MM-DD
   isTriggered: boolean;
   notes?: string;
+  windowId?: string;
+  scheduleAt?: string;
+  notificationId?: number;
+}
+
+export type TicketSearchStatus = 'ok' | 'empty' | 'blocked' | 'error' | 'skipped';
+
+export interface TicketSearchReport {
+  platform: TicketPlatform;
+  status: TicketSearchStatus;
+  count: number;
+  error?: string;
+  handoffUrl?: string;
+  runtime?: 'proxy' | 'client';
+  elapsedMs?: number;
+  parserVersion?: string;
+}
+
+export interface TicketSearchResult {
+  events: ActivityEvent[];
+  reports: TicketSearchReport[];
+  fetchedAt?: string;
+  servedBy?: 'proxy' | 'client';
+}
+
+export interface ReminderTarget {
+  eventId: string;
+  eventTitle: string;
+  platform: TicketPlatform;
+  windowId: string;
+  type: AlertType;
+  label: string;
+  scheduleAt: string;
+  notificationId: number;
+  title: string;
+  body: string;
 }
 
 export interface OshiColor {
@@ -107,9 +147,7 @@ export interface ExtensionSource {
   author: string;
   isEnabled: boolean;
   isInstalled: boolean;
-  updateAvailable: boolean;
   rating: number;
   iconType: 'pia' | 'eplus' | 'livepocket' | 'lawson' | 'all';
   description: string;
-  latencyMs: number;
 }

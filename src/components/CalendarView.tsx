@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { ActivityEvent, TicketPlatform } from '../types';
+import { ActivityEvent, NotificationAlert, TicketPlatform } from '../types';
 import { 
   CalendarDays, Download, Clock, Star, BellRing, 
   MapPin, CheckCircle, Info, ChevronRight 
 } from 'lucide-react';
 import { 
   downloadAllFollowedEventsIcs, downloadEventIcs, 
-  formatDisplayDate, getDaysRemaining 
+  formatDisplayDate, getDaysRemaining, getJstDateKey
 } from '../utils';
 
 interface CalendarViewProps {
   events: ActivityEvent[];
   favorites: string[];
+  activeAlerts: NotificationAlert[];
   onSelectEvent: (event: ActivityEvent) => void;
   oshiColor: string; // hex
 }
@@ -19,23 +20,26 @@ interface CalendarViewProps {
 export function CalendarView({
   events,
   favorites,
+  activeAlerts,
   onSelectEvent,
   oshiColor
 }: CalendarViewProps) {
-  const favoriteEvents = events.filter(e => favorites.includes(e.id));
+  const alertEventIds = new Set(activeAlerts.map(alert => alert.eventId));
+  const favoriteEvents = events.filter(e => favorites.includes(e.id) || alertEventIds.has(e.id));
+  const todayKey = getJstDateKey();
+  const tomorrowKey = getJstDateKey(new Date(new Date(`${todayKey}T00:00:00+09:00`).getTime() + 86400000));
   
-  // Create days mock timeline for May 2026 (Focus on context surrounding May 24, 2026)
-  // Day numbers: 20 to 30
-  const daysOfMay = Array.from({ length: 11 }, (_, i) => {
-    const dayNum = 20 + i;
-    const dateStr = `2026-05-${dayNum}`;
-    const dayOfWeek = ['周三', '周四', '周五', '周六', '周日', '周一', '周二', '周三', '周四', '周五', '周六'][i];
+  const daysOfMay = Array.from({ length: 14 }, (_, i) => {
+    const date = new Date(new Date(`${todayKey}T00:00:00+09:00`).getTime() + i * 86400000);
+    const dateStr = getJstDateKey(date);
+    const dayNum = Number(dateStr.slice(8, 10));
+    const dayOfWeek = new Intl.DateTimeFormat('zh-CN', { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(date);
     
     // Find events happening on this specific date
-    const hasConcerts = events.filter(e => e.date === dateStr);
-    const hasLotteryDeadline = events.filter(e => e.timeline.lotteryEndDate === dateStr);
-    const hasPaymentDeadline = events.filter(e => e.timeline.paymentDeadlineDate === dateStr);
-    const hasGeneralOpen = events.filter(e => e.timeline.generalStartDate === dateStr);
+    const hasConcerts = favoriteEvents.filter(e => e.date === dateStr);
+    const hasLotteryDeadline = favoriteEvents.filter(e => e.timeline.lotteryEndDate === dateStr);
+    const hasPaymentDeadline = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === dateStr);
+    const hasGeneralOpen = favoriteEvents.filter(e => e.timeline.generalStartDate === dateStr);
 
     return {
       dayNum,
@@ -45,23 +49,23 @@ export function CalendarView({
       hasLotteryDeadline,
       hasPaymentDeadline,
       hasGeneralOpen,
-      isToday: dateStr === '2026-05-24'
+      isToday: dateStr === todayKey
     };
   });
 
-  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('2026-05-24');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>(todayKey);
 
   // Find events for the selected horizontal calendar day
   const selectedDayData = daysOfMay.find(d => d.dateStr === selectedDateFilter);
   
   // Categorize timeline events in general:
   // Today's deadlines:
-  const todayLotteryDeadlines = favoriteEvents.filter(e => e.timeline.lotteryEndDate === '2026-05-24');
-  const todayPaymentDeadlines = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === '2026-05-24');
+  const todayLotteryDeadlines = favoriteEvents.filter(e => e.timeline.lotteryEndDate === todayKey);
+  const todayPaymentDeadlines = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === todayKey);
   
   // Tomorrow's deadlines:
-  const tomorrowLotteryDeadlines = favoriteEvents.filter(e => e.timeline.lotteryEndDate === '2026-05-25');
-  const tomorrowPaymentDeadlines = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === '2026-05-25');
+  const tomorrowLotteryDeadlines = favoriteEvents.filter(e => e.timeline.lotteryEndDate === tomorrowKey);
+  const tomorrowPaymentDeadlines = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === tomorrowKey);
 
   const upcomingFavoriteLives = favoriteEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -88,7 +92,7 @@ export function CalendarView({
             </div>
             <div>
               <h1 className="text-base font-bold font-display tracking-tight text-slate-900">票程日历</h1>
-              <p className="text-[10px] text-slate-400 font-mono">基准时间: 2026年5月24日 (今日)</p>
+              <p className="text-[10px] text-slate-400 font-mono">基准时间: {todayKey} (JST)</p>
             </div>
           </div>
 
@@ -109,7 +113,7 @@ export function CalendarView({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider">
-              5月日程纵轴 (WEEK HORIZONTAL TIMELINE)
+              近期日程纵轴 (JST TIMELINE)
             </span>
             <span className="text-[10px] text-slate-400">滑动查看 ⮕</span>
           </div>
@@ -160,7 +164,7 @@ export function CalendarView({
         <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/50 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
             <span className="text-xs font-bold text-slate-900">
-              📅 5月{selectedDayData?.dayNum}日 提醒详情 ({selectedDayData?.isToday ? '今天' : '日程项'})
+              📅 {selectedDayData?.dateStr} 提醒详情 ({selectedDayData?.isToday ? '今天' : '日程项'})
             </span>
             <div className="flex gap-2">
               <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-amber-600 font-bold">● 截止</span>
@@ -299,7 +303,7 @@ export function CalendarView({
                       className="flex items-center gap-2.5 py-2 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition"
                     >
                       <div className="text-center bg-slate-100 p-1 rounded-lg w-10 shrink-0">
-                        <p className="text-[9px] text-slate-400 font-mono tracking-tighter uppercase">5月</p>
+                        <p className="text-[9px] text-slate-400 font-mono tracking-tighter uppercase">{e.date.slice(5, 7)}月</p>
                         <p className="text-xs font-bold font-display text-slate-800">{e.date.split('-')[2]}</p>
                       </div>
 

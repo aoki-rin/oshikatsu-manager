@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Artist, Venue, ActivityEvent } from '../types';
-import { 
-  Heart, MapPin, Building, PlusCircle, Star, Sparkles, 
-  Trash2, ChevronRight, Hash, Users 
+import {
+  Heart, MapPin, Building, PlusCircle, Star, Sparkles,
+  Trash2, ChevronRight, Hash, Users
 } from 'lucide-react';
+import { AppSelect } from './AppSelect';
 
 interface MyOshiViewProps {
   artists: Artist[];
@@ -417,17 +418,21 @@ export function MyOshiView({
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-400">分类领域</label>
-                <select
+                <AppSelect
                   id="artist-form-category"
                   value={newArtistCategory}
-                  onChange={(e) => setNewArtistCategory(e.target.value)}
-                  className="w-full border border-slate-200 p-2 rounded-lg mt-1"
-                >
-                  <option value="J-Pop">J-Pop (流行乐)</option>
-                  <option value="Idol">地下/女子偶像 (Idol)</option>
-                  <option value="VTuber">VTuber (虚拟主播)</option>
-                  <option value="Rock/Metal">摇滚与金属 (Rock/Metal)</option>
-                </select>
+                  onChange={setNewArtistCategory}
+                  oshiColor={oshiColor}
+                  title="分类领域"
+                  ariaLabel="分类领域"
+                  className="w-full bg-white text-sm border border-slate-200 p-2 rounded-lg mt-1"
+                  options={[
+                    { value: 'J-Pop', label: 'J-Pop (流行乐)' },
+                    { value: 'Idol', label: '地下/女子偶像 (Idol)' },
+                    { value: 'VTuber', label: 'VTuber (虚拟主播)' },
+                    { value: 'Rock/Metal', label: '摇滚与金属 (Rock/Metal)' },
+                  ]}
+                />
               </div>
 
               <div>

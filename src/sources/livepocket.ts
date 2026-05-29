@@ -4,6 +4,7 @@
 // 注：M/D 无年份(推断)；精确受付窗口需详情页(后续)。indie/地下偶像为主。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
+import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -13,6 +14,14 @@ const PLACEHOLDER_IMG =
 
 const stripTags = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const m1 = (s: string, re: RegExp): string | null => { const m = s.match(re); return m ? m[1] : null; };
+const normalizeSearchText = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+
+function includesQuery(title: string, venue: string, artist: string): boolean {
+  const needle = normalizeSearchText(artist);
+  if (!needle) return true;
+  const haystack = normalizeSearchText(`${title} ${venue}`);
+  return haystack.includes(needle);
+}
 
 // "5/29"(无年) → YYYY-MM-DD：今年若已过则推断为明年
 function inferDate(md: string | null): string {
@@ -41,6 +50,7 @@ export function parseLivePocketSearch(html: string, artist: string): ActivityEve
     const date = inferDate(sm ? sm[2].trim() : null);
     const venueRaw = m1(b, /class="info"[^>]*>([\s\S]*?)<\/(?:div|ul|p)>/);
     const venue = venueRaw ? stripTags(venueRaw).slice(0, 30) : '—';
+    if (!includesQuery(title, venue, artist)) return;
     const slug = url.split('/e/')[1] || String(i);
     const win: TicketWindow = {
       id: `lp-${slug}-0`,
@@ -52,7 +62,7 @@ export function parseLivePocketSearch(html: string, artist: string): ActivityEve
       sourceUrl: url,
       applyUrl: url,
     };
-    events.push({
+    events.push(normalizeLiveEvent({
       id: `lp-${slug}`,
       title,
       artistId: `lp-artist-${artist}`,
@@ -65,13 +75,13 @@ export function parseLivePocketSearch(html: string, artist: string): ActivityEve
       platform: 'LivePocket',
       price: '—',
       imageUrl: img || PLACEHOLDER_IMG,
-      timeline: {},
+      timeline: deriveTimelineFromWindows([win]),
       ticketWindows: [win],
       originalUrl: url,
       description: `${title}（LivePocket 平台实时搜索）`,
       category: 'Idol',
       tags: ['LivePocket', '实时'],
-    });
+    }, 'livepocket'));
   });
   return events;
 }
@@ -81,6 +91,8 @@ export async function searchLivePocket(artist: string): Promise<ActivityEvent[]>
     url: SEARCH_URL,
     params: { word: artist },
     headers: { 'User-Agent': UA },
+    connectTimeout: 10000,
+    readTimeout: 20000,
   });
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
   return parseLivePocketSearch(html, artist);

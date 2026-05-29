@@ -4,6 +4,7 @@
 // Pia 的 rlsInfo 给的是【状态】(抽選受付中/予定枚数終了)，精确受付締切日期需点详情页(getDetails，后续)。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
+import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -58,7 +59,7 @@ export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
     });
 
     if (windows.length === 0) return;
-    events.push({
+    const base: ActivityEvent = {
       id: `pia-${bundle}`,
       title,
       artistId: `pia-artist-${artist}`,
@@ -77,10 +78,14 @@ export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
       description: `${title}（Ticket Pia 平台实时搜索）`,
       category: 'J-Pop',
       tags: ['Ticket Pia', '实时'],
-    });
+    };
+    events.push(normalizeLiveEvent(base, 'pia'));
   });
 
-  return events;
+  return events.map((event) => normalizeLiveEvent({
+    ...event,
+    timeline: deriveTimelineFromWindows(event.ticketWindows || []),
+  }, 'pia'));
 }
 
 // ---- getDetails: 详情页(ticketInformation.do)取精确受付期間 + 結果発表 ----
@@ -111,7 +116,7 @@ export function parsePiaDetailDates(html: string): PiaDetail {
 
 export async function getPiaDetail(url: string): Promise<PiaDetail | null> {
   try {
-    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': UA } });
+    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
     const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
     return parsePiaDetailDates(html);
   } catch {
@@ -125,6 +130,8 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
     url: 'https://t.pia.jp/pia/search_all.do',
     params: { kw: artist },
     headers: { 'User-Agent': UA },
+    connectTimeout: 10000,
+    readTimeout: 20000,
   });
   const searchHtml = typeof s.data === 'string' ? s.data : String(s.data ?? '');
   const artistCd = parsePiaArtistCd(searchHtml);
@@ -136,6 +143,8 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
     url: 'https://t.pia.jp/pia/artist/rlsInfo.do',
     params: { apiRequest },
     headers: { 'User-Agent': UA },
+    connectTimeout: 10000,
+    readTimeout: 20000,
   });
   const html = typeof r.data === 'string' ? r.data : String(r.data ?? '');
   const events = parsePiaRlsInfo(html, artist);
@@ -155,5 +164,8 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
       }
     })
   );
-  return events;
+  return events.map((event) => normalizeLiveEvent({
+    ...event,
+    timeline: deriveTimelineFromWindows(event.ticketWindows || []),
+  }, 'pia'));
 }
