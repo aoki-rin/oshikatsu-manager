@@ -214,7 +214,8 @@ export function DiscoverView({
     setNewVenue('');
   };
 
-  const displayEvents = filteredSearchResults.length > 0 || searchQuery.trim()
+  // 实时结果优先；为空时回退显示已保存/收藏（含刚自填的本地 Live），避免「搜索框有字就把已存事件藏起来」。
+  const displayEvents = filteredSearchResults.length > 0
     ? filteredSearchResults
     : filteredSavedEvents;
 
@@ -394,7 +395,7 @@ export function DiscoverView({
         <div className="space-y-3.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-slate-700">
-              {searchResults.length > 0 ? '实时搜索结果' : '已保存票务'} ({displayEvents.length} 场)
+              {filteredSearchResults.length > 0 ? '实时搜索结果' : '已保存票务'} ({displayEvents.length} 场)
             </span>
           </div>
 

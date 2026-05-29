@@ -215,13 +215,19 @@ export function EventDetailModal({
                         {isVenueFollowed ? '✓ 关注该馆' : '+ 关注场馆'}
                       </button>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1">{venue?.address || '日本'}</p>
-                    <p className="text-[11px] text-slate-500 leading-tight mt-1 bg-white p-1.5 rounded border border-slate-100">
-                      🏢 容纳数: <b className="text-slate-700">{venue?.capacity?.toLocaleString()}人</b>
-                    </p>
-                    <p className="text-[11px] text-slate-400 leading-tight mt-1.5 font-mono">
-                      🚉 {venue?.accessInfo || '换乘信息'}
-                    </p>
+                    {venue ? (
+                      <>
+                        <p className="text-[11px] text-slate-500 mt-1">{venue.address}</p>
+                        <p className="text-[11px] text-slate-500 leading-tight mt-1 bg-white p-1.5 rounded border border-slate-100">
+                          🏢 容纳数: <b className="text-slate-700">{venue.capacity?.toLocaleString()}人</b>
+                        </p>
+                        <p className="text-[11px] text-slate-400 leading-tight mt-1.5 font-mono">
+                          🚉 {venue.accessInfo}
+                        </p>
+                      </>
+                    ) : (
+                      event.region && <p className="text-[11px] text-slate-500 mt-1">📍 {event.region}</p>
+                    )}
                   </div>
                 </div>
 
@@ -239,32 +245,45 @@ export function EventDetailModal({
               {/* Performer Oshi description */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-2.5">
                 <div className="flex items-center gap-2.5">
-                  <img 
-                    referrerPolicy="no-referrer"
-                    src={artist?.avatarUrl} 
-                    alt={artist?.name} 
-                    className="w-10 h-10 rounded-full object-cover border-2 border-slate-200"
-                  />
+                  {artist?.avatarUrl ? (
+                    <img
+                      referrerPolicy="no-referrer"
+                      src={artist.avatarUrl}
+                      alt={artist.name}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-slate-200"
+                    />
+                  ) : (
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold border-2 border-slate-200 shrink-0"
+                      style={{ backgroundColor: oshiColor }}
+                    >
+                      {event.artistName.slice(0, 1)}
+                    </div>
+                  )}
                   <div>
                     <div className="flex items-center gap-1.5">
                       <h4 className="text-xs font-bold text-slate-900">演职艺人：{event.artistName}</h4>
                       <button
                         onClick={() => onToggleFollowArtist(event.artistId)}
                         className={`text-[9px] px-2 py-0.5 rounded-full font-bold transition-all border ${
-                          isArtistFollowed 
-                            ? 'bg-pink-50 text-pink-600 border-pink-200' 
+                          isArtistFollowed
+                            ? 'bg-pink-50 text-pink-600 border-pink-200'
                             : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                         }`}
                       >
                         {isArtistFollowed ? '♥ 已在推し名单' : '+ 加入推し'}
                       </button>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-mono">推心指数: {artist?.followerCount?.toLocaleString()} 粉丝</p>
+                    {artist && (
+                      <p className="text-[10px] text-slate-400 font-mono">推心指数: {artist.followerCount?.toLocaleString()} 粉丝</p>
+                    )}
                   </div>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed pt-1.5 border-t border-slate-200/50">
-                  {artist?.description || '暂无该艺人详细介绍。'}
-                </p>
+                {artist?.description && (
+                  <p className="text-xs text-slate-600 leading-relaxed pt-1.5 border-t border-slate-200/50">
+                    {artist.description}
+                  </p>
+                )}
               </div>
 
               {/* Narrative detailed event explanation */}
