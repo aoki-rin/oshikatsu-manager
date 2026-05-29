@@ -8,6 +8,7 @@ import { downloadEventIcs, formatDisplayDate, getDaysRemaining, platformLabel } 
 import { buildReminderTargets } from '../notifications';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
+import { enrichPiaWindows } from '../sources/pia';
 
 // Display an ISO (+09:00) instant in JST regardless of the viewer's timezone (R2 principle).
 function fmtJst(iso?: string | null): string {
@@ -43,11 +44,12 @@ interface EventDetailModalProps {
   onToggleFollowVenue: (venueId: string) => void;
   activeAlerts: NotificationAlert[];
   onToggleAlert: (target: ReminderTarget) => void;
+  onEnrichEvent?: (event: ActivityEvent) => void;
   oshiColor: string; // Hex code
 }
 
 export function EventDetailModal({
-  event,
+  event: eventProp,
   artists,
   venues,
   onClose,
@@ -59,8 +61,24 @@ export function EventDetailModal({
   onToggleFollowVenue,
   activeAlerts,
   onToggleAlert,
+  onEnrichEvent,
   oshiColor
 }: EventDetailModalProps) {
+  // Lazy detail enrichment (e.g. Pia precise 受付 dates) on open — search stays fast,
+  // details load when you actually open the event (Mihon-style). Best-effort.
+  const [event, setEvent] = useState<ActivityEvent>(eventProp);
+  useEffect(() => {
+    setEvent(eventProp);
+    let cancelled = false;
+    enrichPiaWindows(eventProp).then((enriched) => {
+      if (cancelled || enriched === eventProp) return;
+      setEvent(enriched);
+      onEnrichEvent?.(enriched);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventProp.id]);
+
   const artist = artists.find(a => a.id === event.artistId);
   const venue = venues.find(v => v.id === event.venueId);
 

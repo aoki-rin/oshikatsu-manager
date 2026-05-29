@@ -96,7 +96,7 @@ export interface NotificationAlert {
   notificationId?: number;
 }
 
-export type TicketSearchStatus = 'ok' | 'empty' | 'blocked' | 'error' | 'skipped';
+export type TicketSearchStatus = 'ok' | 'empty' | 'blocked' | 'error' | 'skipped' | 'pending';
 
 export interface TicketSearchReport {
   platform: TicketPlatform;

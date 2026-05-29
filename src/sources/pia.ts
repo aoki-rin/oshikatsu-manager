@@ -147,25 +147,38 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
     readTimeout: 20000,
   });
   const html = typeof r.data === 'string' ? r.data : String(r.data ?? '');
-  const events = parsePiaRlsInfo(html, artist);
+  // 搜索只返回 rlsInfo（状态 + 链接，快）。精确受付日期由 enrichPiaWindows 在点开详情时懒加载。
+  return parsePiaRlsInfo(html, artist);
+}
 
-  // 3) getDetails 富集：对【受付中】轮次抓详情页拿精确受付締切/結果発表（限量并发控延迟）
-  const active: TicketWindow[] = [];
-  for (const e of events)
-    for (const w of e.ticketWindows)
-      if (active.length < 4 && w.applyUrl && w.statusText && /受付中/.test(w.statusText)) active.push(w);
-  await Promise.allSettled(
-    active.map(async (w) => {
-      const d = await getPiaDetail(w.applyUrl!);
-      if (d && (d.applyStart || d.applyEnd)) {
-        w.applyStart = d.applyStart;
-        w.applyEnd = d.applyEnd;
-        w.resultStart = d.resultStart;
-      }
-    })
+// 点开事件详情时懒加载：对【受付中】且还没精确日期的 Pia 轮次抓详情页补 applyStart/End/resultStart。
+// best-effort：浏览器端会因 CORS 失败(getPiaDetail 返回 null)而原样返回；真机经 CapacitorHttp 可用。
+export async function enrichPiaWindows(event: ActivityEvent): Promise<ActivityEvent> {
+  const windows = event.ticketWindows ?? [];
+  const targets = windows.filter(
+    (w) => w.platform === 'Ticket Pia' && w.applyUrl && !w.applyStart && /受付中/.test(w.statusText ?? ''),
   );
-  return events.map((event) => normalizeLiveEvent({
-    ...event,
-    timeline: deriveTimelineFromWindows(event.ticketWindows || []),
-  }, 'pia'));
+  if (targets.length === 0) return event;
+  const results = await Promise.allSettled(
+    targets.slice(0, 4).map(async (w) => ({ id: w.id, detail: await getPiaDetail(w.applyUrl!) })),
+  );
+  const byId = new Map(windows.map((w) => [w.id, w] as const));
+  let changed = false;
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.detail && (r.value.detail.applyStart || r.value.detail.applyEnd)) {
+      const w = byId.get(r.value.id);
+      if (w) {
+        byId.set(r.value.id, {
+          ...w,
+          applyStart: r.value.detail.applyStart,
+          applyEnd: r.value.detail.applyEnd,
+          resultStart: r.value.detail.resultStart ?? w.resultStart,
+        });
+        changed = true;
+      }
+    }
+  }
+  if (!changed) return event;
+  const ticketWindows = [...byId.values()];
+  return { ...event, ticketWindows, timeline: deriveTimelineFromWindows(ticketWindows) };
 }

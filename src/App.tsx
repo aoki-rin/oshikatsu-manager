@@ -139,6 +139,7 @@ export default function App() {
             onToggleFollowVenue={store.handleToggleFollowVenue}
             activeAlerts={store.activeAlerts}
             onToggleAlert={store.handleToggleAlert}
+            onEnrichEvent={store.handleEnrichEvent}
             oshiColor={oshiColor}
           />
         )}

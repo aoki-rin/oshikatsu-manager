@@ -28,6 +28,7 @@ const getDayNumStr = (dateStr: string) => {
 };
 
 const reportStatusLabel = (report: TicketSearchReport) => {
+  if (report.status === 'pending') return '搜索中…';
   if (report.status === 'ok') return `${report.count} 件`;
   if (report.status === 'empty') return '无结果';
   if (report.status === 'blocked') return '受限';
@@ -36,6 +37,7 @@ const reportStatusLabel = (report: TicketSearchReport) => {
 };
 
 const reportDotClass = (status: TicketSearchReport['status']) => {
+  if (status === 'pending') return 'bg-slate-300 animate-pulse';
   if (status === 'ok') return 'bg-emerald-500';
   if (status === 'blocked') return 'bg-amber-500';
   if (status === 'error') return 'bg-rose-500';

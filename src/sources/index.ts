@@ -7,8 +7,8 @@ import { searchTicketDive } from './ticketdive';
 import { searchLivePocket } from './livepocket';
 import { searchLawson } from './lawson';
 import { buildPlatformSearchUrl, dedupeEvents, PLATFORM_SEARCH_TIMEOUT_MS, withPlatformTimeout, type TicketSource } from './shared';
-import { aggregateConcerts } from './aggregate';
-import { searchWithProxyFallback } from './proxy';
+import { aggregateConcerts, eventPlatforms } from './aggregate';
+import { searchViaProxy, searchWithProxyFallback } from './proxy';
 
 // platform 名（与 ExtensionSource.platform / TicketPlatform 对齐）→ 插件 search
 const REGISTRY: Record<TicketPlatform, TicketSource> = {
@@ -21,6 +21,75 @@ const REGISTRY: Record<TicketPlatform, TicketSource> = {
 
 export function hasPlugin(platform: string): boolean {
   return platform in REGISTRY;
+}
+
+// 解析出本次要搜索的平台（'All' → 全部已注册插件；否则只取有插件的）。
+export function searchableTargets(activePlatforms: string[]): TicketPlatform[] {
+  const configured = activePlatforms.includes('All') ? Object.keys(REGISTRY) : activePlatforms;
+  return configured.filter((p): p is TicketPlatform => p in REGISTRY);
+}
+
+export interface StreamOptions {
+  signal?: AbortSignal;
+}
+
+// 流式搜索：每个源 settle 就立刻回调 onSource，UI 可增量渲染、不必等最慢的源（Mihon 式全局搜索）。
+// 代理优先：配了代理用代理结果（服务端已并行，一次性回调各平台）；否则各源客户端直连、独立流式。
+export async function searchPlatformsStreaming(
+  query: string,
+  activePlatforms: string[],
+  onSource: (report: TicketSearchReport, events: ActivityEvent[]) => void,
+  options: StreamOptions = {},
+): Promise<void> {
+  const q = query.trim();
+  const targets = searchableTargets(activePlatforms);
+  if (!q || targets.length === 0) return;
+
+  // 代理优先（未配置代理时 searchViaProxy 返回 null → 走客户端流式）
+  let proxyResult: TicketSearchResult | null = null;
+  try {
+    proxyResult = await searchViaProxy(q, activePlatforms);
+  } catch {
+    proxyResult = null;
+  }
+  if (proxyResult) {
+    for (const report of proxyResult.reports) {
+      if (options.signal?.aborted) return;
+      const evs = proxyResult.events.filter((event) => eventPlatforms(event).includes(report.platform));
+      onSource({ ...report, runtime: report.runtime ?? 'proxy' }, evs);
+    }
+    return;
+  }
+
+  // 客户端：各源并发，谁先回来谁先回调
+  await Promise.all(targets.map(async (platform) => {
+    if (options.signal?.aborted) return;
+    const startedAt = Date.now();
+    const handoffUrl = REGISTRY[platform].buildSearchUrl(q);
+    try {
+      const events = await withPlatformTimeout(REGISTRY[platform].search(q), PLATFORM_SEARCH_TIMEOUT_MS, platform);
+      if (options.signal?.aborted) return;
+      onSource({
+        platform,
+        status: events.length > 0 ? 'ok' : 'empty',
+        count: events.length,
+        handoffUrl,
+        runtime: 'client',
+        elapsedMs: Date.now() - startedAt,
+      }, events);
+    } catch (error: unknown) {
+      if (options.signal?.aborted) return;
+      onSource({
+        platform,
+        status: 'error',
+        count: 0,
+        error: error instanceof Error ? error.message : String(error),
+        handoffUrl,
+        runtime: 'client',
+        elapsedMs: Date.now() - startedAt,
+      }, []);
+    }
+  }));
 }
 
 export interface AggregateResult {

@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityEvent, Artist, Venue, ExtensionSource,
-  NotificationAlert, ReminderTarget, TicketSearchReport,
+  NotificationAlert, ReminderTarget, TicketSearchReport, TicketPlatform,
 } from '../types';
 import { INITIAL_EXTENSIONS, OSHI_COLORS } from '../data/mockData';
-import { searchAllPlatforms } from '../sources';
-import { dedupeEvents } from '../sources/shared';
+import { searchPlatformsStreaming, searchableTargets } from '../sources';
+import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
 import { aggregateConcerts } from '../sources/aggregate';
 import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
 
@@ -46,6 +46,8 @@ export function useOshiStore() {
   const [searchReports, setSearchReports] = useState<TicketSearchReport[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  // Cancels the previous in-flight search when a new one starts (stale results ignored).
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   // Followed categories states
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -208,36 +210,86 @@ export function useOshiStore() {
     triggerToast('➕ 本地Live同步就绪', `已自主注册《${newEvent.title.slice(0, 18)}...》，并确立多节点时钟守护！`);
   };
 
+  // 流式搜索：每个平台 settle 就立刻把它的结果合并进来并刷新 UI（不等最慢的源）。
   const handleRunPlatformSearch = async (query: string, activePlatforms: string[]) => {
     const q = query.trim();
     if (!q) return { events: [], reports: [] };
+
+    // 取消上一个还在跑的搜索（旧结果忽略）
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     setIsSearching(true);
+    const recent = [q, ...recentSearches.filter(item => item !== q)].slice(0, 8);
+    setRecentSearches(recent);
+    saveToStorage('oshikatsu_recent_searches', recent);
+
+    // 先给每个启用平台一个「搜索中」占位报告，让用户立刻看到进度
+    const reportsByPlatform = new Map<TicketPlatform, TicketSearchReport>();
+    for (const platform of searchableTargets(activePlatforms)) {
+      reportsByPlatform.set(platform, { platform, status: 'pending', count: 0, handoffUrl: buildPlatformSearchUrl(platform, q) });
+    }
+    const rawEventsById = new Map<string, ActivityEvent>();
+    setSearchReports([...reportsByPlatform.values()]);
+    setSearchResultIds([]);
+
+    const apply = () => {
+      const searchEvents = aggregateConcerts([...rawEventsById.values()]);
+      setSearchReports([...reportsByPlatform.values()]);
+      setSearchResultIds(searchEvents.map(event => event.id));
+      // 增量合并进全局事件（含已持久化的），按 id 去重 + 跨平台聚合，幂等
+      setEvents(prev => aggregateConcerts(dedupeEvents([...searchEvents, ...prev])));
+    };
+
     try {
-      const result = await searchAllPlatforms(q, activePlatforms);
-      const ids = result.events.map(event => event.id);
-      const recent = [q, ...recentSearches.filter(item => item !== q)].slice(0, 8);
-      // Re-aggregate the combined set so freshly-fetched results merge with persisted
-      // events of the same concert (stable agg- ids keep searchResultIds valid).
-      const merged = aggregateConcerts(dedupeEvents([...result.events, ...events]));
-      setEvents(merged);
+      await searchPlatformsStreaming(q, activePlatforms, (report, evs) => {
+        if (controller.signal.aborted) return;
+        reportsByPlatform.set(report.platform, report);
+        for (const event of evs) rawEventsById.set(event.id, event);
+        apply();
+      }, { signal: controller.signal });
+
+      if (controller.signal.aborted) return { events: [], reports: [] };
+
+      // 全部完成：持久化最终结果
+      const searchEvents = aggregateConcerts([...rawEventsById.values()]);
+      const reports = [...reportsByPlatform.values()];
+      const ids = searchEvents.map(event => event.id);
+      setSearchReports(reports);
       setSearchResultIds(ids);
-      setSearchReports(result.reports);
-      setRecentSearches(recent);
-      saveToStorage('oshikatsu_events', merged);
       saveToStorage('oshikatsu_search_result_ids', ids);
-      saveToStorage('oshikatsu_search_reports', result.reports);
-      saveToStorage('oshikatsu_recent_searches', recent);
-      return result;
+      saveToStorage('oshikatsu_search_reports', reports);
+      setEvents(prev => {
+        const merged = aggregateConcerts(dedupeEvents([...searchEvents, ...prev]));
+        saveToStorage('oshikatsu_events', merged);
+        return merged;
+      });
+      return { events: searchEvents, reports };
     } finally {
-      setIsSearching(false);
+      if (searchAbortRef.current === controller) {
+        setIsSearching(false);
+        searchAbortRef.current = null;
+      }
     }
   };
 
   const clearSearchResults = () => {
+    searchAbortRef.current?.abort();
     setSearchResultIds([]);
     setSearchReports([]);
     saveToStorage('oshikatsu_search_result_ids', []);
     saveToStorage('oshikatsu_search_reports', []);
+  };
+
+  // 详情页懒加载（如 Pia 精确受付日期）补全后回写：替换同 id 事件并持久化，
+  // 让时间线/提醒也用上补全后的日期。
+  const handleEnrichEvent = (updatedEvent: ActivityEvent) => {
+    setEvents(prev => {
+      const next = prev.map(event => (event.id === updatedEvent.id ? updatedEvent : event));
+      saveToStorage('oshikatsu_events', next);
+      return next;
+    });
   };
 
   // Custom Local Artist adder
@@ -339,6 +391,7 @@ export function useOshiStore() {
     handleAddCustomEvent,
     handleRunPlatformSearch,
     clearSearchResults,
+    handleEnrichEvent,
     handleAddCustomArtist,
     handleToggleAlert,
     handleToggleExtension,
