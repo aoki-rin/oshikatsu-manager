@@ -2,11 +2,15 @@ import { Capacitor } from '@capacitor/core';
 import { CapacitorHttp } from '@capacitor/core';
 import type { TicketSearchResult } from '../types';
 
+// 代理连不上（Mac 关机 / 不在同一 Tailscale）时快速失败，回退到客户端直连，避免每次搜索干等。
+const PROXY_CONNECT_TIMEOUT_MS = 3000;
+const PROXY_READ_TIMEOUT_MS = 20000;
+
 interface ProxyOptions {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   nativePlatform?: boolean;
-  nativeHttpGet?: (options: { url: string; headers?: Record<string, string> }) => Promise<{ status: number; data: unknown }>;
+  nativeHttpGet?: (options: { url: string; headers?: Record<string, string>; connectTimeout?: number; readTimeout?: number }) => Promise<{ status: number; data: unknown }>;
 }
 
 function configuredProxyBaseUrl(): string | null {
@@ -58,6 +62,8 @@ export async function searchViaProxy(
     const response = await nativeGet({
       url,
       headers: { Accept: 'application/json' },
+      connectTimeout: PROXY_CONNECT_TIMEOUT_MS,
+      readTimeout: PROXY_READ_TIMEOUT_MS,
     });
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`代理搜索失败 HTTP ${response.status}`);
