@@ -57,6 +57,24 @@ describe('proxy network policy', () => {
     assert.deepEqual(classifyPlatformHtml(normalPage, 200), { status: 'ok' });
   });
 
+  it('does NOT flag a normal page that mentions captcha/recaptcha in i18n strings', () => {
+    // Regression: TicketDive returns HTTP 200 + valid __NEXT_DATA__, but its i18n bundle
+    // contains "recaptchaExpired"; bare captcha/recaptcha matching wrongly flagged it blocked.
+    const page =
+      '<html><body><script id="__NEXT_DATA__" type="application/json">' +
+      '{"i18n":{"recaptchaExpired":"reCAPTCHAの有効期限が切れました","captcha":"認証"}}' +
+      '</script>' + '内容'.repeat(120) + '</body></html>';
+    assert.equal(classifyPlatformHtml(page, 200).status, 'ok');
+  });
+
+  it('still flags a real Cloudflare challenge page as blocked', () => {
+    const challenge =
+      '<html><head><title>Just a moment...</title></head><body>' +
+      '<div class="cf-browser-verification"></div>' + 'x'.repeat(300) +
+      '</body></html>';
+    assert.equal(classifyPlatformHtml(challenge, 200).status, 'blocked');
+  });
+
   it('caches repeated platform text fetches within the TTL', async () => {
     let calls = 0;
     const client = createPlatformHttpClient({
