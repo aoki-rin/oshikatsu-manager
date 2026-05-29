@@ -1,4 +1,5 @@
 import type { TicketSearchStatus } from '../src/types';
+import { looksLikeAntiBot } from '../src/sources/shared';
 import { PlatformSearchError } from './types';
 
 const DEFAULT_UA =
@@ -24,16 +25,8 @@ interface CacheEntry {
 }
 
 export function classifyPlatformHtml(html: string, statusCode = 200): PlatformHtmlClassification {
-  if (statusCode === 403 || statusCode === 503) {
-    return { status: 'blocked', reason: '平台返回反爬/验证码页面' };
-  }
-  if (/captcha|access denied|forbidden|cloudflare|cf-browser-verification|bot|不正なアクセス/i.test(html)) {
-    return { status: 'blocked', reason: '平台返回反爬/验证码页面' };
-  }
-  if (html.trim().length < 500) {
-    return { status: 'blocked', reason: '平台返回异常短内容' };
-  }
-  return { status: 'ok' };
+  const check = looksLikeAntiBot(html, statusCode);
+  return check.blocked ? { status: 'blocked', reason: check.reason } : { status: 'ok' };
 }
 
 export function createPlatformHttpClient(options: PlatformHttpClientOptions = {}) {

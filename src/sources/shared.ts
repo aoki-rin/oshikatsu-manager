@@ -5,6 +5,35 @@ import type {
   TicketWindow,
 } from '../types';
 
+// 反爬/验证码指纹（client + server 共用）。
+// ⚠️ 不要用裸 'bot'：会误命中 <meta name="robots"> 的 "robots" 和 CSS "footer__bottom"，
+// 从而把每个正常页面都判成 blocked（曾导致所有搜索返回 0 结果）。只用精确指纹。
+const ANTI_BOT_SIGNATURES =
+  /captcha|recaptcha|access denied|cf-browser-verification|cloudflare|不正なアクセス|are you a robot|unusual traffic/i;
+const ANTI_BOT_STATUS = new Set([403, 429, 503]);
+// 真正异常的页面通常极短（空 body / 截断 / 错误占位）。合法的搜索页/JSON 片段都远大于此。
+const MIN_HTML_LENGTH = 200;
+
+export interface AntiBotCheck {
+  blocked: boolean;
+  reason?: string;
+}
+
+// 判定平台响应是否疑似反爬/验证码/异常。仅凭异常状态码 + 精确指纹 + 极短内容判定。
+// 解析结果为空（艺人无在售）应在各 source 里走「empty」，不要在这里判 blocked。
+export function looksLikeAntiBot(html: string, statusCode = 200): AntiBotCheck {
+  if (ANTI_BOT_STATUS.has(statusCode)) {
+    return { blocked: true, reason: '平台返回反爬/验证码页面' };
+  }
+  if (ANTI_BOT_SIGNATURES.test(html)) {
+    return { blocked: true, reason: '平台返回反爬/验证码页面' };
+  }
+  if (html.trim().length < MIN_HTML_LENGTH) {
+    return { blocked: true, reason: '平台返回异常短内容' };
+  }
+  return { blocked: false };
+}
+
 export const PLATFORM_IDS: Record<TicketPlatform, string> = {
   'Ticket Pia': 'pia',
   eplus: 'eplus',

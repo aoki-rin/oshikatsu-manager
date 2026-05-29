@@ -44,6 +44,19 @@ describe('proxy network policy', () => {
     });
   });
 
+  it('does NOT flag a normal page that merely contains "robots"/"bottom" as blocked', () => {
+    // Regression: the old bare /bot/ matched <meta name="robots"> and footer__bottom,
+    // so every real 200 page was wrongly classified blocked -> all searches returned 0.
+    const normalPage =
+      '<html><head><meta name="robots" content="all"></head><body>' +
+      '<main class="search-results">' + '結果'.repeat(120) + '</main>' +
+      '<footer class="footer__bottom footer__bot">© eplus</footer>' +
+      '</body></html>';
+
+    assert.equal(normalPage.length > 200, true);
+    assert.deepEqual(classifyPlatformHtml(normalPage, 200), { status: 'ok' });
+  });
+
   it('caches repeated platform text fetches within the TTL', async () => {
     let calls = 0;
     const client = createPlatformHttpClient({
