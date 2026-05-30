@@ -6,10 +6,14 @@ import type {
 } from '../types';
 
 // 反爬/验证码指纹（client + server 共用）。
-// ⚠️ 不要用裸 'bot'：会误命中 <meta name="robots"> 的 "robots" 和 CSS "footer__bottom"，
-// 从而把每个正常页面都判成 blocked（曾导致所有搜索返回 0 结果）。只用精确指纹。
+// ⚠️ 只匹配「挑战页基础设施」专属串，绝不用宽泛关键词。踩过两次坑：
+//   - 裸 'bot' → 误命中 <meta name="robots"> 的 "robots" / CSS "footer__bottom"
+//   - 裸 'captcha'/'recaptcha'/'cloudflare' → 误命中正常页面 i18n 文案
+//     （如 TicketDive 的 "recaptchaExpired" 翻译串）→ 正常页被判 blocked
+// 宁可漏判(当成 empty/普通页)也不要错判(把能用的平台判成受限)。真正的拦截主要靠
+// 异常状态码(403/429/503)；内容指纹只取挑战页独有的标记。
 const ANTI_BOT_SIGNATURES =
-  /captcha|recaptcha|access denied|cf-browser-verification|cloudflare|不正なアクセス|are you a robot|unusual traffic/i;
+  /cf-browser-verification|\/cdn-cgi\/challenge-platform\/|incapsula incident id|pardon our interruption|unusual traffic from your computer|are you a (robot|human)\?/i;
 const ANTI_BOT_STATUS = new Set([403, 429, 503]);
 // 真正异常的页面通常极短（空 body / 截断 / 错误占位）。合法的搜索页/JSON 片段都远大于此。
 const MIN_HTML_LENGTH = 200;
