@@ -80,7 +80,11 @@ export function decodeHtml(value: string): string {
 export function absoluteUrl(url: string | null | undefined, base = 'https://l-tike.com'): string | null {
   if (!url) return null;
   try {
-    return new URL(url, base).toString();
+    const resolved = new URL(url, base);
+    // 只放行 http(s)：搜索页常有 href="javascript:void(0)" 之类占位链接，若当成有效 URL 存进
+    // applyUrl/purchaseUrl，点「前往购票」时会被安全拦截而毫无反应（Lawson 踩过这个坑）。
+    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return null;
+    return resolved.toString();
   } catch {
     return null;
   }
@@ -118,11 +122,19 @@ export function deriveTimelineFromWindows(windows: TicketWindow[] = [], now: Dat
   return Object.fromEntries(Object.entries(timeline).filter(([, value]) => Boolean(value))) as TicketTimeline;
 }
 
+// href 是否是可直接打开的 http(s) 链接（挡掉 javascript:/data: 等占位/危险串）。
+export function isHttpUrl(url?: string | null): url is string {
+  return !!url && (url.startsWith('http://') || url.startsWith('https://'));
+}
+
 export function primaryPurchaseUrl(event: Pick<ActivityEvent, 'purchaseUrl' | 'ticketWindows' | 'originalUrl'>): string {
-  return event.purchaseUrl
-    || event.ticketWindows?.find((window) => window.applyUrl)?.applyUrl
-    || event.ticketWindows?.find((window) => window.sourceUrl)?.sourceUrl
-    || event.originalUrl;
+  const candidates = [
+    event.purchaseUrl,
+    event.ticketWindows?.find((window) => isHttpUrl(window.applyUrl))?.applyUrl,
+    event.ticketWindows?.find((window) => isHttpUrl(window.sourceUrl))?.sourceUrl,
+    event.originalUrl,
+  ];
+  return candidates.find(isHttpUrl) || event.originalUrl;
 }
 
 export function normalizeLiveEvent(event: ActivityEvent, platformId: string, fetchedAt = new Date().toISOString()): ActivityEvent {

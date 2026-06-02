@@ -4,9 +4,11 @@ import type { ActivityEvent, TicketWindow } from '../src/types';
 import { parseLawsonSearch } from '../src/sources/lawson';
 import { parseLivePocketSearch } from '../src/sources/livepocket';
 import {
+  absoluteUrl,
   buildPlatformSearchUrl,
   dedupeEvents,
   deriveTimelineFromWindows,
+  primaryPurchaseUrl,
   withPlatformTimeout,
 } from '../src/sources/shared';
 import {
@@ -18,6 +20,33 @@ import {
   buildReminderTargets,
   makeReminderNotificationId,
 } from '../src/notifications';
+
+describe('purchase URL safety', () => {
+  it('absoluteUrl drops javascript:/data: and keeps http(s)', () => {
+    assert.equal(absoluteUrl('javascript:void(0)'), null);
+    assert.equal(absoluteUrl('data:text/html,x'), null);
+    assert.equal(absoluteUrl('/event/mevent/?mid=1', 'https://l-tike.com'), 'https://l-tike.com/event/mevent/?mid=1');
+    assert.equal(absoluteUrl('https://eplus.jp/x'), 'https://eplus.jp/x');
+  });
+
+  it('primaryPurchaseUrl skips javascript: junk and falls back to a real URL', () => {
+    const win: TicketWindow = {
+      id: 'lawson-x-0',
+      platform: 'Lawson Ticket',
+      roundType: '受付',
+      applyStart: null,
+      applyEnd: null,
+      applyUrl: 'javascript:void(0)',
+      sourceUrl: 'javascript:void(0)',
+    };
+    const url = primaryPurchaseUrl({
+      purchaseUrl: 'javascript:void(0)',
+      ticketWindows: [win],
+      originalUrl: 'https://l-tike.com/search/?keyword=ado',
+    });
+    assert.equal(url, 'https://l-tike.com/search/?keyword=ado');
+  });
+});
 
 const sampleWindow: TicketWindow = {
   id: 'lawson-777777-0',
