@@ -1,21 +1,22 @@
 import { Compass, Calendar, Heart, Puzzle, Settings, type LucideIcon } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 export type TabId = 'discover' | 'calendar' | 'oshis' | 'extensions' | 'settings';
 
 interface TabDef {
   id: TabId;
-  label: string;
+  labelKey: string;
   Icon: LucideIcon;
   /** 选中时填充图标（如爱心） */
   fillWhenActive?: boolean;
 }
 
 const TABS: readonly TabDef[] = [
-  { id: 'discover', label: '发现演出', Icon: Compass },
-  { id: 'calendar', label: '票务日程', Icon: Calendar },
-  { id: 'oshis', label: '我的关注', Icon: Heart, fillWhenActive: true },
-  { id: 'extensions', label: '平台插件', Icon: Puzzle },
-  { id: 'settings', label: '应援设置', Icon: Settings },
+  { id: 'discover', labelKey: 'tabs.discover', Icon: Compass },
+  { id: 'calendar', labelKey: 'tabs.calendar', Icon: Calendar },
+  { id: 'oshis', labelKey: 'tabs.oshis', Icon: Heart, fillWhenActive: true },
+  { id: 'extensions', labelKey: 'tabs.extensions', Icon: Puzzle },
+  { id: 'settings', labelKey: 'tabs.settings', Icon: Settings },
 ];
 
 interface BottomTabBarProps {
@@ -28,6 +29,8 @@ interface BottomTabBarProps {
 // 高级感底部导航：磨砂玻璃浮层 + Material 3 风格的「胶囊高亮」+ 图标发光。
 // 选中态用推し色：胶囊底色(透明叠加)、图标/文字着色、图标下方柔光。
 export function BottomTabBar({ currentTab, onChange, oshiColor }: BottomTabBarProps) {
+  const { t } = useI18n();
+
   return (
     <nav
       id="mobile-native-tabbar"
@@ -43,8 +46,9 @@ export function BottomTabBar({ currentTab, onChange, oshiColor }: BottomTabBarPr
                    bg-gradient-to-r from-transparent via-slate-300/60 to-transparent"
       />
 
-      {TABS.map(({ id, label, Icon, fillWhenActive }) => {
+      {TABS.map(({ id, labelKey, Icon, fillWhenActive }) => {
         const active = currentTab === id;
+        const label = t(labelKey);
         return (
           <button
             key={id}

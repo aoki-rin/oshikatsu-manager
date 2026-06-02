@@ -1,6 +1,8 @@
 import { ActivityEvent, TicketPlatform } from './types';
+import { createTranslator, type TFunction } from './i18n/core';
 
 const JST_TIME_ZONE = 'Asia/Tokyo';
+const defaultT = createTranslator('zh-CN');
 
 // 统一的平台展示短名（各平台的常用品牌名）。内部仍用 TicketPlatform 全名做逻辑/存储，
 // 仅用于界面展示，保证「卡片徽标 / 筛选 chip / 搜索报告 / 打开按钮 / 详情页」叫法一致。
@@ -71,23 +73,28 @@ function addMinutesAsJstIcs(dateStr: string, timeStr: string, minutes: number): 
   return `${parts.year}${parts.month}${parts.day}T${parts.hour}${parts.minute}00`;
 }
 
-function targetDateFor(event: ActivityEvent, targetDateType: 'concert' | 'lottery_end' | 'payment'): { summary: string; date: string; time: string; durationMinutes: number; description: string } {
+function targetDateFor(
+  event: ActivityEvent,
+  targetDateType: 'concert' | 'lottery_end' | 'payment',
+  t: TFunction,
+): { summary: string; date: string; time: string; durationMinutes: number; description: string } {
+  const url = event.purchaseUrl || event.originalUrl;
   if (targetDateType === 'lottery_end') {
     return {
-      summary: `【抽选截止】${event.title}`,
+      summary: t('ics.summary.lotteryEnd', { title: event.title }),
       date: event.timeline.lotteryEndDate || event.date,
       time: '23:59',
       durationMinutes: 15,
-      description: `抽选截止提醒。平台: ${event.platform}\n链接: ${event.purchaseUrl || event.originalUrl}`,
+      description: t('ics.description.lotteryEnd', { platform: event.platform, url }),
     };
   }
   if (targetDateType === 'payment') {
     return {
-      summary: `【付款截止】${event.title}`,
+      summary: t('ics.summary.payment', { title: event.title }),
       date: event.timeline.paymentDeadlineDate || event.date,
       time: '23:00',
       durationMinutes: 15,
-      description: `付款截止提醒。平台: ${event.platform}\n链接: ${event.purchaseUrl || event.originalUrl}`,
+      description: t('ics.description.payment', { platform: event.platform, url }),
     };
   }
   return {
@@ -95,7 +102,12 @@ function targetDateFor(event: ActivityEvent, targetDateType: 'concert' | 'lotter
     date: event.date,
     time: event.time || '18:00',
     durationMinutes: 180,
-    description: `${event.description}\n\n平台: ${event.platform}\n票价: ${event.price}\n购票链接: ${event.purchaseUrl || event.originalUrl}`,
+    description: t('ics.description.concert', {
+      description: event.description,
+      platform: event.platform,
+      price: event.price,
+      url,
+    }),
   };
 }
 
@@ -103,8 +115,9 @@ export function buildEventIcs(
   event: ActivityEvent,
   targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert',
   now: Date = new Date(),
+  t: TFunction = defaultT,
 ): string {
-  const target = targetDateFor(event, targetDateType);
+  const target = targetDateFor(event, targetDateType, t);
   const startFormatted = formatToIcsDate(target.date, target.time);
   const endFormatted = addMinutesAsJstIcs(target.date, target.time, target.durationMinutes);
   return [
@@ -137,8 +150,12 @@ export function buildEventIcs(
 }
 
 // Generate an ICS string and trigger a download for a clean Japanese Live Event
-export function downloadEventIcs(event: ActivityEvent, targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert') {
-  const icsString = buildEventIcs(event, targetDateType);
+export function downloadEventIcs(
+  event: ActivityEvent,
+  targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert',
+  t: TFunction = defaultT,
+) {
+  const icsString = buildEventIcs(event, targetDateType, new Date(), t);
   const blob = new Blob([icsString], { type: 'text/calendar;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   
@@ -151,7 +168,7 @@ export function downloadEventIcs(event: ActivityEvent, targetDateType: 'concert'
 }
 
 // Generate dynamic ICS Calendar comprising all followed items
-export function downloadAllFollowedEventsIcs(events: ActivityEvent[]) {
+export function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFunction = defaultT) {
   const icsLines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -178,7 +195,7 @@ export function downloadAllFollowedEventsIcs(events: ActivityEvent[]) {
       `DTSTAMP:${utcStamp()}`,
       `DTSTART;TZID=${JST_TIME_ZONE}:${liveStart}`,
       `DTEND;TZID=${JST_TIME_ZONE}:${liveEnd}`,
-      `SUMMARY:${escapeIcs(`【公演】${event.title}`)}`,
+      `SUMMARY:${escapeIcs(t('ics.summary.allConcert', { title: event.title }))}`,
       `DESCRIPTION:${escapeIcs(event.description.slice(0, 100))}`,
       `LOCATION:${escapeIcs(event.venueName)}`,
       `URL:${event.purchaseUrl || event.originalUrl}`,
@@ -195,8 +212,8 @@ export function downloadAllFollowedEventsIcs(events: ActivityEvent[]) {
         `DTSTAMP:${utcStamp()}`,
         `DTSTART;TZID=${JST_TIME_ZONE}:${lotStart}`,
         `DTEND;TZID=${JST_TIME_ZONE}:${lotEnd}`,
-        `SUMMARY:${escapeIcs(`【推し活】抽选截止: ${event.artistName}`)}`,
-        `DESCRIPTION:${escapeIcs(`购票平台: ${event.platform}\n原链接: ${event.purchaseUrl || event.originalUrl}`)}`,
+        `SUMMARY:${escapeIcs(t('ics.summary.allLottery', { artist: event.artistName }))}`,
+        `DESCRIPTION:${escapeIcs(t('ics.description.allLottery', { platform: event.platform, url: event.purchaseUrl || event.originalUrl }))}`,
         `LOCATION:${escapeIcs(event.venueName)}`,
         'END:VEVENT'
       );

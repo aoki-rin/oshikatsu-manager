@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ExtensionSource } from '../types';
 import { Puzzle, Search } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface ExtensionViewProps {
   extensions: ExtensionSource[];
@@ -13,6 +14,7 @@ export function ExtensionView({
   onToggleExtension,
   oshiColor
 }: ExtensionViewProps) {
+  const { t } = useI18n();
   const [extSearchText, setExtSearchText] = useState('');
 
   const installedExtensions = extensions.filter(
@@ -32,8 +34,8 @@ export function ExtensionView({
             <Puzzle className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-base font-bold font-display text-slate-900">数据源插件</h1>
-            <p className="text-[10px] text-slate-400">启用 / 停用哪些平台参与聚合搜索</p>
+            <h1 className="text-base font-bold font-display text-slate-900">{t('extension.title')}</h1>
+            <p className="text-[10px] text-slate-400">{t('extension.subtitle')}</p>
           </div>
         </div>
 
@@ -45,7 +47,7 @@ export function ExtensionView({
             type="text"
             value={extSearchText}
             onChange={(e) => setExtSearchText(e.target.value)}
-            placeholder="筛选已安装票源..."
+            placeholder={t('extension.searchPlaceholder')}
             className="w-full text-xs pl-8.5 pr-4 py-2 bg-slate-100 rounded-xl border border-slate-150 focus:outline-none focus:border-slate-300 focus:bg-white"
           />
         </div>
@@ -56,7 +58,7 @@ export function ExtensionView({
         {/* Installed sources */}
         <div className="space-y-2.5">
           <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider block">
-            票源 ({installedExtensions.length} 个)
+            {t('extension.installedTitle', { count: installedExtensions.length })}
           </span>
 
           {installedExtensions.map(ext => (
@@ -69,13 +71,13 @@ export function ExtensionView({
                 <h4 className="text-xs font-bold text-slate-900">{ext.name}</h4>
 
                 <p className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
-                  {ext.description}
+                  {t(`extension.description.${ext.id}`)}
                 </p>
               </div>
 
               {/* Enable/disable toggle (real: controls which platforms search) */}
               <div className="flex items-center gap-1.5 pt-0.5 shrink-0">
-                <span className="text-[9px] font-bold text-slate-400">{ext.isEnabled ? '已启用' : '已停用'}</span>
+                <span className="text-[9px] font-bold text-slate-400">{ext.isEnabled ? t('extension.enabled') : t('extension.disabled')}</span>
                 <button
                   id={`toggle-${ext.id}`}
                   onClick={() => onToggleExtension(ext.id)}
