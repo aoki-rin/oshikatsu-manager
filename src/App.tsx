@@ -77,6 +77,8 @@ export default function App() {
             <CalendarView
               events={store.events}
               favorites={store.favorites}
+              followedArtists={store.followedArtists}
+              followedVenues={store.followedVenues}
               activeAlerts={store.activeAlerts}
               onSelectEvent={setSelectedEvent}
               oshiColor={oshiColor}

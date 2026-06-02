@@ -12,6 +12,8 @@ import {
 interface CalendarViewProps {
   events: ActivityEvent[];
   favorites: string[];
+  followedArtists: string[];
+  followedVenues: string[];
   activeAlerts: NotificationAlert[];
   onSelectEvent: (event: ActivityEvent) => void;
   oshiColor: string; // hex
@@ -20,26 +22,36 @@ interface CalendarViewProps {
 export function CalendarView({
   events,
   favorites,
+  followedArtists,
+  followedVenues,
   activeAlerts,
   onSelectEvent,
   oshiColor
 }: CalendarViewProps) {
   const alertEventIds = new Set(activeAlerts.map(alert => alert.eventId));
-  const favoriteEvents = events.filter(e => favorites.includes(e.id) || alertEventIds.has(e.id));
+  const followedArtistSet = new Set(followedArtists);
+  const followedVenueSet = new Set(followedVenues);
+  // 日历雷达 = 我关心的所有演出：收藏 + 已设提醒 + 关注的艺人/会场的演出。
+  const trackedEvents = events.filter(e =>
+    favorites.includes(e.id) ||
+    alertEventIds.has(e.id) ||
+    followedArtistSet.has(e.artistId) ||
+    followedVenueSet.has(e.venueId),
+  );
   const todayKey = getJstDateKey();
   const tomorrowKey = getJstDateKey(new Date(new Date(`${todayKey}T00:00:00+09:00`).getTime() + 86400000));
   
-  const daysOfMay = Array.from({ length: 14 }, (_, i) => {
+  const timelineDays = Array.from({ length: 14 }, (_, i) => {
     const date = new Date(new Date(`${todayKey}T00:00:00+09:00`).getTime() + i * 86400000);
     const dateStr = getJstDateKey(date);
     const dayNum = Number(dateStr.slice(8, 10));
     const dayOfWeek = new Intl.DateTimeFormat('zh-CN', { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(date);
     
     // Find events happening on this specific date
-    const hasConcerts = favoriteEvents.filter(e => e.date === dateStr);
-    const hasLotteryDeadline = favoriteEvents.filter(e => e.timeline.lotteryEndDate === dateStr);
-    const hasPaymentDeadline = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === dateStr);
-    const hasGeneralOpen = favoriteEvents.filter(e => e.timeline.generalStartDate === dateStr);
+    const hasConcerts = trackedEvents.filter(e => e.date === dateStr);
+    const hasLotteryDeadline = trackedEvents.filter(e => e.timeline.lotteryEndDate === dateStr);
+    const hasPaymentDeadline = trackedEvents.filter(e => e.timeline.paymentDeadlineDate === dateStr);
+    const hasGeneralOpen = trackedEvents.filter(e => e.timeline.generalStartDate === dateStr);
 
     return {
       dayNum,
@@ -56,25 +68,25 @@ export function CalendarView({
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>(todayKey);
 
   // Find events for the selected horizontal calendar day
-  const selectedDayData = daysOfMay.find(d => d.dateStr === selectedDateFilter);
+  const selectedDayData = timelineDays.find(d => d.dateStr === selectedDateFilter);
   
   // Categorize timeline events in general:
   // Today's deadlines:
-  const todayLotteryDeadlines = favoriteEvents.filter(e => e.timeline.lotteryEndDate === todayKey);
-  const todayPaymentDeadlines = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === todayKey);
+  const todayLotteryDeadlines = trackedEvents.filter(e => e.timeline.lotteryEndDate === todayKey);
+  const todayPaymentDeadlines = trackedEvents.filter(e => e.timeline.paymentDeadlineDate === todayKey);
   
   // Tomorrow's deadlines:
-  const tomorrowLotteryDeadlines = favoriteEvents.filter(e => e.timeline.lotteryEndDate === tomorrowKey);
-  const tomorrowPaymentDeadlines = favoriteEvents.filter(e => e.timeline.paymentDeadlineDate === tomorrowKey);
+  const tomorrowLotteryDeadlines = trackedEvents.filter(e => e.timeline.lotteryEndDate === tomorrowKey);
+  const tomorrowPaymentDeadlines = trackedEvents.filter(e => e.timeline.paymentDeadlineDate === tomorrowKey);
 
-  const upcomingFavoriteLives = favoriteEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const upcomingTrackedLives = [...trackedEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const handleExportAll = () => {
-    if (favoriteEvents.length === 0) {
-      alert('您的收藏夹目前是空的，请先在“发现”页面点击星星收藏一些演出！');
+    if (trackedEvents.length === 0) {
+      alert('还没有可导出的演出——先收藏演出，或关注艺人 / 场馆。');
       return;
     }
-    downloadAllFollowedEventsIcs(favoriteEvents);
+    downloadAllFollowedEventsIcs(trackedEvents);
   };
 
   return (
@@ -119,7 +131,7 @@ export function CalendarView({
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 no-scrollbar">
-            {daysOfMay.map(day => {
+            {timelineDays.map(day => {
               const isSelected = selectedDateFilter === day.dateStr;
               const hasActivity = day.hasConcerts.length > 0 || day.hasLotteryDeadline.length > 0 || day.hasPaymentDeadline.length > 0 || day.hasGeneralOpen.length > 0;
               
@@ -166,9 +178,11 @@ export function CalendarView({
             <span className="text-xs font-bold text-slate-900">
               📅 {selectedDayData?.dateStr} 提醒详情 ({selectedDayData?.isToday ? '今天' : '日程项'})
             </span>
-            <div className="flex gap-2">
-              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-amber-600 font-bold">● 截止</span>
+            <div className="flex flex-wrap gap-1 justify-end">
+              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-rose-600 font-bold">● 付款</span>
+              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-amber-600 font-bold">● 抽選</span>
               <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-purple-600 font-bold">● 公演</span>
+              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-emerald-600 font-bold">● 発売</span>
             </div>
           </div>
 
@@ -209,9 +223,21 @@ export function CalendarView({
                   </div>
                 ))}
 
-                {selectedDayData.hasConcerts.length === 0 && 
-                 selectedDayData.hasLotteryDeadline.length === 0 && 
-                 selectedDayData.hasPaymentDeadline.length === 0 && (
+                {selectedDayData.hasGeneralOpen.map(e => (
+                  <div key={e.id} onClick={() => onSelectEvent(e)} className="cursor-pointer bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl flex items-center justify-between hover:bg-emerald-100/50 transition">
+                    <div className="min-w-0 pr-2">
+                      <div className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider">🎫 一般発売开始 GENERAL SALE</div>
+                      <h4 className="text-xs font-bold text-slate-800 truncate mt-0.5">{e.title}</h4>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">{e.platform}</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-emerald-500 shrink-0" />
+                  </div>
+                ))}
+
+                {selectedDayData.hasConcerts.length === 0 &&
+                 selectedDayData.hasLotteryDeadline.length === 0 &&
+                 selectedDayData.hasPaymentDeadline.length === 0 &&
+                 selectedDayData.hasGeneralOpen.length === 0 && (
                    <p className="text-[11px] text-slate-400 text-center py-4">本日无特别标记的门票抽选或公演开场指标。</p>
                  )
                 }
@@ -227,11 +253,11 @@ export function CalendarView({
             已收藏 Oshi 票务临期看板 
           </h3>
 
-          {favoriteEvents.length === 0 ? (
+          {trackedEvents.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 p-4 text-center space-y-1.5 py-6">
               <p className="text-xs font-bold text-slate-600">您的临期看板暂不饱满</p>
               <p className="text-[10px] text-slate-400">
-                收藏的购票活动将自动在这里被按截止时间降序排列，帮您盯防便利店结算期！
+                收藏演出、或关注艺人 / 场馆后，相关的抽選・付款・公演日期会自动按时间排在这里。
               </p>
             </div>
           ) : (
@@ -295,7 +321,7 @@ export function CalendarView({
                   未来的演出票程 (UPCOMING OSHIKATSU LIST)
                 </span>
                 
-                {upcomingFavoriteLives.map(e => {
+                {upcomingTrackedLives.map(e => {
                   return (
                     <div 
                       key={e.id} 
