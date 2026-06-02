@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ExtensionSource } from '../types';
-import { Puzzle, Search, Server } from 'lucide-react';
+import { Puzzle, Search } from 'lucide-react';
 
 interface ExtensionViewProps {
   extensions: ExtensionSource[];
@@ -66,29 +66,16 @@ export function ExtensionView({
               className="bg-white rounded-2xl p-3.5 border border-slate-150 flex gap-3 items-start justify-between shadow-xs"
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <h4 className="text-xs font-bold text-slate-900">{ext.name}</h4>
-                  <span className="text-[8px] font-mono px-1 bg-slate-100 text-slate-500 rounded">
-                    {ext.version}
-                  </span>
-                </div>
+                <h4 className="text-xs font-bold text-slate-900">{ext.name}</h4>
 
                 <p className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
                   {ext.description}
                 </p>
-
-                <div className="flex items-center gap-3 mt-3">
-                  <span className="text-[9px] text-slate-400 flex items-center gap-1 font-mono">
-                    <Server className="w-3 h-3" />
-                    状态: {ext.isEnabled ? <b className="text-emerald-500">启用</b> : <span className="text-slate-300">未启用</span>}
-                  </span>
-                  <span className="text-[9px] text-slate-400 font-mono">作者: {ext.author}</span>
-                </div>
               </div>
 
               {/* Enable/disable toggle (real: controls which platforms search) */}
               <div className="flex items-center gap-1.5 pt-0.5 shrink-0">
-                <span className="text-[9px] font-bold text-slate-400">{ext.isEnabled ? '在役' : '休眠'}</span>
+                <span className="text-[9px] font-bold text-slate-400">{ext.isEnabled ? '已启用' : '已停用'}</span>
                 <button
                   id={`toggle-${ext.id}`}
                   onClick={() => onToggleExtension(ext.id)}
