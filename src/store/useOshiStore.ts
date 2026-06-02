@@ -201,15 +201,6 @@ export function useOshiStore() {
     saveToStorage('oshikatsu_followed_venues', updated);
   };
 
-  // Custom Local Events adder
-  const handleAddCustomEvent = (newEvent: ActivityEvent) => {
-    const event = { ...newEvent, sourceKind: 'manual' as const };
-    const updated = dedupeEvents([event, ...events]);
-    setEvents(updated);
-    saveToStorage('oshikatsu_events', updated);
-    triggerToast('➕ 本地Live同步就绪', `已自主注册《${newEvent.title.slice(0, 18)}...》，并确立多节点时钟守护！`);
-  };
-
   // 流式搜索：每个平台 settle 就立刻把它的结果合并进来并刷新 UI（不等最慢的源）。
   const handleRunPlatformSearch = async (query: string, activePlatforms: string[]) => {
     const q = query.trim();
@@ -290,20 +281,6 @@ export function useOshiStore() {
       saveToStorage('oshikatsu_events', next);
       return next;
     });
-  };
-
-  // Custom Local Artist adder
-  const handleAddCustomArtist = (newArtist: Artist) => {
-    const updated = [newArtist, ...artists];
-    setArtists(updated);
-    saveToStorage('oshikatsu_artists', updated);
-
-    // Auto follow this newly added artist
-    const followedUpdated = [...followedArtists, newArtist.id];
-    setFollowedArtists(followedUpdated);
-    saveToStorage('oshikatsu_followed_artists', followedUpdated);
-
-    triggerToast('♥ 新推本命入库', `自主关注艺人「${newArtist.name}」已立绘，祝现场大获中签！`);
   };
 
   // Alert Management Add/Remove alarm indicators
@@ -388,11 +365,9 @@ export function useOshiStore() {
     handleToggleFavorite,
     handleToggleFollowArtist,
     handleToggleFollowVenue,
-    handleAddCustomEvent,
     handleRunPlatformSearch,
     clearSearchResults,
     handleEnrichEvent,
-    handleAddCustomArtist,
     handleToggleAlert,
     handleToggleExtension,
   };

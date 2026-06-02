@@ -67,7 +67,6 @@ export default function App() {
               onSelectEvent={setSelectedEvent}
               favorites={store.favorites}
               onToggleFavorite={store.handleToggleFavorite}
-              onAddCustomEvent={store.handleAddCustomEvent}
               onRunPlatformSearch={store.handleRunPlatformSearch}
               onClearSearchResults={store.clearSearchResults}
               oshiColor={oshiColor}
@@ -93,7 +92,6 @@ export default function App() {
               followedVenues={store.followedVenues}
               onToggleFollowArtist={store.handleToggleFollowArtist}
               onToggleFollowVenue={store.handleToggleFollowVenue}
-              onAddCustomArtist={store.handleAddCustomArtist}
               onSelectEvent={setSelectedEvent}
               oshiColor={oshiColor}
             />

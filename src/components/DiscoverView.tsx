@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
-import { Search, Sparkles, PlusCircle, AlertCircle, Star, ChevronDown } from 'lucide-react';
+import { Search, Sparkles, AlertCircle, Star, ChevronDown } from 'lucide-react';
 import { formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
@@ -61,7 +61,6 @@ interface DiscoverViewProps {
   onSelectEvent: (event: ActivityEvent) => void;
   favorites: string[];
   onToggleFavorite: (eventId: string) => void;
-  onAddCustomEvent: (newEvent: ActivityEvent) => void;
   onRunPlatformSearch: (query: string, activePlatforms: string[]) => Promise<{ events: ActivityEvent[]; reports: TicketSearchReport[] }>;
   onClearSearchResults: () => void;
   oshiColor: string; // hex
@@ -79,7 +78,6 @@ export function DiscoverView({
   onSelectEvent,
   favorites,
   onToggleFavorite,
-  onAddCustomEvent,
   onRunPlatformSearch,
   onClearSearchResults,
   oshiColor
@@ -88,21 +86,9 @@ export function DiscoverView({
   const [selectedPlatform, setSelectedPlatform] = useState<TicketPlatform | 'All'>('All');
   const [selectedRegion, setSelectedRegion] = useState<string>('All');
   const [activeDeadlineFilter, setActiveDeadlineFilter] = useState<'all' | 'lottery' | 'general' | 'payment'>('all');
-  const [showAddModal, setShowAddModal] = useState(false);
   const [showReports, setShowReports] = useState(false);
 
   const [searchNote, setSearchNote] = useState('');
-
-  // Custom Event Form States
-  const [newTitle, setNewTitle] = useState('');
-  const [newArtist, setNewArtist] = useState('');
-  const [newVenue, setNewVenue] = useState('');
-  const [newDate, setNewDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }));
-  const [newTime, setNewTime] = useState('18:00');
-  const [newRegion, setNewRegion] = useState('关东 (东京)');
-  const [newPlatform, setNewPlatform] = useState<TicketPlatform>('Ticket Pia');
-  const [newPrice, setNewPrice] = useState('¥6,800');
-  const [newCategory, setNewCategory] = useState<'J-Pop' | 'Idol' | 'VTuber'>('J-Pop');
 
   // Verify which platforms are active via the Ext Extension Source system
   const activePlatforms = extensions
@@ -166,54 +152,9 @@ export function DiscoverView({
     ...presentRegions.map(pref => ({ value: pref, label: pref })),
   ];
   const filteredSavedEvents = events
-    .filter(event => event.sourceKind === 'manual' || favorites.includes(event.id))
+    .filter(event => favorites.includes(event.id))
     .filter(filterEvent);
   const filteredSearchResults = searchResults.filter(filterEvent);
-
-  const handleCreateCustomEvent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle || !newArtist || !newVenue) return;
-
-    // Auto append IDs or use existing ones
-    const randomId = `ev-custom-${Date.now()}`;
-    const artistId = `art-custom-${newArtist.toLowerCase().replace(/\s+/g, '-')}`;
-    const venueId = `ven-custom-${newVenue.toLowerCase().replace(/\s+/g, '-')}`;
-
-    const customEvent: ActivityEvent = {
-      id: randomId,
-      title: newTitle,
-      artistId: artistId,
-      artistName: newArtist,
-      venueId: venueId,
-      venueName: newVenue,
-      date: newDate,
-      time: newTime,
-      region: newRegion,
-      platform: newPlatform,
-      price: newPrice,
-      imageUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=400&q=80',
-      timeline: {
-        lotteryStartDate: '2026-05-20',
-        lotteryEndDate: '2026-06-03',
-        generalStartDate: '2026-06-08',
-        paymentDeadlineDate: '2026-06-05'
-      },
-      originalUrl: 'https://oshikatsu.manager/custom-ticket-proxy',
-      description: '用户自主同步生成的本地推し巡演！数据保存在您本地，已建立全套开票警告时钟。',
-      category: newCategory,
-      tags: ['本地定制', '我推的主场', 'LiveHouse']
-      ,
-      sourceKind: 'manual'
-    };
-
-    onAddCustomEvent(customEvent);
-    setShowAddModal(false);
-
-    // Reset Form
-    setNewTitle('');
-    setNewArtist('');
-    setNewVenue('');
-  };
 
   // 实时结果优先；为空时回退显示已保存/收藏（含刚自填的本地 Live），避免「搜索框有字就把已存事件藏起来」。
   const displayEvents = filteredSearchResults.length > 0
@@ -238,16 +179,6 @@ export function DiscoverView({
               <p className="text-[10px] text-slate-400 font-medium">聚合门票先行与一般售票情报</p>
             </div>
           </div>
-
-          {/* Manual insert custom live item shortcut */}
-          <button
-            id="btn-trigger-add-event-modal"
-            onClick={() => setShowAddModal(true)}
-            className="p-1.5 rounded-lg bg-slate-150 text-slate-600 hover:bg-slate-200 transition flex items-center gap-1.5 text-xs font-semibold"
-          >
-            <PlusCircle className="w-4 h-4 text-slate-500" />
-            <span>自填Live</span>
-          </button>
         </div>
 
         {/* Input Search Container */}
@@ -537,141 +468,6 @@ export function DiscoverView({
         </div>
 
       </div>
-
-      {/* Insert Custom Event Portal Dialog (Tachiyomi Extension Mock Simulator) */}
-      {showAddModal && (
-        <div id="add-live-modal" className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-40">
-          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl relative overflow-hidden text-slate-800">
-            <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2.5 flex items-center gap-1.5">
-              <PlusCircle className="w-4 h-4 text-emerald-500" />
-              同步本地演出信息 (Custom Oshi)
-            </h3>
-
-            <form onSubmit={handleCreateCustomEvent} className="p-1 space-y-3 mt-4 text-xs">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase">公演标题</label>
-                <input
-                  id="form-title"
-                  type="text"
-                  required
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="如：LiSA Acoutic Solo Show 2026"
-                  className="w-full border border-slate-200 p-2 rounded-lg mt-1 focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase">推し艺人</label>
-                  <input
-                    id="form-artist"
-                    type="text"
-                    required
-                    value={newArtist}
-                    onChange={(e) => setNewArtist(e.target.value)}
-                    placeholder="艺人或企划"
-                    className="w-full border border-slate-200 p-2 rounded-lg mt-1 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase">公演场馆</label>
-                  <input
-                    id="form-venue"
-                    type="text"
-                    required
-                    value={newVenue}
-                    onChange={(e) => setNewVenue(e.target.value)}
-                    placeholder="如: Zepp Haneda"
-                    className="w-full border border-slate-200 p-2 rounded-lg mt-1 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase">公演日期</label>
-                  <input
-                    id="form-date"
-                    type="date"
-                    required
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full border border-slate-200 p-1.5 rounded-lg mt-1 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase">价格估值 (例: ¥7,500)</label>
-                  <input
-                    id="form-price"
-                    type="text"
-                    value={newPrice}
-                    onChange={(e) => setNewPrice(e.target.value)}
-                    className="w-full border border-slate-200 p-1.5 rounded-lg mt-1"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase">地区</label>
-                  <AppSelect
-                    id="form-region"
-                    value={newRegion}
-                    onChange={setNewRegion}
-                    oshiColor={oshiColor}
-                    title="选择地区"
-                    ariaLabel="地区"
-                    className="w-full bg-white text-sm border border-slate-200 p-1.5 rounded-lg mt-1"
-                    options={[
-                      { value: '关东 (东京)', label: '东京 (Kanto)' },
-                      { value: '关西 (大阪)', label: '大阪 (Kansai)' },
-                      { value: '中部 (名古屋)', label: '名古屋 (Chubu)' },
-                    ]}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase">抓取源分类</label>
-                  <AppSelect
-                    id="form-platform"
-                    value={newPlatform}
-                    onChange={setNewPlatform}
-                    oshiColor={oshiColor}
-                    title="抓取源分类"
-                    ariaLabel="抓取源分类"
-                    className="w-full bg-white text-sm border border-slate-200 p-1.5 rounded-lg mt-1"
-                    options={[
-                      { value: 'Ticket Pia', label: 'Ticket Pia' },
-                      { value: 'eplus', label: 'eplus' },
-                      { value: 'LivePocket', label: 'LivePocket' },
-                      { value: 'Lawson Ticket', label: 'Lawson Ticket' },
-                    ]}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-3 border-t border-slate-100">
-                <button
-                  id="btn-cancel-add-event"
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold"
-                >
-                  取消
-                </button>
-                <button
-                  id="btn-confirm-add-event"
-                  type="submit"
-                  className="flex-1 py-2 text-white rounded-xl text-xs font-semibold"
-                  style={{ backgroundColor: oshiColor }}
-                >
-                  确认同步
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </div>
   );

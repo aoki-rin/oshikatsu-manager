@@ -99,7 +99,7 @@ export function SettingsView({
             重置本地票仓数据
           </h3>
           <p className="text-[10px] text-rose-700 leading-normal">
-            若您的自定义演出产生冲突，或者想重载内置预售爬虫，可清空 LocalStorage 来重新抓取基础 Pia、e+、LivePocket 表单。
+            清空本地缓存、重新抓取各平台基础表单。注意：会一并清掉你的收藏、关注与应援色，恢复到初始状态。
           </p>
           <button
             id="btn-reset-db"

@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Artist, Venue, ActivityEvent } from '../types';
 import {
-  Heart, MapPin, Building, PlusCircle, Star, Sparkles,
+  Heart, MapPin, Building, Star, Sparkles,
   Trash2, ChevronRight, Hash, Users
 } from 'lucide-react';
-import { AppSelect } from './AppSelect';
 
 interface MyOshiViewProps {
   artists: Artist[];
@@ -14,7 +13,6 @@ interface MyOshiViewProps {
   followedVenues: string[];
   onToggleFollowArtist: (id: string) => void;
   onToggleFollowVenue: (id: string) => void;
-  onAddCustomArtist: (newArtist: Artist) => void;
   onSelectEvent: (event: ActivityEvent) => void;
   oshiColor: string; // hex
 }
@@ -27,19 +25,11 @@ export function MyOshiView({
   followedVenues,
   onToggleFollowArtist,
   onToggleFollowVenue,
-  onAddCustomArtist,
   onSelectEvent,
   oshiColor
 }: MyOshiViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<'artists' | 'venues'>('artists');
-  const [showAddArtistModal, setShowAddArtistModal] = useState(false);
   
-  // Custom Artist Form state
-  const [newArtistName, setNewArtistName] = useState('');
-  const [newArtistCategory, setNewArtistCategory] = useState('J-Pop');
-  const [newArtistDesc, setNewArtistDesc] = useState('');
-  const [newArtistTags, setNewArtistTags] = useState('');
-
   // Selected focused artist or venue for quick filter
   const [filterFocusId, setFilterFocusId] = useState<string | null>(null);
 
@@ -49,31 +39,6 @@ export function MyOshiView({
 
   const followedVenueList = venues.filter(v => followedVenues.includes(v.id));
   const otherVenueList = venues.filter(v => !followedVenues.includes(v.id));
-
-  const handleCreateArtistSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newArtistName) return;
-
-    const formattedTags = newArtistTags ? newArtistTags.split(',').map(t => t.trim()) : ['自家星推'];
-
-    const newArtist: Artist = {
-      id: `art-user-${Date.now()}`,
-      name: newArtistName,
-      avatarUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=150&q=80',
-      category: newArtistCategory,
-      description: newArtistDesc || '用户自主添加的独占推し主页！快为他/她同步添加更多Live吧。',
-      followerCount: 999,
-      tags: formattedTags
-    };
-
-    onAddCustomArtist(newArtist);
-    setShowAddArtistModal(false);
-
-    // Reset Form
-    setNewArtistName('');
-    setNewArtistDesc('');
-    setNewArtistTags('');
-  };
 
   // Find events matching the selected focused artist or venue
   const focusedEvents = events.filter(e => {
@@ -106,17 +71,6 @@ export function MyOshiView({
               <p className="text-[10px] text-slate-400">我的星推阵容与常去演厅圣地</p>
             </div>
           </div>
-
-          {activeSubTab === 'artists' && (
-            <button
-              id="btn-trigger-add-artist"
-              onClick={() => setShowAddArtistModal(true)}
-              className="p-1 px-2 text-[11px] font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-1 shrink-0"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>添加推し</span>
-            </button>
-          )}
         </div>
 
         {/* Sub tabs selectors */}
@@ -392,82 +346,6 @@ export function MyOshiView({
         )}
 
       </div>
-
-      {/* Add Custom Artist Form overlay modal */}
-      {showAddArtistModal && (
-        <div id="add-artist-modal" className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-40">
-          <div className="w-full max-w-xs bg-white rounded-3xl p-5 shadow-2xl text-slate-800">
-            <h3 className="text-xs font-bold text-slate-930 border-b border-slate-100 pb-2 flex items-center gap-1.5 uppercase font-display">
-              <PlusCircle className="w-4 h-4 text-pink-500" />
-              添加自定义推し Performer
-            </h3>
-
-            <form onSubmit={handleCreateArtistSubmit} className="space-y-3 mt-4 text-xs">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400">推し本命名称 (或企划团队名)</label>
-                <input
-                  id="artist-form-name"
-                  type="text"
-                  required
-                  value={newArtistName}
-                  onChange={(e) => setNewArtistName(e.target.value)}
-                  placeholder="如: YOASOBI / Ado / 凑阿库娅"
-                  className="w-full border border-slate-200 p-2 rounded-lg mt-1 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400">分类领域</label>
-                <AppSelect
-                  id="artist-form-category"
-                  value={newArtistCategory}
-                  onChange={setNewArtistCategory}
-                  oshiColor={oshiColor}
-                  title="分类领域"
-                  ariaLabel="分类领域"
-                  className="w-full bg-white text-sm border border-slate-200 p-2 rounded-lg mt-1"
-                  options={[
-                    { value: 'J-Pop', label: 'J-Pop (流行乐)' },
-                    { value: 'Idol', label: '地下/女子偶像 (Idol)' },
-                    { value: 'VTuber', label: 'VTuber (虚拟主播)' },
-                    { value: 'Rock/Metal', label: '摇滚与金属 (Rock/Metal)' },
-                  ]}
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400">爱意宣言 / 本命短述</label>
-                <textarea
-                  id="artist-form-desc"
-                  value={newArtistDesc}
-                  onChange={(e) => setNewArtistDesc(e.target.value)}
-                  placeholder="请输入对推的简单安利，展现热诚！"
-                  className="w-full border border-slate-205 p-2 rounded-lg mt-1 h-16 resize-none focus:outline-none"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-3 border-t border-slate-150">
-                <button
-                  id="btn-cancel-add-artist"
-                  type="button"
-                  onClick={() => setShowAddArtistModal(false)}
-                  className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
-                >
-                  取消
-                </button>
-                <button
-                  id="btn-confirm-add-artist"
-                  type="submit"
-                  className="flex-1 py-2 text-white rounded-lg transition"
-                  style={{ backgroundColor: oshiColor }}
-                >
-                  本命入库
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </div>
   );
