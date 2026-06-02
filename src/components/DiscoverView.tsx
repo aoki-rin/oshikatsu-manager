@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
-import { Search, Sparkles, PlusCircle, AlertCircle, Star } from 'lucide-react';
+import { Search, Sparkles, PlusCircle, AlertCircle, Star, ChevronDown } from 'lucide-react';
 import { formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
@@ -89,6 +89,7 @@ export function DiscoverView({
   const [selectedRegion, setSelectedRegion] = useState<string>('All');
   const [activeDeadlineFilter, setActiveDeadlineFilter] = useState<'all' | 'lottery' | 'general' | 'payment'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showReports, setShowReports] = useState(false);
 
   const [searchNote, setSearchNote] = useState('');
 
@@ -324,11 +325,18 @@ export function DiscoverView({
 
         {searchReports.length > 0 && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase">
+            <button
+              type="button"
+              onClick={() => setShowReports((v) => !v)}
+              aria-expanded={showReports}
+              className="w-full flex items-center gap-2 px-2.5 py-2 bg-white border border-slate-100 rounded-xl"
+            >
+              <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase shrink-0">
                 平台搜索报告
               </span>
-            </div>
+              <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 ml-auto transition-transform ${showReports ? 'rotate-180' : ''}`} />
+            </button>
+            {showReports && (
             <div className="grid grid-cols-1 gap-2">
               {searchReports.map((report) => (
                 <div key={report.platform} className="bg-white border border-slate-100 rounded-xl p-2.5 flex items-center gap-2">
@@ -356,6 +364,7 @@ export function DiscoverView({
                 </div>
               ))}
             </div>
+            )}
           </div>
         )}
 
