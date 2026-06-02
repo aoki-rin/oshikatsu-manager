@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 export interface SelectOption<T extends string> {
   value: T;
@@ -35,6 +36,7 @@ export function AppSelect<T extends string>({
   ariaLabel,
   id,
 }: AppSelectProps<T>) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
@@ -69,7 +71,7 @@ export function AppSelect<T extends string>({
         aria-label={ariaLabel}
         className={`${triggerClass} focus:outline-none active:scale-[0.99] transition-transform`}
       >
-        <span className="truncate">{selected?.label ?? '请选择'}</span>
+        <span className="truncate">{selected?.label ?? t('common.selectPlaceholder')}</span>
         <ChevronDown
           className={`w-3.5 h-3.5 shrink-0 text-slate-400 transition-transform duration-200 ${
             open ? 'rotate-180' : ''

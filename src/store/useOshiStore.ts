@@ -8,6 +8,7 @@ import { searchPlatformsStreaming, searchableTargets } from '../sources';
 import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
 import { aggregateConcerts } from '../sources/aggregate';
 import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
+import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
 const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
 
@@ -33,7 +34,7 @@ interface ToastMessage {
 
 // 应用领域状态 + 持久化 + 全部业务 handler 的单一来源。
 // App 组件只负责导航(currentTab)/详情(selectedEvent) 这类纯视图状态与渲染。
-export function useOshiStore() {
+export function useOshiStore(t: TFunction) {
   // Dynamic Oshi Fandom color state
   const [oshiColorId, setOshiColorId] = useState<string>('pink');
 
@@ -135,12 +136,17 @@ export function useOshiStore() {
   const handleSelectOshiColor = (id: string) => {
     setOshiColorId(id);
     localStorage.setItem('oshikatsu_color_id', id);
-    triggerToast('我推主题切换成功', `已成功挂载「${OSHI_COLORS.find(c => c.id === id)?.name}」！全场焦点已就绪。`);
+    triggerToast(
+      t('toast.themeTitle'),
+      t('toast.themeBody', { color: OSHI_COLORS.find(c => c.id === id)?.jpName || id }),
+    );
   };
 
   // Reset database values
   const handleResetDatabase = () => {
+    const storedLocaleMode = localStorage.getItem(LOCALE_STORAGE_KEY);
     localStorage.clear();
+    if (storedLocaleMode) localStorage.setItem(LOCALE_STORAGE_KEY, storedLocaleMode);
     setOshiColorId('pink');
     setEvents([]);
     setArtists([]);
@@ -161,11 +167,11 @@ export function useOshiStore() {
     let updated;
     if (isFav) {
       updated = favorites.filter(id => id !== eventId);
-      triggerToast('取消收藏', '演出已移出您的近期临期备忘录。');
+      triggerToast(t('toast.favoriteRemovedTitle'), t('toast.favoriteRemovedBody'));
     } else {
       updated = [...favorites, eventId];
       const ev = events.find(e => e.id === eventId);
-      triggerToast('★ 收藏入库成功', `《${ev?.title.slice(0, 15)}...》已加入票程督防列表！`);
+      triggerToast(t('toast.favoriteAddedTitle'), t('toast.favoriteAddedBody', { title: ev?.title.slice(0, 15) || '' }));
     }
     setFavorites(updated);
     saveToStorage('oshikatsu_favorites', updated);
@@ -176,11 +182,11 @@ export function useOshiStore() {
     let updated;
     if (isFollowed) {
       updated = followedArtists.filter(id => id !== artistId);
-      triggerToast('取消关注艺人', '已将艺人移出常推阵容。');
+      triggerToast(t('toast.artistRemovedTitle'), t('toast.artistRemovedBody'));
     } else {
       updated = [...followedArtists, artistId];
       const art = artists.find(a => a.id === artistId);
-      triggerToast('♥ 加入推し主力阵营', `已确立对 [${art?.name}] 的重点特异关注！`);
+      triggerToast(t('toast.artistAddedTitle'), t('toast.artistAddedBody', { name: art?.name || artistId }));
     }
     setFollowedArtists(updated);
     saveToStorage('oshikatsu_followed_artists', updated);
@@ -191,11 +197,11 @@ export function useOshiStore() {
     let updated;
     if (isFollowed) {
       updated = followedVenues.filter(id => id !== venueId);
-      triggerToast('取消关注场馆', '已停止对该演厅的快捷日程合并。');
+      triggerToast(t('toast.venueRemovedTitle'), t('toast.venueRemovedBody'));
     } else {
       updated = [...followedVenues, venueId];
       const ven = venues.find(v => v.id === venueId);
-      triggerToast('🏢 圣地常驻标记', `已将 [${ven?.name.slice(0, 15)}] 加入经常往返地。`);
+      triggerToast(t('toast.venueAddedTitle'), t('toast.venueAddedBody', { name: ven?.name.slice(0, 15) || venueId }));
     }
     setFollowedVenues(updated);
     saveToStorage('oshikatsu_followed_venues', updated);
@@ -290,12 +296,12 @@ export function useOshiStore() {
     if (existingIndex > -1) {
       await cancelReminderTarget(target.notificationId);
       updated = activeAlerts.filter((_, idx) => idx !== existingIndex);
-      triggerToast('⏰ 提醒时钟卸载', '已关闭该节点倒计时。');
+      triggerToast(t('toast.reminderRemovedTitle'), t('toast.reminderRemovedBody'));
     } else {
       try {
-        await scheduleReminderTarget(target);
+        await scheduleReminderTarget(target, t);
       } catch (error: unknown) {
-        triggerToast('提醒未启用', error instanceof Error ? error.message : '系统通知权限未开启。');
+        triggerToast(t('toast.reminderDisabledTitle'), error instanceof Error ? error.message : t('toast.reminderDisabledBody'));
         return;
       }
 
@@ -313,7 +319,7 @@ export function useOshiStore() {
       };
 
       updated = [...activeAlerts, newAlert];
-      triggerToast('⏰ 本地闹钟设定', `已为您设置【${target.label}】。系统会在指定时间推送。`);
+      triggerToast(t('toast.reminderAddedTitle'), t('toast.reminderAddedBody', { label: target.label }));
     }
 
     setActiveAlerts(updated);
@@ -326,9 +332,9 @@ export function useOshiStore() {
       if (ext.id === id) {
         const nextState = !ext.isEnabled;
         if (nextState) {
-          triggerToast('已启用该源', `【${ext.name}】已启用，下次搜索会包含该平台。`);
+          triggerToast(t('toast.sourceEnabledTitle'), t('toast.sourceEnabledBody', { name: ext.name }));
         } else {
-          triggerToast('已停用该源', `【${ext.name}】已停用，搜索时会跳过该平台。`);
+          triggerToast(t('toast.sourceDisabledTitle'), t('toast.sourceDisabledBody', { name: ext.name }));
         }
         return { ...ext, isEnabled: nextState };
       }

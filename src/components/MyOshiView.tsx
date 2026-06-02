@@ -4,6 +4,7 @@ import {
   Heart, MapPin, Building, Star, Sparkles,
   Trash2, ChevronRight, Hash, Users
 } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface MyOshiViewProps {
   artists: Artist[];
@@ -28,6 +29,7 @@ export function MyOshiView({
   onSelectEvent,
   oshiColor
 }: MyOshiViewProps) {
+  const { locale, t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<'artists' | 'venues'>('artists');
   
   // Selected focused artist or venue for quick filter
@@ -77,6 +79,7 @@ export function MyOshiView({
   const focusedEntityName = activeSubTab === 'artists'
     ? allArtists.find(a => a.id === filterFocusId)?.name
     : allVenues.find(v => v.id === filterFocusId)?.name;
+  const numberFormatter = new Intl.NumberFormat(locale);
 
   return (
     <div id="oshi-view-root" className="flex-1 flex flex-col overflow-hidden">
@@ -92,8 +95,8 @@ export function MyOshiView({
               <Heart className="w-4 h-4 fill-current" />
             </div>
             <div>
-              <h1 className="text-base font-bold font-display text-slate-900">推し与圣地</h1>
-              <p className="text-[10px] text-slate-400">我的星推阵容与常去演厅圣地</p>
+              <h1 className="text-base font-bold font-display text-slate-900">{t('oshi.title')}</h1>
+              <p className="text-[10px] text-slate-400">{t('oshi.subtitle')}</p>
             </div>
           </div>
         </div>
@@ -110,7 +113,7 @@ export function MyOshiView({
               activeSubTab === 'artists' ? 'text-slate-900' : 'text-slate-400 font-medium'
             }`}
           >
-            我推的艺人 ({followedArtistList.length})
+            {t('oshi.artistsTab', { count: followedArtistList.length })}
             {activeSubTab === 'artists' && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ backgroundColor: oshiColor }}></span>
             )}
@@ -126,7 +129,7 @@ export function MyOshiView({
               activeSubTab === 'venues' ? 'text-slate-900' : 'text-slate-400 font-medium'
             }`}
           >
-            关注场馆 ({followedVenueList.length})
+            {t('oshi.venuesTab', { count: followedVenueList.length })}
             {activeSubTab === 'venues' && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ backgroundColor: oshiColor }}></span>
             )}
@@ -141,20 +144,20 @@ export function MyOshiView({
           <div className="bg-slate-900 text-white rounded-2xl p-3.5 border border-slate-800 space-y-3 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] text-slate-400 font-mono">专属巡演检索</span>
+                <span className="text-[10px] text-slate-400 font-mono">{t('oshi.focusedSearch')}</span>
                 <h3 className="text-xs font-bold text-slate-100 truncate mt-0.5">⭐ {focusedEntityName}</h3>
               </div>
               <button 
                 onClick={() => setFilterFocusId(null)}
                 className="text-xs text-slate-400 hover:text-white border border-slate-705 px-2 py-0.5 rounded"
               >
-                关闭聚合
+                {t('oshi.closeFocused')}
               </button>
             </div>
 
             <div className="space-y-2">
               {focusedEvents.length === 0 ? (
-                <p className="text-[10px] text-slate-400 py-2">目前日本各大票仓 Pia / e+ 暂不包含其名目下的近期开票实况。</p>
+                <p className="text-[10px] text-slate-400 py-2">{t('oshi.noFocusedEvents')}</p>
               ) : (
                 focusedEvents.map(e => (
                   <div 
@@ -181,12 +184,12 @@ export function MyOshiView({
             {/* Followed list */}
             <div className="space-y-2.5">
               <span className="text-[10px] font-bold text-slate-400 font-mono block">
-                已在推名单 (MY SPECIAL OSHIS)
+                {t('oshi.followedArtistsTitle')}
               </span>
 
               {followedArtistList.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-4 bg-white rounded-2xl border border-slate-100/80">
-                  在任意演出详情里点「关注该艺人」，就会出现在这里。
+                  {t('oshi.followedArtistsEmpty')}
                 </p>
               ) : (
                 followedArtistList.map(artist => (
@@ -215,12 +218,14 @@ export function MyOshiView({
                             backgroundColor: `${oshiColor}08`
                           }}
                         >
-                          已推 ♥
+                          {t('oshi.followedArtistButton')}
                         </button>
                       </div>
 
                       <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        {artist.followerCount > 0 ? `粉丝数: ${artist.followerCount}名 · ` : ''}{artist.category}
+                        {artist.followerCount > 0
+                          ? t('oshi.artistFollowers', { count: numberFormatter.format(artist.followerCount), category: artist.category })
+                          : t('oshi.artistCategoryOnly', { category: artist.category })}
                       </p>
                       {artist.description && (
                         <p className="text-[10.5px] text-slate-500 line-clamp-1 leading-snug mt-1">{artist.description}</p>
@@ -231,7 +236,7 @@ export function MyOshiView({
                         onClick={() => setFilterFocusId(artist.id)}
                         className="text-[9px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded mt-2.5 hover:bg-slate-200 transition font-bold"
                       >
-                        ⚡ 检索聚合排期
+                        {t('oshi.searchSchedule')}
                       </button>
                     </div>
                   </div>
@@ -243,7 +248,7 @@ export function MyOshiView({
             {otherArtistList.length > 0 && (
               <div className="space-y-2.5 pt-2">
                 <span className="text-[10px] font-bold text-slate-400 font-mono block">
-                  探索其他人气艺人 (EXPLORE SUGGESTED)
+                  {t('oshi.exploreArtistsTitle')}
                 </span>
 
                 <div className="space-y-2">
@@ -270,7 +275,7 @@ export function MyOshiView({
                         onClick={() => onToggleFollowArtist(artist.id)}
                         className="text-[10px] font-bold px-2.5 py-1 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg transition"
                       >
-                        + 关注
+                        {t('oshi.followButton')}
                       </button>
                     </div>
                   ))}
@@ -288,12 +293,12 @@ export function MyOshiView({
             {/* Followed Venues list */}
             <div className="space-y-2.5">
               <span className="text-[10px] font-bold text-slate-400 font-mono block">
-                已关注场馆 (MY HOLY VENUES)
+                {t('oshi.followedVenuesTitle')}
               </span>
 
               {followedVenueList.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-4 bg-white rounded-2xl border border-slate-100/80">
-                  在任意演出详情里点「关注该馆」，就会出现在这里。
+                  {t('oshi.followedVenuesEmpty')}
                 </p>
               ) : (
                 followedVenueList.map(venue => (
@@ -323,17 +328,21 @@ export function MyOshiView({
                             backgroundColor: `${oshiColor}08`
                           }}
                         >
-                          已关注 ✓
+                          {t('oshi.followedVenueButton')}
                         </button>
                       </div>
 
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">{venue.capacity > 0 ? `容纳规模: ${venue.capacity}人 | ` : ''}{venue.region}</p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        {venue.capacity > 0
+                          ? t('oshi.venueCapacity', { count: numberFormatter.format(venue.capacity), region: venue.region })
+                          : t('oshi.venueRegionOnly', { region: venue.region })}
+                      </p>
                       
                       <button
                         onClick={() => setFilterFocusId(venue.id)}
                         className="text-[9px] text-slate-605 bg-slate-100 px-2 py-0.5 rounded mt-2.5 hover:bg-slate-200 transition font-bold"
                       >
-                        🏢 检索该馆演出
+                        {t('oshi.searchVenue')}
                       </button>
                     </div>
                   </div>
@@ -345,7 +354,7 @@ export function MyOshiView({
             {otherVenueList.length > 0 && (
               <div className="space-y-2.5 pt-2">
                 <span className="text-[10px] font-bold text-slate-400 font-mono block">
-                  探索日本标志性 Live House / 巨蛋
+                  {t('oshi.exploreVenuesTitle')}
                 </span>
 
                 <div className="space-y-2">
@@ -356,14 +365,16 @@ export function MyOshiView({
                     >
                       <div className="min-w-0 pr-2">
                         <h4 className="text-xs font-bold text-slate-800 truncate">{v.name}</h4>
-                        <span className="text-[8.5px] text-slate-400 font-mono">{v.region} · 最大 {v.capacity.toLocaleString()} 人</span>
+                        <span className="text-[8.5px] text-slate-400 font-mono">
+                          {t('oshi.venueMax', { region: v.region, count: numberFormatter.format(v.capacity) })}
+                        </span>
                       </div>
                       <button
                         id={`btn-follow-venue-${v.id}`}
                         onClick={() => onToggleFollowVenue(v.id)}
                         className="text-[10px] font-bold px-2.5 py-1 bg-slate-100 text-slate-650 rounded-lg shrink-0 hover:bg-slate-200 transition"
                       >
-                        + 关注
+                        {t('oshi.followButton')}
                       </button>
                     </div>
                   ))}

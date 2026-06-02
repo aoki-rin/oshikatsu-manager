@@ -10,16 +10,18 @@ import { EventDetailModal } from './components/EventDetailModal';
 import { BottomTabBar, type TabId } from './components/BottomTabBar';
 import { BellRing, X } from 'lucide-react';
 import { useOshiStore } from './store/useOshiStore';
+import { useI18n } from './i18n/I18nProvider';
 
 export type OShiColorId = 'pink' | 'blue' | 'green' | 'yellow' | 'purple' | 'red' | 'black' | 'orange';
 
 export default function App() {
+  const { locale, localeMode, setLocaleMode, t } = useI18n();
   // Pure view state: active tab + the event whose detail sheet is open.
   const [currentTab, setCurrentTab] = useState<TabId>('discover');
   const [selectedEvent, setSelectedEvent] = useState<ActivityEvent | null>(null);
 
   // All domain state, persistence and business handlers live in the store hook.
-  const store = useOshiStore();
+  const store = useOshiStore(t);
   const { activeColorObj, toastMessage, setToastMessage } = store;
   const oshiColor = activeColorObj.colorHex;
 
@@ -113,6 +115,9 @@ export default function App() {
               onSelectOshiColor={store.handleSelectOshiColor}
               onResetDatabase={store.handleResetDatabase}
               oshiColorHex={oshiColor}
+              locale={locale}
+              localeMode={localeMode}
+              onSelectLocaleMode={setLocaleMode}
             />
           )}
         </div>

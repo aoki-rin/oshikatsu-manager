@@ -7,6 +7,11 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
+html {
+  background-color: #f8fafc;
+  color-scheme: light;
+}
+
 /* Custom Mobile-app style utilities */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -21,6 +26,11 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
   overscroll-behavior-y: contain; /* Prevents pull-to-refresh pull-out on mobile platforms */
+}
+
+#root {
+  min-height: 100dvh;
+  background-color: #f8fafc;
 }
 
 /* Animations */

@@ -8,6 +8,7 @@ import {
   downloadAllFollowedEventsIcs, downloadEventIcs, 
   formatDisplayDate, getDaysRemaining, getJstDateKey
 } from '../utils';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface CalendarViewProps {
   events: ActivityEvent[];
@@ -28,6 +29,7 @@ export function CalendarView({
   onSelectEvent,
   oshiColor
 }: CalendarViewProps) {
+  const { locale, t } = useI18n();
   const alertEventIds = new Set(activeAlerts.map(alert => alert.eventId));
   const followedArtistSet = new Set(followedArtists);
   const followedVenueSet = new Set(followedVenues);
@@ -40,12 +42,13 @@ export function CalendarView({
   );
   const todayKey = getJstDateKey();
   const tomorrowKey = getJstDateKey(new Date(new Date(`${todayKey}T00:00:00+09:00`).getTime() + 86400000));
+  const monthFormatter = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'Asia/Tokyo' });
   
   const timelineDays = Array.from({ length: 14 }, (_, i) => {
     const date = new Date(new Date(`${todayKey}T00:00:00+09:00`).getTime() + i * 86400000);
     const dateStr = getJstDateKey(date);
     const dayNum = Number(dateStr.slice(8, 10));
-    const dayOfWeek = new Intl.DateTimeFormat('zh-CN', { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(date);
+    const dayOfWeek = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(date);
     
     // Find events happening on this specific date
     const hasConcerts = trackedEvents.filter(e => e.date === dateStr);
@@ -83,10 +86,10 @@ export function CalendarView({
 
   const handleExportAll = () => {
     if (trackedEvents.length === 0) {
-      alert('还没有可导出的演出——先收藏演出，或关注艺人 / 场馆。');
+      alert(t('calendar.exportEmpty'));
       return;
     }
-    downloadAllFollowedEventsIcs(trackedEvents);
+    downloadAllFollowedEventsIcs(trackedEvents, t);
   };
 
   return (
@@ -103,8 +106,8 @@ export function CalendarView({
               <CalendarDays className="w-4 h-4" />
             </div>
             <div>
-              <h1 className="text-base font-bold font-display tracking-tight text-slate-900">票程日历</h1>
-              <p className="text-[10px] text-slate-400 font-mono">基准时间: {todayKey} (JST)</p>
+              <h1 className="text-base font-bold font-display tracking-tight text-slate-900">{t('calendar.title')}</h1>
+              <p className="text-[10px] text-slate-400 font-mono">{t('calendar.baseline', { date: todayKey })}</p>
             </div>
           </div>
 
@@ -114,7 +117,7 @@ export function CalendarView({
             className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center gap-1 transition"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>导出全部到手机日历</span>
+            <span>{t('calendar.exportAll')}</span>
           </button>
         </div>
       </div>
@@ -125,9 +128,9 @@ export function CalendarView({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider">
-              近期日程纵轴 (JST TIMELINE)
+              {t('calendar.timelineTitle')}
             </span>
-            <span className="text-[10px] text-slate-400">滑动查看 ⮕</span>
+            <span className="text-[10px] text-slate-400">{t('calendar.swipeHint')}</span>
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 no-scrollbar">
@@ -176,13 +179,16 @@ export function CalendarView({
         <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/50 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
             <span className="text-xs font-bold text-slate-900">
-              📅 {selectedDayData?.dateStr} 提醒详情 ({selectedDayData?.isToday ? '今天' : '日程项'})
+              {t('calendar.dayDetails', {
+                date: selectedDayData?.dateStr || '',
+                label: selectedDayData?.isToday ? t('common.today') : t('common.scheduleItems'),
+              })}
             </span>
             <div className="flex flex-wrap gap-1 justify-end">
-              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-rose-600 font-bold">● 付款</span>
-              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-amber-600 font-bold">● 抽選</span>
-              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-purple-600 font-bold">● 公演</span>
-              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-emerald-600 font-bold">● 発売</span>
+              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-rose-600 font-bold">{t('calendar.legendPayment')}</span>
+              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-amber-600 font-bold">{t('calendar.legendLottery')}</span>
+              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-purple-600 font-bold">{t('calendar.legendConcert')}</span>
+              <span className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded text-emerald-600 font-bold">{t('calendar.legendSale')}</span>
             </div>
           </div>
 
@@ -193,9 +199,9 @@ export function CalendarView({
                 {selectedDayData.hasConcerts.map(e => (
                   <div key={e.id} onClick={() => onSelectEvent(e)} className="cursor-pointer bg-purple-50 border border-purple-100 p-2.5 rounded-xl flex items-center justify-between hover:bg-purple-100/50 transition">
                     <div className="min-w-0 pr-2">
-                      <div className="text-[9px] text-purple-600 font-bold uppercase tracking-wider">🎸 演出/公演 Live Show</div>
+                      <div className="text-[9px] text-purple-600 font-bold uppercase tracking-wider">{t('calendar.eventLabel')}</div>
                       <h4 className="text-xs font-bold text-slate-800 truncate mt-0.5">{e.title}</h4>
-                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">{e.time} 场 | {e.venueName}</p>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">{t('calendar.eventMeta', { time: e.time, venue: e.venueName })}</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-purple-400 shrink-0" />
                   </div>
@@ -204,9 +210,9 @@ export function CalendarView({
                 {selectedDayData.hasLotteryDeadline.map(e => (
                   <div key={e.id} onClick={() => onSelectEvent(e)} className="cursor-pointer bg-amber-50 border border-amber-100 p-2.5 rounded-xl flex items-center justify-between hover:bg-amber-100/50 transition">
                     <div className="min-w-0 pr-2">
-                      <div className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">⚠️ 先行抽选截止 LOTTERY ENDS</div>
+                      <div className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">{t('calendar.lotteryEndsLabel')}</div>
                       <h4 className="text-xs font-bold text-slate-800 truncate mt-0.5">{e.title}</h4>
-                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">23:59 截止 | {e.platform}</p>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">{t('calendar.lotteryEndsMeta', { platform: e.platform })}</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-amber-500 shrink-0" />
                   </div>
@@ -215,9 +221,9 @@ export function CalendarView({
                 {selectedDayData.hasPaymentDeadline.map(e => (
                   <div key={e.id} onClick={() => onSelectEvent(e)} className="cursor-pointer bg-rose-50 border border-rose-100 p-2.5 rounded-xl flex items-center justify-between hover:bg-rose-100/50 transition">
                     <div className="min-w-0 pr-2">
-                      <div className="text-[9px] text-rose-600 font-bold uppercase tracking-wider">🚨 中选门票付款截止 PAYMENT TIME</div>
+                      <div className="text-[9px] text-rose-600 font-bold uppercase tracking-wider">{t('calendar.paymentLabel')}</div>
                       <h4 className="text-xs font-bold text-slate-800 truncate mt-0.5">{e.title}</h4>
-                      <p className="text-[10px] text-rose-500 font-mono mt-0.5">23:00 截至 | {e.platform}</p>
+                      <p className="text-[10px] text-rose-500 font-mono mt-0.5">{t('calendar.paymentMeta', { platform: e.platform })}</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-rose-500 shrink-0" />
                   </div>
@@ -226,7 +232,7 @@ export function CalendarView({
                 {selectedDayData.hasGeneralOpen.map(e => (
                   <div key={e.id} onClick={() => onSelectEvent(e)} className="cursor-pointer bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl flex items-center justify-between hover:bg-emerald-100/50 transition">
                     <div className="min-w-0 pr-2">
-                      <div className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider">🎫 一般発売开始 GENERAL SALE</div>
+                      <div className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider">{t('calendar.generalSaleLabel')}</div>
                       <h4 className="text-xs font-bold text-slate-800 truncate mt-0.5">{e.title}</h4>
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">{e.platform}</p>
                     </div>
@@ -238,7 +244,7 @@ export function CalendarView({
                  selectedDayData.hasLotteryDeadline.length === 0 &&
                  selectedDayData.hasPaymentDeadline.length === 0 &&
                  selectedDayData.hasGeneralOpen.length === 0 && (
-                   <p className="text-[11px] text-slate-400 text-center py-4">本日无特别标记的门票抽选或公演开场指标。</p>
+	                   <p className="text-[11px] text-slate-400 text-center py-4">{t('calendar.noMarks')}</p>
                  )
                 }
               </>
@@ -250,14 +256,14 @@ export function CalendarView({
         <div className="space-y-3 pt-1">
           <h3 className="text-xs font-bold text-slate-700 flex items-center gap-1">
             <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-            已收藏 Oshi 票务临期看板 
+            {t('calendar.boardTitle')}
           </h3>
 
           {trackedEvents.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 p-4 text-center space-y-1.5 py-6">
-              <p className="text-xs font-bold text-slate-600">您的临期看板暂不饱满</p>
+              <p className="text-xs font-bold text-slate-600">{t('calendar.emptyBoardTitle')}</p>
               <p className="text-[10px] text-slate-400">
-                收藏演出、或关注艺人 / 场馆后，相关的抽選・付款・公演日期会自动按时间排在这里。
+                {t('calendar.emptyBoardBody')}
               </p>
             </div>
           ) : (
@@ -267,22 +273,22 @@ export function CalendarView({
               {(todayLotteryDeadlines.length > 0 || todayPaymentDeadlines.length > 0) && (
                 <div className="border border-red-100 rounded-2xl p-3 bg-red-50/50 space-y-2">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-600">
-                    ⚠️ 今天截止 (TODAY CRITICAL)
+                    {t('calendar.todayCritical')}
                   </span>
 
                   {todayLotteryDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-slate-800 truncate max-w-[190px]">【抽选】{e.title}</span>
-                      <button onClick={() => downloadEventIcs(e, 'lottery_end')} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
-                        付款日历.ics
+                      <span className="font-semibold text-slate-800 truncate max-w-[190px]">{t('calendar.lotteryPrefix', { title: e.title })}</span>
+                      <button onClick={() => downloadEventIcs(e, 'lottery_end', t)} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
+                        {t('calendar.paymentIcs')}
                       </button>
                     </div>
                   ))}
                   {todayPaymentDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-slate-800 truncate max-w-[190px]">【支付】{e.title}</span>
-                      <button onClick={() => downloadEventIcs(e, 'payment')} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
-                        便利店付款.ics
+                      <span className="font-semibold text-slate-800 truncate max-w-[190px]">{t('calendar.paymentPrefix', { title: e.title })}</span>
+                      <button onClick={() => downloadEventIcs(e, 'payment', t)} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
+                        {t('calendar.convenienceIcs')}
                       </button>
                     </div>
                   ))}
@@ -293,22 +299,22 @@ export function CalendarView({
               {(tomorrowLotteryDeadlines.length > 0 || tomorrowPaymentDeadlines.length > 0) && (
                 <div className="border border-amber-100 rounded-2xl p-3 bg-amber-50/50 space-y-2">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                    ⏰ 明天截止 (TOMORROW DUE)
+                    {t('calendar.tomorrowDue')}
                   </span>
 
                   {tomorrowLotteryDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-slate-800 truncate max-w-[195px]">{e.title}</span>
-                      <button onClick={() => downloadEventIcs(e, 'lottery_end')} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
-                        打卡
+                      <button onClick={() => downloadEventIcs(e, 'lottery_end', t)} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
+                        {t('calendar.checkIn')}
                       </button>
                     </div>
                   ))}
                   {tomorrowPaymentDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-slate-800 truncate max-w-[195px]">{e.title}</span>
-                      <button onClick={() => downloadEventIcs(e, 'payment')} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
-                        打卡
+                      <button onClick={() => downloadEventIcs(e, 'payment', t)} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
+                        {t('calendar.checkIn')}
                       </button>
                     </div>
                   ))}
@@ -318,7 +324,7 @@ export function CalendarView({
               {/* Master upcoming list */}
               <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-2">
                 <span className="text-[10px] font-bold text-slate-400 font-mono block">
-                  未来的演出票程 (UPCOMING OSHIKATSU LIST)
+                  {t('calendar.upcomingTitle')}
                 </span>
                 
                 {upcomingTrackedLives.map(e => {
@@ -329,7 +335,9 @@ export function CalendarView({
                       className="flex items-center gap-2.5 py-2 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition"
                     >
                       <div className="text-center bg-slate-100 p-1 rounded-lg w-10 shrink-0">
-                        <p className="text-[9px] text-slate-400 font-mono tracking-tighter uppercase">{e.date.slice(5, 7)}月</p>
+                        <p className="text-[9px] text-slate-400 font-mono tracking-tighter uppercase">
+                          {monthFormatter.format(new Date(`${e.date}T00:00:00+09:00`))}
+                        </p>
                         <p className="text-xs font-bold font-display text-slate-800">{e.date.split('-')[2]}</p>
                       </div>
 
@@ -347,7 +355,7 @@ export function CalendarView({
 
                       <div className="text-right shrink-0">
                         <span className="text-[10px] font-bold font-mono text-emerald-600 block">
-                          {getDaysRemaining(e.date) > 0 ? `T-${getDaysRemaining(e.date)}` : '公演日'}
+                          {getDaysRemaining(e.date) > 0 ? `T-${getDaysRemaining(e.date)}` : t('calendar.eventDay')}
                         </span>
                       </div>
                     </div>

@@ -10,21 +10,27 @@ import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { primaryPurchaseUrl, isHttpUrl } from '../sources/shared';
 import { enrichPiaWindows } from '../sources/pia';
+import { useI18n } from '../i18n/I18nProvider';
+import type { Locale, TFunction } from '../i18n/core';
 
 // Display an ISO (+09:00) instant in JST regardless of the viewer's timezone (R2 principle).
-function fmtJst(iso?: string | null): string {
-  if (!iso) return '未定';
-  return new Date(iso).toLocaleString('ja-JP', {
+function fmtJst(iso: string | null | undefined, t: TFunction, locale: Locale): string {
+  if (!iso) return t('common.unspecified');
+  return new Date(iso).toLocaleString(locale, {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo',
   });
 }
 
 // Status of an application window relative to now.
-function windowStatus(applyStart?: string | null, applyEnd?: string | null): { label: string; cls: string } {
+function windowStatus(
+  applyStart: string | null | undefined,
+  applyEnd: string | null | undefined,
+  t: TFunction,
+): { label: string; cls: string; state: 'ended' | 'upcoming' | 'open' } {
   const now = Date.now();
-  if (applyEnd && now > new Date(applyEnd).getTime()) return { label: '受付終了', cls: 'bg-slate-400' };
-  if (applyStart && now < new Date(applyStart).getTime()) return { label: '受付予定', cls: 'bg-blue-500' };
-  return { label: '受付中', cls: 'bg-emerald-500' };
+  if (applyEnd && now > new Date(applyEnd).getTime()) return { label: t('detail.windowStatusEnded'), cls: 'bg-slate-400', state: 'ended' };
+  if (applyStart && now < new Date(applyStart).getTime()) return { label: t('detail.windowStatusUpcoming'), cls: 'bg-blue-500', state: 'upcoming' };
+  return { label: t('detail.windowStatusOpen'), cls: 'bg-emerald-500', state: 'open' };
 }
 
 function daysLeft(iso?: string | null): number | null {
@@ -65,6 +71,8 @@ export function EventDetailModal({
   onEnrichEvent,
   oshiColor
 }: EventDetailModalProps) {
+  const { locale, t } = useI18n();
+  const numberFormatter = new Intl.NumberFormat(locale);
   // Lazy detail enrichment (e.g. Pia precise 受付 dates) on open — search stays fast,
   // details load when you actually open the event (Mihon-style). Best-effort.
   const [event, setEvent] = useState<ActivityEvent>(eventProp);
@@ -83,7 +91,7 @@ export function EventDetailModal({
   const artist = artists.find(a => a.id === event.artistId);
   const venue = venues.find(v => v.id === event.venueId);
 
-  const reminderTargets = buildReminderTargets(event);
+  const reminderTargets = buildReminderTargets(event, t);
   const isReminderActive = (target: ReminderTarget) => activeAlerts.some(a => a.notificationId === target.notificationId);
 
   const [activeTab, setActiveTab] = useState<'info' | 'timeline' | 'reminders'>('info');
@@ -122,7 +130,7 @@ export function EventDetailModal({
               }}
             >
               <Heart className="w-3.5 h-3.5 fill-current" />
-              <span>{isFavorited ? '已添加' : '收藏入库'}</span>
+              <span>{isFavorited ? t('detail.favoriteAdded') : t('detail.favoriteAdd')}</span>
             </button>
 
             <button 
@@ -147,7 +155,7 @@ export function EventDetailModal({
                 {platformLabel(p)}
               </span>
             ))}
-            <span className="text-[10px] text-slate-400">源端</span>
+            <span className="text-[10px] text-slate-400">{t('common.source')}</span>
           </div>
           <h2 className="text-base font-bold text-slate-900 mt-2 leading-snug">
             {event.title}
@@ -172,7 +180,7 @@ export function EventDetailModal({
                 activeTab === 'info' ? 'bg-white shadow text-slate-950 font-bold' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              公演信息
+              {t('detail.tabInfo')}
             </button>
             <button
               id="btn-tab-timeline"
@@ -181,7 +189,7 @@ export function EventDetailModal({
                 activeTab === 'timeline' ? 'bg-white shadow text-slate-950 font-bold' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              票程Milestones
+              {t('detail.tabTimeline')}
             </button>
             <button
               id="btn-tab-reminders"
@@ -191,7 +199,7 @@ export function EventDetailModal({
               }`}
             >
               <Bell className="w-3.5 h-3.5" style={{ color: activeTab === 'reminders' ? oshiColor : undefined }} />
-              开票开响提醒
+              {t('detail.tabReminders')}
             </button>
           </div>
         </div>
@@ -212,7 +220,7 @@ export function EventDetailModal({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-4">
                   <div>
-                    <span className="text-[10px] text-white/80 font-mono">公演日期与时间</span>
+                    <span className="text-[10px] text-white/80 font-mono">{t('detail.dateTimeLabel')}</span>
                     <p className="text-white text-sm font-bold flex items-center gap-1.5 mt-0.5">
                       <Calendar className="w-4 h-4 text-white" />
                       {formatDisplayDate(event.date)} ({event.time})
@@ -229,7 +237,7 @@ export function EventDetailModal({
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-slate-900">演馆：{event.venueName}</h4>
+                      <h4 className="text-xs font-bold text-slate-900">{t('detail.venueTitle', { name: event.venueName })}</h4>
                       <button
                         onClick={() => onToggleFollowVenue(event.venueId)}
                         className={`text-[9px] px-2 py-0.5 rounded-full font-bold transition-all border ${
@@ -238,14 +246,14 @@ export function EventDetailModal({
                             : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                         }`}
                       >
-                        {isVenueFollowed ? '✓ 关注该馆' : '+ 关注场馆'}
+                        {isVenueFollowed ? t('detail.followVenueOn') : t('detail.followVenueOff')}
                       </button>
                     </div>
                     {venue ? (
                       <>
                         <p className="text-[11px] text-slate-500 mt-1">{venue.address}</p>
                         <p className="text-[11px] text-slate-500 leading-tight mt-1 bg-white p-1.5 rounded border border-slate-100">
-                          🏢 容纳数: <b className="text-slate-700">{venue.capacity?.toLocaleString()}人</b>
+                          🏢 <b className="text-slate-700">{t('detail.capacity', { count: numberFormatter.format(venue.capacity ?? 0) })}</b>
                         </p>
                         <p className="text-[11px] text-slate-400 leading-tight mt-1.5 font-mono">
                           🚉 {venue.accessInfo}
@@ -262,11 +270,11 @@ export function EventDetailModal({
                     <CreditCard className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">参考票价/席位</h4>
+                    <h4 className="text-xs font-bold text-slate-900">{t('detail.priceTitle')}</h4>
                     {event.price && event.price !== '—' ? (
                       <p className="text-sm font-bold text-amber-600 mt-0.5">{event.price}</p>
                     ) : (
-                      <p className="text-xs text-slate-400 mt-0.5">未定 · 详见官方页</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{t('detail.priceUnavailable')}</p>
                     )}
                   </div>
                 </div>
@@ -292,7 +300,7 @@ export function EventDetailModal({
                   )}
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-slate-900">演职艺人：{event.artistName}</h4>
+                      <h4 className="text-xs font-bold text-slate-900">{t('detail.artistTitle', { name: event.artistName })}</h4>
                       <button
                         onClick={() => onToggleFollowArtist(event.artistId)}
                         className={`text-[9px] px-2 py-0.5 rounded-full font-bold transition-all border ${
@@ -301,11 +309,11 @@ export function EventDetailModal({
                             : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                         }`}
                       >
-                        {isArtistFollowed ? '♥ 已在推し名单' : '+ 加入推し'}
+                        {isArtistFollowed ? t('detail.followArtistOn') : t('detail.followArtistOff')}
                       </button>
                     </div>
                     {artist && (
-                      <p className="text-[10px] text-slate-400 font-mono">推心指数: {artist.followerCount?.toLocaleString()} 粉丝</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{t('detail.artistPower', { count: numberFormatter.format(artist.followerCount ?? 0) })}</p>
                     )}
                   </div>
                 </div>
@@ -320,7 +328,7 @@ export function EventDetailModal({
               <div className="space-y-1">
                 <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-slate-500" />
-                  公演特色亮点简介
+                  {t('detail.descriptionTitle')}
                 </h4>
                 <p className="text-xs text-slate-600 leading-relaxed bg-slate-100/50 p-3 rounded-xl border border-slate-100">
                   {event.description}
@@ -335,10 +343,10 @@ export function EventDetailModal({
               {event.ticketWindows && event.ticketWindows.length > 0 && (
                 <div className="space-y-3">
                   <p className="text-[11px] text-slate-500 leading-tight">
-                    🎫 自动抓取的多轮抽選/发售窗口（时间为日本时间 JST）。每轮可点「申込」直达，或点来源核对。
+                    {t('detail.windowsIntro')}
                   </p>
                   {event.ticketWindows.map((w) => {
-                    const st = windowStatus(w.applyStart, w.applyEnd);
+                    const st = windowStatus(w.applyStart, w.applyEnd, t);
                     const dl = daysLeft(w.applyEnd);
                     return (
                       <div key={w.id} className="rounded-2xl border border-slate-200 p-3.5 bg-white">
@@ -351,21 +359,21 @@ export function EventDetailModal({
                         </div>
                         <div className="mt-2 space-y-1">
                           {(w.applyStart || w.applyEnd) && (
-                            <p className="text-[11px] text-slate-700"><span className="text-slate-400">受付</span> {fmtJst(w.applyStart)} → {fmtJst(w.applyEnd)}</p>
+                            <p className="text-[11px] text-slate-700"><span className="text-slate-400">{t('detail.windowApplyRangeLabel')}</span> {fmtJst(w.applyStart, t, locale)} → {fmtJst(w.applyEnd, t, locale)}</p>
                           )}
                           {(w.resultStart || w.resultEnd) && (
-                            <p className="text-[11px] text-slate-700"><span className="text-slate-400">当落・入金</span> {fmtJst(w.resultStart)} → {fmtJst(w.resultEnd)}</p>
+                            <p className="text-[11px] text-slate-700"><span className="text-slate-400">{t('detail.windowResultRangeLabel')}</span> {fmtJst(w.resultStart, t, locale)} → {fmtJst(w.resultEnd, t, locale)}</p>
                           )}
-                          {st.label === '受付中' && dl !== null && dl >= 0 && (
-                            <p className="text-[11px] font-bold text-rose-600">締切まであと {dl} 日</p>
+                          {st.state === 'open' && dl !== null && dl >= 0 && (
+                            <p className="text-[11px] font-bold text-rose-600">{t('detail.windowDeadlineDays', { days: dl })}</p>
                           )}
                         </div>
                         <div className="mt-2.5 flex items-center gap-2">
                           {isHttpUrl(w.applyUrl) && (
-                            <button onClick={() => openPurchaseUrl(w.applyUrl!)} className="text-[10px] font-bold text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: oshiColor }}>申込はこちら ↗</button>
+                            <button onClick={() => openPurchaseUrl(w.applyUrl!)} className="text-[10px] font-bold text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: oshiColor }}>{t('detail.applyButton')}</button>
                           )}
                           {isHttpUrl(w.sourceUrl) && (
-                            <button onClick={() => openPurchaseUrl(w.sourceUrl!)} className="text-[10px] text-slate-500 underline">来源核对</button>
+                            <button onClick={() => openPurchaseUrl(w.sourceUrl!)} className="text-[10px] text-slate-500 underline">{t('common.checkSource')}</button>
                           )}
                         </div>
                       </div>
@@ -378,7 +386,7 @@ export function EventDetailModal({
               {(!event.ticketWindows || event.ticketWindows.length === 0) && (
               <>
               <p className="text-[11px] text-slate-500 leading-tight">
-                🎫 日本各大票务平台购票一般分为 <b>抽选先行申请</b> 与 <b>一般先到先得发售</b>，中选后务必在 <b>付款截止日</b> 前完成结算。点击以下任意节点可单独生成 ICS 文件！
+                {t('detail.timelineIntro')}
               </p>
 
               {/* Interactive Visual Timeline List */}
@@ -390,16 +398,16 @@ export function EventDetailModal({
                     <div className="absolute -left-8.5 top-0.5 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-sm flex items-center justify-center"></div>
                     <div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-900">抽选申请首日 (Lottery Open)</span>
+                        <span className="text-xs font-bold text-slate-900">{t('detail.lotteryOpenTitle')}</span>
                         <button 
-                          onClick={() => downloadEventIcs(event, 'lottery_end')}
+                          onClick={() => downloadEventIcs(event, 'lottery_end', t)}
                           className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition"
                         >
-                          导出.ics
+                          {t('common.exportIcs')}
                         </button>
                       </div>
-                      <p className="text-xs font-mono text-slate-605 mt-0.5">{event.timeline.lotteryStartDate} 起</p>
-                      <p className="text-[11px] text-slate-400">先行申票渠道开启，各票仓开始接受会员或特约卡中选取。开票率高。</p>
+                      <p className="text-xs font-mono text-slate-605 mt-0.5">{t('detail.lotteryOpenDate', { date: event.timeline.lotteryStartDate })}</p>
+                      <p className="text-[11px] text-slate-400">{t('detail.lotteryOpenBody')}</p>
                     </div>
                   </div>
                 )}
@@ -410,21 +418,21 @@ export function EventDetailModal({
                     <div className="absolute -left-8.5 top-0.5 w-5 h-5 rounded-full bg-amber-500 border-4 border-white shadow-sm flex items-center justify-center"></div>
                     <div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-900">先期抽选截止 (Lottery Deadline)</span>
+                        <span className="text-xs font-bold text-slate-900">{t('detail.lotteryDeadlineTitle')}</span>
                         <button 
-                          onClick={() => downloadEventIcs(event, 'lottery_end')}
+                          onClick={() => downloadEventIcs(event, 'lottery_end', t)}
                           className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded hover:bg-amber-100 transition"
                         >
-                          导出.ics
+                          {t('common.exportIcs')}
                         </button>
                       </div>
-                      <p className="text-xs font-mono text-slate-605 mt-0.5">{event.timeline.lotteryEndDate} 23:59止</p>
+                      <p className="text-xs font-mono text-slate-605 mt-0.5">{t('detail.lotteryDeadlineDate', { date: event.timeline.lotteryEndDate })}</p>
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500 text-white">重要</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500 text-white">{t('detail.important')}</span>
                         <span className="text-[11px] text-amber-700 font-medium">
                           {getDaysRemaining(event.timeline.lotteryEndDate) > 0 
-                            ? `仅剩 ${getDaysRemaining(event.timeline.lotteryEndDate)} 天申购时间` 
-                            : '已截止申请'}
+                            ? t('detail.lotteryRemainingDays', { days: getDaysRemaining(event.timeline.lotteryEndDate) })
+                            : t('detail.lotteryClosed')}
                         </span>
                       </div>
                     </div>
@@ -438,17 +446,17 @@ export function EventDetailModal({
                     <div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                          首轮中选付款截止
+                          {t('detail.paymentDeadlineTitle')}
                         </span>
                         <button 
-                          onClick={() => downloadEventIcs(event, 'payment')}
+                          onClick={() => downloadEventIcs(event, 'payment', t)}
                           className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded hover:bg-rose-100 transition"
                         >
-                          导出.ics
+                          {t('common.exportIcs')}
                         </button>
                       </div>
-                      <p className="text-xs font-mono text-slate-605 mt-0.5">{event.timeline.paymentDeadlineDate} 23:00</p>
-                      <p className="text-[11px] text-slate-400">中选通知书发放后的第2~3天，未按时通过便利店或国际信用卡付款将自动作废名额。</p>
+                      <p className="text-xs font-mono text-slate-605 mt-0.5">{t('detail.paymentDeadlineDate', { date: event.timeline.paymentDeadlineDate })}</p>
+                      <p className="text-[11px] text-slate-400">{t('detail.paymentDeadlineBody')}</p>
                     </div>
                   </div>
                 )}
@@ -459,16 +467,16 @@ export function EventDetailModal({
                     <div className="absolute -left-8.5 top-0.5 w-5 h-5 rounded-full bg-emerald-500 border-4 border-white shadow-sm flex items-center justify-center"></div>
                     <div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-900">一般票先到先得发售 (General Sale)</span>
+                        <span className="text-xs font-bold text-slate-900">{t('detail.generalSaleTitle')}</span>
                         <button 
-                          onClick={() => downloadEventIcs(event, 'concert')}
+                          onClick={() => downloadEventIcs(event, 'concert', t)}
                           className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded hover:bg-emerald-110 transition"
                         >
-                          导出.ics
+                          {t('common.exportIcs')}
                         </button>
                       </div>
-                      <p className="text-xs font-mono text-slate-650 mt-0.5">{event.timeline.generalStartDate} 10:00</p>
-                      <p className="text-[11px] text-slate-400">公开一般发售，通常不拼运气而拼网速，瞬间秒空，请预先备好对应票仓认证环境。</p>
+                      <p className="text-xs font-mono text-slate-650 mt-0.5">{t('detail.generalSaleDate', { date: event.timeline.generalStartDate })}</p>
+                      <p className="text-[11px] text-slate-400">{t('detail.generalSaleBody')}</p>
                     </div>
                   </div>
                 )}
@@ -481,14 +489,14 @@ export function EventDetailModal({
           {activeTab === 'reminders' && (
             <div className="space-y-4">
               <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 text-[11px] text-amber-800 leading-snug">
-                🚨 <b>本地通知</b>：这些开关会向 Android/iOS 系统登记本地通知。若系统权限关闭，App 会提示你打开通知权限。
+                🚨 <b>{t('detail.reminderIntroTitle')}</b>: {t('detail.reminderIntroBody')}
               </div>
 
               <div className="space-y-3">
                 {reminderTargets.length === 0 ? (
                   <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-xs font-bold text-slate-600">这个结果还没有可提醒的票务时间</p>
-                    <p className="text-[10px] text-slate-400 mt-1">请打开来源核对；平台补全受付期間后再次搜索会自动更新。</p>
+                    <p className="text-xs font-bold text-slate-600">{t('detail.reminderEmptyTitle')}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{t('detail.reminderEmptyBody')}</p>
                   </div>
                 ) : reminderTargets.map((target) => {
                   const active = isReminderActive(target);
@@ -496,7 +504,7 @@ export function EventDetailModal({
                     <div key={`${target.windowId}-${target.type}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60">
                       <div className="min-w-0 pr-3">
                         <h4 className="text-xs font-bold text-slate-800 truncate">{target.label}</h4>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{fmtJst(target.scheduleAt)}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{fmtJst(target.scheduleAt, t, locale)}</p>
                       </div>
                       <button
                         id={`opt-${target.notificationId}`}
@@ -519,8 +527,8 @@ export function EventDetailModal({
         {/* Footer Jump Action Panel */}
         <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center gap-2.5">
           <div className="flex-1">
-            <span className="text-[9px] text-slate-400 font-mono">Aggregation Protocol Verified</span>
-            <p className="text-[10px] text-slate-600 font-medium">已就绪抓取链接。将代理分发至移动浏览器。</p>
+            <span className="text-[9px] text-slate-400 font-mono">{t('detail.footerProtocol')}</span>
+            <p className="text-[10px] text-slate-600 font-medium">{t('detail.footerBody')}</p>
           </div>
           <button
             id={`btn-visit-source-${event.id}`}
@@ -528,7 +536,7 @@ export function EventDetailModal({
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition pulse-primary shadow-md"
             style={{ backgroundColor: oshiColor }}
           >
-            <span>直接前往 {platformLabel(event.platform)} 购票</span>
+            <span>{t('detail.openPurchaseButton', { platform: platformLabel(event.platform) })}</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </button>
         </div>

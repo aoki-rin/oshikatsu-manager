@@ -5,17 +5,15 @@ import { formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { AppSelect } from './AppSelect';
+import { useI18n } from '../i18n/I18nProvider';
+import type { Locale, TFunction } from '../i18n/core';
 
 // Geometric Balance date parsing helpers
-const getMonthAbbr = (dateStr: string) => {
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  try {
-    const parts = dateStr.split('-');
-    const monthIdx = parseInt(parts[1], 10) - 1;
-    return months[monthIdx] || 'MAY';
-  } catch {
-    return 'MAY';
-  }
+const getMonthLabel = (dateStr: string, locale: Locale) => {
+  const month = Number(dateStr.split('-')[1]);
+  if (!Number.isFinite(month) || month <= 0) return '未定';
+  return new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'Asia/Tokyo' })
+    .format(new Date(`${dateStr}T00:00:00+09:00`));
 };
 
 const getDayNumStr = (dateStr: string) => {
@@ -27,13 +25,13 @@ const getDayNumStr = (dateStr: string) => {
   }
 };
 
-const reportStatusLabel = (report: TicketSearchReport) => {
-  if (report.status === 'pending') return '搜索中…';
-  if (report.status === 'ok') return `${report.count} 件`;
-  if (report.status === 'empty') return '无结果';
-  if (report.status === 'blocked') return '受限';
-  if (report.status === 'skipped') return '已跳过';
-  return '搜索失败';
+const reportStatusLabel = (report: TicketSearchReport, t: TFunction) => {
+  if (report.status === 'pending') return t('report.pending');
+  if (report.status === 'ok') return t('report.ok', { count: report.count });
+  if (report.status === 'empty') return t('report.empty');
+  if (report.status === 'blocked') return t('report.blocked');
+  if (report.status === 'skipped') return t('report.skipped');
+  return t('report.error');
 };
 
 const reportDotClass = (status: TicketSearchReport['status']) => {
@@ -82,6 +80,7 @@ export function DiscoverView({
   onClearSearchResults,
   oshiColor
 }: DiscoverViewProps) {
+  const { locale, t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlatforms, setSelectedPlatforms] = useState<TicketPlatform[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>('All');
@@ -99,13 +98,15 @@ export function DiscoverView({
   const runPlatformSearch = async () => {
     const q = searchQuery.trim();
     if (!q) { onClearSearchResults(); setSearchNote(''); return; }
-    setSearchNote('搜索中…');
+    setSearchNote(t('discover.noteSearching'));
     try {
       const { events: res, reports } = await onRunPlatformSearch(q, activePlatforms as string[]);
-      const summary = reports.map(p => `${p.platform}:${reportStatusLabel(p)}`).join(' · ');
-      setSearchNote(res.length ? `平台实时 ${res.length} 条（${summary}）` : `没有可直接聚合的结果（${summary || '无启用插件'}）`);
+      const summary = reports.map(p => `${p.platform}:${reportStatusLabel(p, t)}`).join(' · ');
+      setSearchNote(res.length
+        ? t('discover.noteFound', { count: res.length, summary })
+        : t('discover.noteEmpty', { summary: summary || t('discover.noteEmptyNoSource') }));
     } catch (e: unknown) {
-      setSearchNote('搜索失败：' + (e instanceof Error ? e.message : String(e)));
+      setSearchNote(t('discover.noteError', { message: e instanceof Error ? e.message : String(e) }));
     }
   };
 
@@ -149,7 +150,7 @@ export function DiscoverView({
     events.some(event => normalizeRegion(event.region).includes(pref)),
   );
   const regionOptions = [
-    { value: 'All', label: '📍 日本全地区' },
+    { value: 'All', label: t('discover.regionAll') },
     ...presentRegions.map(pref => ({ value: pref, label: pref })),
   ];
   const filteredSavedEvents = events
@@ -176,8 +177,8 @@ export function DiscoverView({
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h1 className="text-base font-bold font-display tracking-tight text-slate-900">发现演出</h1>
-              <p className="text-[10px] text-slate-400 font-medium">聚合门票先行与一般售票情报</p>
+              <h1 className="text-base font-bold font-display tracking-tight text-slate-900">{t('discover.title')}</h1>
+              <p className="text-[10px] text-slate-400 font-medium">{t('discover.subtitle')}</p>
             </div>
           </div>
         </div>
@@ -191,7 +192,7 @@ export function DiscoverView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') runPlatformSearch(); }}
-            placeholder="搜艺人名 → 实时搜各平台..."
+            placeholder={t('discover.searchPlaceholder')}
             className="w-full text-xs pl-9 pr-8 py-2.5 bg-slate-100 rounded-xl border border-slate-200/50 focus:outline-none focus:border-slate-300 focus:bg-white transition"
           />
           {searchQuery && (
@@ -213,7 +214,7 @@ export function DiscoverView({
             style={{ backgroundColor: oshiColor }}
           >
             <Search className="w-3 h-3" />
-            {searching ? '搜索中…' : '搜平台'}
+            {searching ? t('discover.searching') : t('discover.searchButton')}
           </button>
           {searchNote && <span className="text-[10px] text-slate-500 truncate flex-1">{searchNote}</span>}
         </div>
@@ -226,7 +227,7 @@ export function DiscoverView({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase">
-              可搜索平台 (SOURCES)
+              {t('discover.sourcesTitle')}
             </span>
           </div>
 
@@ -252,7 +253,7 @@ export function DiscoverView({
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'}`}></span>
                   {platformLabel(platName)}
-                  {!isActive && <span className="text-[8px] bg-slate-200 text-slate-400 px-1 rounded">Offline</span>}
+                  {!isActive && <span className="text-[8px] bg-slate-200 text-slate-400 px-1 rounded">{t('common.offline')}</span>}
                 </button>
               );
             })}
@@ -268,7 +269,7 @@ export function DiscoverView({
               className="w-full flex items-center gap-2 px-2.5 py-2 bg-white border border-slate-100 rounded-xl"
             >
               <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase shrink-0">
-                平台搜索报告
+                {t('discover.reportTitle')}
               </span>
               <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 ml-auto transition-transform ${showReports ? 'rotate-180' : ''}`} />
             </button>
@@ -279,7 +280,7 @@ export function DiscoverView({
                   <span className={`w-2 h-2 rounded-full shrink-0 ${reportDotClass(report.status)}`}></span>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold text-slate-800">
-                      {platformLabel(report.platform)} · {reportStatusLabel(report)}
+                      {platformLabel(report.platform)} · {reportStatusLabel(report, t)}
                       {report.runtime && <span className="text-[9px] text-slate-400 font-mono"> · {report.runtime}</span>}
                     </p>
                     {(report.parserVersion || typeof report.elapsedMs === 'number') && (
@@ -294,7 +295,7 @@ export function DiscoverView({
                       onClick={() => openPurchaseUrl(report.handoffUrl!)}
                       className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600 shrink-0"
                     >
-                      打开{platformLabel(report.platform)}
+                      {t('discover.openPlatform', { platform: platformLabel(report.platform) })}
                     </button>
                   )}
                 </div>
@@ -311,8 +312,8 @@ export function DiscoverView({
               value={selectedRegion}
               onChange={setSelectedRegion}
               oshiColor={oshiColor}
-              title="选择地区"
-              ariaLabel="地区筛选"
+              title={t('discover.regionTitle')}
+              ariaLabel={t('discover.regionTitle')}
               options={regionOptions}
             />
           </div>
@@ -321,13 +322,13 @@ export function DiscoverView({
               value={activeDeadlineFilter}
               onChange={setActiveDeadlineFilter}
               oshiColor={oshiColor}
-              title="开票阶段"
-              ariaLabel="开票阶段筛选"
+              title={t('discover.phaseTitle')}
+              ariaLabel={t('discover.phaseTitle')}
               options={[
-                { value: 'all', label: '⏰ 所有开票阶段' },
-                { value: 'lottery', label: '正在抽选之中' },
-                { value: 'general', label: '一般发售预告' },
-                { value: 'payment', label: '付款倒计时告急' },
+                { value: 'all', label: t('discover.phaseAll') },
+                { value: 'lottery', label: t('discover.phaseLottery') },
+                { value: 'general', label: t('discover.phaseGeneral') },
+                { value: 'payment', label: t('discover.phasePayment') },
               ]}
             />
           </div>
@@ -337,16 +338,18 @@ export function DiscoverView({
         <div className="space-y-3.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-slate-700">
-              {filteredSearchResults.length > 0 ? '实时搜索结果' : '已保存票务'} ({displayEvents.length} 场)
+              {filteredSearchResults.length > 0
+                ? t('discover.resultsTitle', { count: displayEvents.length })
+                : t('discover.savedTitle', { count: displayEvents.length })}
             </span>
           </div>
 
           {displayEvents.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl border border-slate-100 p-5 space-y-2">
               <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
-              <p className="text-xs font-semibold text-slate-600">未找到对应要求的购票信息</p>
+              <p className="text-xs font-semibold text-slate-600">{t('discover.emptyTitle')}</p>
               <p className="text-[10px] text-slate-400">
-                输入艺人名后点击“搜平台”。若某个平台失败，可在平台搜索报告里打开对应搜索页继续购票。
+                {t('discover.emptyBody')}
               </p>
               {recentSearches.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-1.5 pt-2">
@@ -380,7 +383,7 @@ export function DiscoverView({
                       e.stopPropagation();
                       onToggleFavorite(event.id);
                     }}
-                    aria-label={isFav ? '取消收藏' : '收藏'}
+                    aria-label={isFav ? t('discover.favoriteRemove') : t('discover.favoriteAdd')}
                     aria-pressed={isFav}
                     className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/80 backdrop-blur-sm shadow-sm hover:bg-white transition"
                     style={{ color: isFav ? oshiColor : '#cbd5e1' }}
@@ -396,7 +399,7 @@ export function DiscoverView({
                         className="w-full text-[8.5px] font-black text-white text-center py-0.5 font-mono tracking-wider uppercase leading-none"
                         style={{ backgroundColor: oshiColor }}
                       >
-                        {getMonthAbbr(event.date)}
+                        {getMonthLabel(event.date, locale)}
                       </div>
                       <div className="flex-1 flex items-center justify-center text-sm font-black text-slate-900 font-display">
                         {getDayNumStr(event.date)}
@@ -450,8 +453,8 @@ export function DiscoverView({
                   {event.timeline.lotteryEndDate && (
                     <div className="px-3.5 pb-2.5 pt-1.5 bg-slate-50/70 border-t border-slate-150/50">
                       <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
-                        <span className="font-bold uppercase tracking-wider">先行 抽選受付</span>
-                        <span>{daysLeft >= 0 ? `⏰ 仅剩 ${daysLeft} 天` : '已截止'}</span>
+                        <span className="font-bold uppercase tracking-wider">{t('discover.lotteryBadge')}</span>
+                        <span>{daysLeft >= 0 ? t('discover.deadlinePrefix', { days: daysLeft }) : t('discover.deadlineClosed')}</span>
                       </div>
                       {/* Simulate simple visual heatbar */}
                       <div className="w-full bg-slate-205 h-1.5 rounded-full mt-1 overflow-hidden">
