@@ -114,13 +114,13 @@ export function SettingsView({
         <div className="text-center pt-4 space-y-1">
           <div className="flex justify-center items-center gap-1 text-slate-400">
             <Heart className="w-3.5 h-3.5 fill-pink-500 text-pink-500 animate-pulse" />
-            <span className="text-[10.5px] font-bold text-slate-500">推し活マネージャー v1.0.0</span>
+            <span className="text-[10.5px] font-bold text-slate-500">推し活マネージャー v1.0</span>
           </div>
           <p className="text-[9px] text-slate-400 font-mono">
-            基建支持: React 19 / Capacitor Edge Core / Tailwind V4
+            基建支持: React 19 / Capacitor 8 / Tailwind 4
           </p>
           <p className="text-[9px] text-slate-400/80">
-            仅限日本巨蛋、Livehouse票务提醒与多规合一ICS同步
+            个人自用 · 聚合日本各平台 Live 票务 · 抽選/截止提醒 · .ics 导出
           </p>
         </div>
 
