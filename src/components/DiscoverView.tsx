@@ -83,7 +83,7 @@ export function DiscoverView({
   oshiColor
 }: DiscoverViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPlatform, setSelectedPlatform] = useState<TicketPlatform | 'All'>('All');
+  const [selectedPlatforms, setSelectedPlatforms] = useState<TicketPlatform[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>('All');
   const [activeDeadlineFilter, setActiveDeadlineFilter] = useState<'all' | 'lottery' | 'general' | 'payment'>('all');
   const [showReports, setShowReports] = useState(false);
@@ -123,7 +123,8 @@ export function DiscoverView({
     if (!isExtensionActive) return false;
 
     // 3. Platform filter (merged events expose every platform present in their windows)
-    const matchesPlatform = selectedPlatform === 'All' || eventPlatforms(event).includes(selectedPlatform);
+    // 多选筛选：未选任何平台 = 不筛选(全部显示);选了若干个 = 只显示这些平台的结果。
+    const matchesPlatform = selectedPlatforms.length === 0 || selectedPlatforms.some(sp => eventPlatforms(event).includes(sp));
 
     // 4. Region filter (NFKC-normalized substring; real region is Japanese kanji)
     const matchesRegion = selectedRegion === 'All' || normalizeRegion(event.region).includes(selectedRegion);
@@ -236,9 +237,13 @@ export function DiscoverView({
               return (
                 <button
                   key={platName}
-                  onClick={() => setSelectedPlatform(selectedPlatform === platName ? 'All' : (platName as TicketPlatform))}
+                  onClick={() => setSelectedPlatforms(prev =>
+                    prev.includes(platName as TicketPlatform)
+                      ? prev.filter(p => p !== platName)
+                      : [...prev, platName as TicketPlatform],
+                  )}
                   className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold flex items-center gap-1.5 border transition-all shrink-0 ${
-                    selectedPlatform === platName
+                    selectedPlatforms.includes(platName as TicketPlatform)
                       ? 'bg-slate-900 border-slate-900 text-white'
                       : isActive
                       ? 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
