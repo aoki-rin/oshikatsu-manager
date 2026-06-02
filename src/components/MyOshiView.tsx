@@ -33,11 +33,36 @@ export function MyOshiView({
   // Selected focused artist or venue for quick filter
   const [filterFocusId, setFilterFocusId] = useState<string | null>(null);
 
-  // Filter actual lists
-  const followedArtistList = artists.filter(a => followedArtists.includes(a.id));
+  // 没有独立的 Artist/Venue 库：实时搜索事件只带 artistId/venueId + 名称。
+  // 从 events 派生记录，让「关注」能在这里解析并显示（props.artists/venues 优先）。
+  const artistsById = new Map<string, Artist>(artists.map((a): [string, Artist] => [a.id, a]));
+  for (const e of events) {
+    if (e.artistId && !artistsById.has(e.artistId)) {
+      artistsById.set(e.artistId, {
+        id: e.artistId, name: e.artistName, avatarUrl: e.imageUrl,
+        category: e.category, description: '', followerCount: 0, tags: [],
+      });
+    }
+  }
+  const allArtists = [...artistsById.values()];
+
+  const venuesById = new Map<string, Venue>(venues.map((v): [string, Venue] => [v.id, v]));
+  for (const e of events) {
+    if (e.venueId && !venuesById.has(e.venueId)) {
+      venuesById.set(e.venueId, {
+        id: e.venueId, name: e.venueName, capacity: 0,
+        region: e.region, address: '', accessInfo: '', imageUrl: e.imageUrl,
+      });
+    }
+  }
+  const allVenues = [...venuesById.values()];
+
+  // Followed lists resolve against the derived records; the "explore" lists stay
+  // curated-only (props), so they simply hide when there's no curated catalog.
+  const followedArtistList = allArtists.filter(a => followedArtists.includes(a.id));
   const otherArtistList = artists.filter(a => !followedArtists.includes(a.id));
 
-  const followedVenueList = venues.filter(v => followedVenues.includes(v.id));
+  const followedVenueList = allVenues.filter(v => followedVenues.includes(v.id));
   const otherVenueList = venues.filter(v => !followedVenues.includes(v.id));
 
   // Find events matching the selected focused artist or venue
@@ -49,9 +74,9 @@ export function MyOshiView({
     }
   });
 
-  const focusedEntityName = activeSubTab === 'artists' 
-    ? artists.find(a => a.id === filterFocusId)?.name 
-    : venues.find(v => v.id === filterFocusId)?.name;
+  const focusedEntityName = activeSubTab === 'artists'
+    ? allArtists.find(a => a.id === filterFocusId)?.name
+    : allVenues.find(v => v.id === filterFocusId)?.name;
 
   return (
     <div id="oshi-view-root" className="flex-1 flex flex-col overflow-hidden">
@@ -161,7 +186,7 @@ export function MyOshiView({
 
               {followedArtistList.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-4 bg-white rounded-2xl border border-slate-100/80">
-                  点击发现页的小心心，或者在下方候选列表添加您的本命歌姬与偶像！
+                  在任意演出详情里点「关注该艺人」，就会出现在这里。
                 </p>
               ) : (
                 followedArtistList.map(artist => (
@@ -194,8 +219,12 @@ export function MyOshiView({
                         </button>
                       </div>
 
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">粉丝数: {artist.followerCount}名 · {artist.category}</p>
-                      <p className="text-[10.5px] text-slate-500 line-clamp-1 leading-snug mt-1">{artist.description}</p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        {artist.followerCount > 0 ? `粉丝数: ${artist.followerCount}名 · ` : ''}{artist.category}
+                      </p>
+                      {artist.description && (
+                        <p className="text-[10.5px] text-slate-500 line-clamp-1 leading-snug mt-1">{artist.description}</p>
+                      )}
                       
                       {/* Interactive Aggregate schedule shortcut trigger */}
                       <button
@@ -264,7 +293,7 @@ export function MyOshiView({
 
               {followedVenueList.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-4 bg-white rounded-2xl border border-slate-100/80">
-                  关注场馆可在上方随时展开近期开票的现场合算。
+                  在任意演出详情里点「关注该馆」，就会出现在这里。
                 </p>
               ) : (
                 followedVenueList.map(venue => (
@@ -298,7 +327,7 @@ export function MyOshiView({
                         </button>
                       </div>
 
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">容纳规模: {venue.capacity}人 | {venue.region}</p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">{venue.capacity > 0 ? `容纳规模: ${venue.capacity}人 | ` : ''}{venue.region}</p>
                       
                       <button
                         onClick={() => setFilterFocusId(venue.id)}
