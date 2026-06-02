@@ -59,6 +59,10 @@ export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
     });
 
     if (windows.length === 0) return;
+    // Pia app 对 /pia/event/event.do 做了 verified app-link（真机实测会直接开 app）；
+    // 把它同时用作 purchaseUrl,「前往购票」即可深链进 Pia app。
+    // 窗口 applyUrl 仍保留精确受付页(ticketInformation.do)——getDetails 富集 + 逐轮「申込」按钮用。
+    const eventUrl = `https://t.pia.jp/pia/event/event.do?eventBundleCd=${bundle}`;
     const base: ActivityEvent = {
       id: `pia-${bundle}`,
       title,
@@ -74,7 +78,8 @@ export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
       imageUrl: PLACEHOLDER_IMG,
       timeline: {},
       ticketWindows: windows,
-      originalUrl: `https://t.pia.jp/pia/event/event.do?eventBundleCd=${bundle}`,
+      originalUrl: eventUrl,
+      purchaseUrl: eventUrl,
       description: `${title}（Ticket Pia 平台实时搜索）`,
       category: 'J-Pop',
       tags: ['Ticket Pia', '实时'],

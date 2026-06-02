@@ -99,6 +99,8 @@ describe('Ticket Pia search parser', () => {
     assert.equal(e.ticketWindows?.length, 1);
     assert.equal(e.ticketWindows?.[0].roundType, 'プレリザーブ先行');
     assert.equal(e.ticketWindows?.[0].statusText, '受付中');
+    // purchaseUrl 必须是 Pia app 能深链的 /pia/event/event.do（而非浏览器-only 的 ticketInformation/search 页）
+    assert.equal(e.purchaseUrl, 'https://t.pia.jp/pia/event/event.do?eventBundleCd=BUNDLE1');
   });
 });
 
