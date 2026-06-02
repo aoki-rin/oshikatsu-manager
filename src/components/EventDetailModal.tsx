@@ -8,6 +8,7 @@ import { downloadEventIcs, formatDisplayDate, getDaysRemaining, platformLabel } 
 import { buildReminderTargets } from '../notifications';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
+import { primaryPurchaseUrl, isHttpUrl } from '../sources/shared';
 import { enrichPiaWindows } from '../sources/pia';
 
 // Display an ISO (+09:00) instant in JST regardless of the viewer's timezone (R2 principle).
@@ -360,10 +361,10 @@ export function EventDetailModal({
                           )}
                         </div>
                         <div className="mt-2.5 flex items-center gap-2">
-                          {w.applyUrl && (
+                          {isHttpUrl(w.applyUrl) && (
                             <button onClick={() => openPurchaseUrl(w.applyUrl!)} className="text-[10px] font-bold text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: oshiColor }}>申込はこちら ↗</button>
                           )}
-                          {w.sourceUrl && (
+                          {isHttpUrl(w.sourceUrl) && (
                             <button onClick={() => openPurchaseUrl(w.sourceUrl!)} className="text-[10px] text-slate-500 underline">来源核对</button>
                           )}
                         </div>
@@ -523,7 +524,7 @@ export function EventDetailModal({
           </div>
           <button
             id={`btn-visit-source-${event.id}`}
-            onClick={() => openPurchaseUrl(event.purchaseUrl || event.originalUrl)}
+            onClick={() => openPurchaseUrl(primaryPurchaseUrl(event))}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition pulse-primary shadow-md"
             style={{ backgroundColor: oshiColor }}
           >
