@@ -262,7 +262,11 @@ export function EventDetailModal({
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-900">参考票价/席位</h4>
-                    <p className="text-sm font-bold text-amber-600 mt-0.5">{event.price}</p>
+                    {event.price && event.price !== '—' ? (
+                      <p className="text-sm font-bold text-amber-600 mt-0.5">{event.price}</p>
+                    ) : (
+                      <p className="text-xs text-slate-400 mt-0.5">未定 · 详见官方页</p>
+                    )}
                   </div>
                 </div>
               </div>
