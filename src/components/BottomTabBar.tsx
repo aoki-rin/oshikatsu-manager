@@ -11,10 +11,10 @@ interface TabDef {
 }
 
 const TABS: readonly TabDef[] = [
-  { id: 'discover', label: '发现聚合', Icon: Compass },
-  { id: 'calendar', label: '票务日前', Icon: Calendar },
-  { id: 'oshis', label: '追の阵容', Icon: Heart, fillWhenActive: true },
-  { id: 'extensions', label: '扩展插件', Icon: Puzzle },
+  { id: 'discover', label: '发现演出', Icon: Compass },
+  { id: 'calendar', label: '票务日程', Icon: Calendar },
+  { id: 'oshis', label: '我的关注', Icon: Heart, fillWhenActive: true },
+  { id: 'extensions', label: '平台插件', Icon: Puzzle },
   { id: 'settings', label: '应援设置', Icon: Settings },
 ];
 
