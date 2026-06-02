@@ -99,7 +99,7 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     isInstalled: true,
     rating: 4.8,
     iconType: 'pia',
-    description: '日本第一大票务平台 Ticket Pia 的数据爬取扩展。支持演唱会、话剧、综合演出的抽选与一般发售抓取。',
+    description: 'Ticket Pia 搜索规则。读取公开搜索结果与多轮受付窗口（抽選 / 一般）。',
   },
   {
     id: 'ext-eplus',
@@ -123,7 +123,7 @@ export const INITIAL_EXTENSIONS: ExtensionSource[] = [
     isInstalled: true,
     rating: 4.6,
     iconType: 'livepocket',
-    description: '专为地下偶像和动漫声优见习会等中小型 LiveHub 而设的 LivePocket 接口卡片。获取高精度现场特典消息。',
+    description: 'LivePocket 搜索规则（地下偶像 / 声优等中小型 Live 为主）。读取公开搜索结果。',
   },
   {
     id: 'ext-lawson',

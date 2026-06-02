@@ -33,7 +33,7 @@ export function ExtensionView({
           </div>
           <div>
             <h1 className="text-base font-bold font-display text-slate-900">数据源插件</h1>
-            <p className="text-[10px] text-slate-400">Mihon 式票源规则：启用/停用哪些平台参与搜索</p>
+            <p className="text-[10px] text-slate-400">启用 / 停用哪些平台参与聚合搜索</p>
           </div>
         </div>
 
@@ -52,19 +52,6 @@ export function ExtensionView({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar" style={{ scrollbarWidth: 'none' }}>
-
-        {/* Concept Introduction banner */}
-        <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-4 space-y-2 border border-slate-800 shadow-lg">
-          <p className="text-[11px] font-mono text-slate-400 uppercase tracking-widest">插件机制说明</p>
-          <h3 className="text-xs font-bold leading-snug">为什么是 Mihon 式票源组件？</h3>
-          <p className="text-[10.5px] text-slate-300 leading-normal">
-            各票务平台的页面结构会变动。App 把每个平台的搜索、解析、失败报告与官方跳转分开维护：
-          </p>
-          <ul className="text-[10px] text-slate-400 space-y-1 list-disc pl-4 leading-normal">
-            <li>停用某个源后，搜索时会跳过它（其结果不再参与聚合）。</li>
-            <li>遇到反爬或结构异常时显示原因，并提供官方搜索跳转。</li>
-          </ul>
-        </div>
 
         {/* Installed sources */}
         <div className="space-y-2.5">
