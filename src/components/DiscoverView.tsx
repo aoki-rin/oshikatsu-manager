@@ -423,11 +423,26 @@ export function DiscoverView({
               const isFav = favorites.includes(event.id);
 
               return (
-                <div 
+                <div
                   key={event.id}
                   id={`event-card-${event.id}`}
-                  className="bg-white rounded-2xl border border-slate-100 hover:border-slate-200 shadow-xs overflow-hidden flex flex-col transition duration-205 hover:-translate-y-0.5"
+                  className="relative bg-white rounded-2xl border border-slate-100 hover:border-slate-200 shadow-xs overflow-hidden flex flex-col transition duration-205 hover:-translate-y-0.5"
                 >
+                  {/* Persistent quick-favorite toggle — top-right corner, present on every card */}
+                  <button
+                    id={`btn-fav-card-${event.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleFavorite(event.id);
+                    }}
+                    aria-label={isFav ? '取消收藏' : '收藏'}
+                    aria-pressed={isFav}
+                    className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/80 backdrop-blur-sm shadow-sm hover:bg-white transition"
+                    style={{ color: isFav ? oshiColor : '#cbd5e1' }}
+                  >
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                  </button>
+
                   <div className="p-3 flex items-center gap-3.5 cursor-pointer" onClick={() => onSelectEvent(event)}>
                     
                     {/* Left: Geometric Date Box Indicator */}
@@ -486,38 +501,23 @@ export function DiscoverView({
                     </div>
                   </div>
 
-                  {/* Lottery interactive countdown bar panel */}
+                  {/* Lottery countdown bar panel — only when a 抽選/先行 deadline exists */}
                   {event.timeline.lotteryEndDate && (
-                    <div className="px-3.5 pb-2.5 pt-1.5 bg-slate-50/70 border-t border-slate-150/50 flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
-                          <span className="font-bold uppercase tracking-wider">先行 抽選受付</span>
-                          <span>{daysLeft >= 0 ? `⏰ 仅剩 ${daysLeft} 天` : '已截止'}</span>
-                        </div>
-                        {/* Simulate simple visual heatbar */}
-                        <div className="w-full bg-slate-205 h-1.5 rounded-full mt-1 overflow-hidden">
-                          <div 
-                            className="h-full rounded-full transition-all"
-                            style={{ 
-                              width: daysLeft >= 0 ? `${Math.max(15, Math.min(100, 100 - (daysLeft * 10)))}%` : '100%',
-                              backgroundColor: oshiColor
-                            }}
-                          ></div>
-                        </div>
+                    <div className="px-3.5 pb-2.5 pt-1.5 bg-slate-50/70 border-t border-slate-150/50">
+                      <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
+                        <span className="font-bold uppercase tracking-wider">先行 抽選受付</span>
+                        <span>{daysLeft >= 0 ? `⏰ 仅剩 ${daysLeft} 天` : '已截止'}</span>
                       </div>
-
-                      {/* Small Quick Fav toggler */}
-                      <button
-                        id={`btn-fav-card-${event.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleFavorite(event.id);
-                        }}
-                        className="p-2 rounded-xl transition hover:bg-slate-200"
-                        style={{ color: isFav ? oshiColor : '#cbd5e1' }}
-                      >
-                        <Star className="w-3.5 h-3.5 fill-current" />
-                      </button>
+                      {/* Simulate simple visual heatbar */}
+                      <div className="w-full bg-slate-205 h-1.5 rounded-full mt-1 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: daysLeft >= 0 ? `${Math.max(15, Math.min(100, 100 - (daysLeft * 10)))}%` : '100%',
+                            backgroundColor: oshiColor
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   )}
 
