@@ -525,15 +525,11 @@ export function EventDetailModal({
         </div>
 
         {/* Footer Jump Action Panel */}
-        <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center gap-2.5">
-          <div className="flex-1">
-            <span className="text-[9px] text-slate-400 font-mono">{t('detail.footerProtocol')}</span>
-            <p className="text-[10px] text-slate-600 font-medium">{t('detail.footerBody')}</p>
-          </div>
+        <div className="p-4 bg-slate-100 border-t border-slate-200">
           <button
             id={`btn-visit-source-${event.id}`}
             onClick={() => openPurchaseUrl(primaryPurchaseUrl(event))}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition pulse-primary shadow-md"
+            className="w-full justify-center px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition pulse-primary shadow-md"
             style={{ backgroundColor: oshiColor }}
           >
             <span>{t('detail.openPurchaseButton', { platform: platformLabel(event.platform) })}</span>

@@ -178,33 +178,72 @@ export function useOshiStore(t: TFunction) {
   };
 
   const handleToggleFollowArtist = (artistId: string) => {
-    const isFollowed = followedArtists.includes(artistId);
-    let updated;
-    if (isFollowed) {
-      updated = followedArtists.filter(id => id !== artistId);
+    if (followedArtists.includes(artistId)) {
+      const updated = followedArtists.filter(id => id !== artistId);
+      setFollowedArtists(updated);
+      saveToStorage('oshikatsu_followed_artists', updated);
+      // 取关时连带移除持久化记录，避免堆积/出现在「其他」列表。
+      const pruned = artists.filter(a => a.id !== artistId);
+      if (pruned.length !== artists.length) {
+        setArtists(pruned);
+        saveToStorage('oshikatsu_artists', pruned);
+      }
       triggerToast(t('toast.artistRemovedTitle'), t('toast.artistRemovedBody'));
-    } else {
-      updated = [...followedArtists, artistId];
-      const art = artists.find(a => a.id === artistId);
-      triggerToast(t('toast.artistAddedTitle'), t('toast.artistAddedBody', { name: art?.name || artistId }));
+      return;
     }
+    const updated = [...followedArtists, artistId];
     setFollowedArtists(updated);
     saveToStorage('oshikatsu_followed_artists', updated);
+    // 没有独立艺人库：关注时从当前 events 取该艺人最小记录并持久化，
+    // 这样即使之后换了搜索词（events 变了），关注列表仍稳定显示，不会忽隐忽现。
+    let name = artists.find(a => a.id === artistId)?.name || artistId;
+    if (!artists.some(a => a.id === artistId)) {
+      const src = events.find(e => e.artistId === artistId);
+      if (src) {
+        name = src.artistName;
+        const rec: Artist = {
+          id: artistId, name: src.artistName, avatarUrl: src.imageUrl,
+          category: src.category, description: '', followerCount: 0, tags: [],
+        };
+        const updatedArtists = [rec, ...artists];
+        setArtists(updatedArtists);
+        saveToStorage('oshikatsu_artists', updatedArtists);
+      }
+    }
+    triggerToast(t('toast.artistAddedTitle'), t('toast.artistAddedBody', { name }));
   };
 
   const handleToggleFollowVenue = (venueId: string) => {
-    const isFollowed = followedVenues.includes(venueId);
-    let updated;
-    if (isFollowed) {
-      updated = followedVenues.filter(id => id !== venueId);
+    if (followedVenues.includes(venueId)) {
+      const updated = followedVenues.filter(id => id !== venueId);
+      setFollowedVenues(updated);
+      saveToStorage('oshikatsu_followed_venues', updated);
+      const pruned = venues.filter(v => v.id !== venueId);
+      if (pruned.length !== venues.length) {
+        setVenues(pruned);
+        saveToStorage('oshikatsu_venues', pruned);
+      }
       triggerToast(t('toast.venueRemovedTitle'), t('toast.venueRemovedBody'));
-    } else {
-      updated = [...followedVenues, venueId];
-      const ven = venues.find(v => v.id === venueId);
-      triggerToast(t('toast.venueAddedTitle'), t('toast.venueAddedBody', { name: ven?.name.slice(0, 15) || venueId }));
+      return;
     }
+    const updated = [...followedVenues, venueId];
     setFollowedVenues(updated);
     saveToStorage('oshikatsu_followed_venues', updated);
+    let name = venues.find(v => v.id === venueId)?.name || venueId;
+    if (!venues.some(v => v.id === venueId)) {
+      const src = events.find(e => e.venueId === venueId);
+      if (src) {
+        name = src.venueName;
+        const rec: Venue = {
+          id: venueId, name: src.venueName, capacity: 0,
+          region: src.region, address: '', accessInfo: '', imageUrl: src.imageUrl,
+        };
+        const updatedVenues = [rec, ...venues];
+        setVenues(updatedVenues);
+        saveToStorage('oshikatsu_venues', updatedVenues);
+      }
+    }
+    triggerToast(t('toast.venueAddedTitle'), t('toast.venueAddedBody', { name: name.slice(0, 15) }));
   };
 
   // 流式搜索：每个平台 settle 就立刻把它的结果合并进来并刷新 UI（不等最慢的源）。
