@@ -16,8 +16,10 @@ interface ProxyOptions {
 function configuredProxyBaseUrl(): string | null {
   const env = (import.meta as { env?: { VITE_TICKET_PROXY_BASE_URL?: string; DEV?: boolean } }).env;
   const configured = String(env?.VITE_TICKET_PROXY_BASE_URL || '').trim();
-  if (configured) return configured;
+  // dev 浏览器(非原生)永远走 vite 同源代理(/api → 127.0.0.1:8787);否则会对绝对地址
+  // (VITE_TICKET_PROXY_BASE_URL,本是给真机用的 Tailscale IP)发跨域请求被 CORS 拦截 → 预览搜不到。
   if (!Capacitor.isNativePlatform() && env?.DEV) return '';
+  if (configured) return configured;
   return null;
 }
 
