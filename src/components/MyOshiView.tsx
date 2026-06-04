@@ -15,6 +15,7 @@ interface MyOshiViewProps {
   onToggleFollowArtist: (id: string) => void;
   onToggleFollowVenue: (id: string) => void;
   onSelectEvent: (event: ActivityEvent) => void;
+  onSearchEntity: (name: string) => Promise<void>;
   oshiColor: string; // hex
 }
 
@@ -27,13 +28,28 @@ export function MyOshiView({
   onToggleFollowArtist,
   onToggleFollowVenue,
   onSelectEvent,
+  onSearchEntity,
   oshiColor
 }: MyOshiViewProps) {
   const { locale, t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<'artists' | 'venues'>('artists');
-  
+
   // Selected focused artist or venue for quick filter
   const [filterFocusId, setFilterFocusId] = useState<string | null>(null);
+  // 正在为哪个关注对象跑实时检索（按钮 loading + 防重复点击）。
+  const [searchingId, setSearchingId] = useState<string | null>(null);
+
+  // 关注 = 订阅：点「检索最新场次」真的去各平台拉该 艺人/会场 的最新演出，
+  // 结果并入 events 后下面的聚焦列表即时显示（不再只是过滤旧缓存）。
+  const runEntitySearch = async (id: string, name: string) => {
+    setSearchingId(id);
+    try {
+      await onSearchEntity(name);
+    } finally {
+      setSearchingId(null);
+    }
+    setFilterFocusId(id);
+  };
 
   // 没有独立的 Artist/Venue 库：实时搜索事件只带 artistId/venueId + 名称。
   // 从 events 派生记录，让「关注」能在这里解析并显示（props.artists/venues 优先）。
@@ -231,12 +247,13 @@ export function MyOshiView({
                         <p className="text-[10.5px] text-slate-500 line-clamp-1 leading-snug mt-1">{artist.description}</p>
                       )}
                       
-                      {/* Interactive Aggregate schedule shortcut trigger */}
+                      {/* 检索最新场次：真的跑实时搜索（关注=订阅），结果并入后即时显示 */}
                       <button
-                        onClick={() => setFilterFocusId(artist.id)}
-                        className="text-[9px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded mt-2.5 hover:bg-slate-200 transition font-bold"
+                        onClick={() => runEntitySearch(artist.id, artist.name)}
+                        disabled={searchingId === artist.id}
+                        className="text-[9px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded mt-2.5 hover:bg-slate-200 transition font-bold disabled:opacity-60"
                       >
-                        {t('oshi.searchSchedule')}
+                        {searchingId === artist.id ? t('oshi.searching') : t('oshi.searchSchedule')}
                       </button>
                     </div>
                   </div>
@@ -339,10 +356,11 @@ export function MyOshiView({
                       </p>
                       
                       <button
-                        onClick={() => setFilterFocusId(venue.id)}
-                        className="text-[9px] text-slate-605 bg-slate-100 px-2 py-0.5 rounded mt-2.5 hover:bg-slate-200 transition font-bold"
+                        onClick={() => runEntitySearch(venue.id, venue.name)}
+                        disabled={searchingId === venue.id}
+                        className="text-[9px] text-slate-605 bg-slate-100 px-2 py-0.5 rounded mt-2.5 hover:bg-slate-200 transition font-bold disabled:opacity-60"
                       >
-                        {t('oshi.searchVenue')}
+                        {searchingId === venue.id ? t('oshi.searching') : t('oshi.searchVenue')}
                       </button>
                     </div>
                   </div>
