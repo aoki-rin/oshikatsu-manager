@@ -1,5 +1,5 @@
 import type { ActivityEvent, TicketWindow } from '../../src/types';
-import { buildPlatformSearchUrl, deriveTimelineFromWindows, normalizeLiveEvent } from '../../src/sources/shared';
+import { buildPlatformSearchUrl, canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from '../../src/sources/shared';
 import { parseEplusSearch } from '../../src/sources/eplus';
 import type { ServerTicketSource } from '../types';
 
@@ -19,9 +19,9 @@ export const eplusSource: ServerTicketSource = {
       return normalizeLiveEvent({
         id: event.eventId,
         title: event.title,
-        artistId: `eplus-artist-${query}`,
+        artistId: canonicalArtistId(query) || `eplus-artist-${query}`,
         artistName: query,
-        venueId: `eplus-venue-${event.eventId}`,
+        venueId: canonicalVenueId(event.venue) || `eplus-venue-${event.eventId}`,
         venueName: event.venue,
         date: event.date || fallbackDate,
         time: event.time || '18:00',

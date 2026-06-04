@@ -2,6 +2,8 @@ import type { ActivityEvent, TicketWindow } from '../types';
 import {
   absoluteUrl,
   buildPlatformSearchUrl,
+  canonicalArtistId,
+  canonicalVenueId,
   decodeHtml,
   deriveTimelineFromWindows,
   normalizeLiveEvent,
@@ -122,9 +124,9 @@ export function parseLawsonSearch(html: string, query: string, fetchedAt = new D
     events.push(normalizeLiveEvent({
       id: eventId,
       title,
-      artistId: `lawson-artist-${query}`,
+      artistId: canonicalArtistId(query) || `lawson-artist-${query}`,
       artistName: query,
-      venueId: `lawson-venue-${code}`,
+      venueId: canonicalVenueId(venue) || `lawson-venue-${code}`,
       venueName: venue,
       date: date || windows[0]?.applyEnd?.slice(0, 10) || '',
       time: '00:00',

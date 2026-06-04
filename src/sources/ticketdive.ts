@@ -3,7 +3,7 @@
 // 按 イベント/出演者/会場名 搜索；indie/地下偶像为主。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -62,9 +62,9 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
     return normalizeLiveEvent({
       id: `td-${e.id}`,
       title: e.title || artist,
-      artistId: `td-artist-${artist}`,
+      artistId: canonicalArtistId(artist) || `td-artist-${artist}`,
       artistName: artist,
-      venueId: `td-venue-${e.id}`,
+      venueId: canonicalVenueId(e.venueName) || `td-venue-${e.id}`,
       venueName: e.venueName || '—',
       date: jstDate(e.startEventDate),
       time: jstTime(e.displayStageDate || e.startEventDate),

@@ -4,7 +4,7 @@
 // Pia 的 rlsInfo 给的是【状态】(抽選受付中/予定枚数終了)，精确受付締切日期需点详情页(getDetails，后续)。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -66,9 +66,9 @@ export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
     const base: ActivityEvent = {
       id: `pia-${bundle}`,
       title,
-      artistId: `pia-artist-${artist}`,
+      artistId: canonicalArtistId(artist) || `pia-artist-${artist}`,
       artistName: artist,
-      venueId: `pia-venue-${bundle}`,
+      venueId: canonicalVenueId(region) || `pia-venue-${bundle}`,
       venueName: region || '—',
       date: eventDate || '',
       time: '',

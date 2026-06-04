@@ -4,7 +4,7 @@
 // 注：M/D 无年份(推断)；精确受付窗口需详情页(后续)。indie/地下偶像为主。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -65,9 +65,9 @@ export function parseLivePocketSearch(html: string, artist: string): ActivityEve
     events.push(normalizeLiveEvent({
       id: `lp-${slug}`,
       title,
-      artistId: `lp-artist-${artist}`,
+      artistId: canonicalArtistId(artist) || `lp-artist-${artist}`,
       artistName: artist,
-      venueId: `lp-venue-${slug}`,
+      venueId: canonicalVenueId(venue) || `lp-venue-${slug}`,
       venueName: venue,
       date,
       time: '',
