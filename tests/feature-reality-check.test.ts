@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ActivityEvent } from '../src/types';
 import { buildEventIcs, formatDisplayDate } from '../src/utils';
-import { buildReminderTargets } from '../src/notifications';
+import { buildReminderTargets, isPastReminder } from '../src/notifications';
 import { aggregateConcerts } from '../src/sources/aggregate';
 
 function makeEvent(over: Partial<ActivityEvent> = {}): ActivityEvent {
@@ -77,5 +77,30 @@ describe('无日期事件的传播链（为何上面的坑可达）', () => {
     const out = aggregateConcerts([makeEvent({ id: 'lp-1', date: '', platform: 'LivePocket' })]);
     assert.equal(out.length, 1);
     assert.equal(out[0].date, '');
+  });
+});
+
+describe('提醒：已过期窗口不应再给「设提醒」开关', () => {
+  // 旧实现 buildReminderTargets 不分过去/未来，详情页对已结束的先行抽選也显示开关；
+  // 原生端对过去时刻 schedule 会「立刻弹」或被丢弃 → 点了像没反应。
+  it('isPastReminder 正确区分过去 / 未来', () => {
+    const ev = makeEvent({ date: '2026-12-31', time: '18:00', ticketWindows: [], timeline: {} });
+    const concert = buildReminderTargets(ev).find((x) => x.type === 'concert')!;
+    assert.equal(isPastReminder(concert, new Date('2026-01-01T00:00:00+09:00')), false);
+    assert.equal(isPastReminder(concert, new Date('2027-01-01T00:00:00+09:00')), true);
+  });
+});
+
+describe('收藏在跨平台聚合后的身份脆弱性（记录现状，未修）', () => {
+  // 单平台收藏 → 之后另一平台也搜到同场 → 聚合后 id 变 agg-… →
+  // 重载时 favorites.filter(validEventIds) 会过滤掉旧 id → 收藏静默丢失。
+  it('单平台事件被聚合后 event.id 改变（旧收藏 id 失配）', () => {
+    const lawson = makeEvent({ id: 'lawson-1', platform: 'Lawson Ticket', artistName: 'A', date: '2026-08-01', venueName: '東京ドーム' });
+    const eplus = makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'A', date: '2026-08-01', venueName: '東京ドーム' });
+    assert.equal(aggregateConcerts([lawson])[0].id, 'lawson-1');
+    const merged = aggregateConcerts([lawson, eplus]);
+    assert.equal(merged.length, 1);
+    assert.match(merged[0].id, /^agg-/);
+    assert.notEqual(merged[0].id, 'lawson-1');
   });
 });
