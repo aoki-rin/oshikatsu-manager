@@ -55,6 +55,8 @@ export function useOshiStore(t: TFunction) {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [followedArtists, setFollowedArtists] = useState<string[]>([]);
   const [followedVenues, setFollowedVenues] = useState<string[]>([]);
+  // 关注对象的「上次查看」时间戳（entity id → ISO），给 MyOshi 的「新着」角标用。
+  const [lastViewed, setLastViewed] = useState<Record<string, string>>({});
 
   // System customized ticket notifications list
   const [activeAlerts, setActiveAlerts] = useState<NotificationAlert[]>([]);
@@ -108,6 +110,9 @@ export function useOshiStore(t: TFunction) {
     const storedFollowedVen = localStorage.getItem('oshikatsu_followed_venues');
     if (storedFollowedVen) setFollowedVenues(JSON.parse(storedFollowedVen));
 
+    const storedLastViewed = localStorage.getItem('oshikatsu_last_viewed');
+    if (storedLastViewed) setLastViewed(JSON.parse(storedLastViewed));
+
     // 4. Alerts and configurations
     const storedAlerts = localStorage.getItem('oshikatsu_alerts');
     if (storedAlerts) setActiveAlerts(JSON.parse(storedAlerts));
@@ -158,6 +163,7 @@ export function useOshiStore(t: TFunction) {
     setFavorites([]);
     setFollowedArtists([]);
     setFollowedVenues([]);
+    setLastViewed({});
     setActiveAlerts([]);
     setSearchResultIds([]);
     setSearchReports([]);
@@ -180,6 +186,15 @@ export function useOshiStore(t: TFunction) {
     }
     setFavorites(updated);
     saveToStorage('oshikatsu_favorites', updated);
+  };
+
+  // 关注页「查看 / 检索」某对象时记录时间戳 → 清掉它的「新着」角标。
+  const markViewed = (entityId: string) => {
+    setLastViewed(prev => {
+      const next = { ...prev, [entityId]: new Date().toISOString() };
+      saveToStorage('oshikatsu_last_viewed', next);
+      return next;
+    });
   };
 
   const handleToggleFollowArtist = (artistId: string) => {
@@ -406,6 +421,7 @@ export function useOshiStore(t: TFunction) {
     favorites,
     followedArtists,
     followedVenues,
+    lastViewed,
     activeAlerts,
     // toast
     toastMessage,
@@ -415,6 +431,7 @@ export function useOshiStore(t: TFunction) {
     handleToggleFavorite,
     handleToggleFollowArtist,
     handleToggleFollowVenue,
+    markViewed,
     handleRunPlatformSearch,
     clearSearchResults,
     handleEnrichEvent,

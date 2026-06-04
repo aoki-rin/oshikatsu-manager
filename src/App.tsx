@@ -104,6 +104,8 @@ export default function App() {
               onToggleFollowVenue={store.handleToggleFollowVenue}
               onSelectEvent={setSelectedEvent}
               onSearchEntity={async (name) => { await store.handleRunPlatformSearch(name, enabledPlatforms); }}
+              lastViewed={store.lastViewed}
+              onViewEntity={store.markViewed}
               oshiColor={oshiColor}
             />
           )}
