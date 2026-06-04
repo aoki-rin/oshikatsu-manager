@@ -93,3 +93,62 @@ export async function searchTicketDive(artist: string): Promise<ActivityEvent[]>
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
   return parseTicketDiveSearch(html, artist);
 }
+
+// ---- 详情页(/event/<slug>)富集：取精确受付期间 ----
+// 详情页 __NEXT_DATA__ 的 eventDetail.ticketInfoList[] 每个 plan 有 startApply/endApply（UTC ISO）。
+// 搜索页只有粗略状态——点开详情时懒加载补齐（整体最早开始 / 最晚结束）。
+interface TicketDiveTicketInfo { startApply?: string | null; endApply?: string | null }
+interface TicketDiveDetailNext {
+  props?: { pageProps?: { __superjsonProps?: { json?: { eventDetail?: { ticketInfoList?: TicketDiveTicketInfo[] } } } } };
+}
+
+function tdUtcToJstIso(utc: string | null | undefined): string | null {
+  if (!utc) return null;
+  const d = new Date(utc);
+  if (isNaN(d.getTime())) return null;
+  return `${new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 19)}+09:00`;
+}
+
+export interface TicketDiveDetailWindow {
+  applyStart: string | null;
+  applyEnd: string | null;
+}
+
+// 纯函数：从详情页 HTML 的 __NEXT_DATA__ 解析整体受付期间。
+export function parseTicketDiveDetailWindow(html: string): TicketDiveDetailWindow {
+  const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return { applyStart: null, applyEnd: null };
+  let list: TicketDiveTicketInfo[] = [];
+  try {
+    const parsed = JSON.parse(m[1]) as TicketDiveDetailNext;
+    list = parsed.props?.pageProps?.__superjsonProps?.json?.eventDetail?.ticketInfoList ?? [];
+  } catch {
+    return { applyStart: null, applyEnd: null };
+  }
+  const starts = list.map((t) => tdUtcToJstIso(t.startApply)).filter((v): v is string => !!v).sort();
+  const ends = list.map((t) => tdUtcToJstIso(t.endApply)).filter((v): v is string => !!v).sort();
+  return { applyStart: starts[0] ?? null, applyEnd: ends.pop() ?? null };
+}
+
+async function getTicketDiveDetail(url: string): Promise<TicketDiveDetailWindow | null> {
+  try {
+    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
+    const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+    return parseTicketDiveDetailWindow(html);
+  } catch {
+    return null;
+  }
+}
+
+// 点开详情时懒加载：给还没精确日期的 TicketDive 窗口补 applyStart/applyEnd。best-effort（同上）。
+export async function enrichTicketDiveWindows(event: ActivityEvent): Promise<ActivityEvent> {
+  const windows = event.ticketWindows ?? [];
+  const target = windows.find((w) => w.platform === 'TicketDive' && !w.applyStart && (w.sourceUrl || w.applyUrl));
+  if (!target) return event;
+  const detail = await getTicketDiveDetail((target.sourceUrl || target.applyUrl)!);
+  if (!detail || (!detail.applyStart && !detail.applyEnd)) return event;
+  const ticketWindows = windows.map((w) =>
+    w.id === target.id ? { ...w, applyStart: detail.applyStart, applyEnd: detail.applyEnd } : w,
+  );
+  return { ...event, ticketWindows, timeline: deriveTimelineFromWindows(ticketWindows) };
+}

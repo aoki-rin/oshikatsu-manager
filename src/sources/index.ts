@@ -2,9 +2,9 @@
 // 每个平台一个 search(artist) → ActivityEvent[]。搜索框只调【已启用】的插件。
 import type { ActivityEvent, TicketPlatform, TicketSearchReport, TicketSearchResult } from '../types';
 import { searchEplus } from './eplus';
-import { searchPia } from './pia';
-import { searchTicketDive } from './ticketdive';
-import { searchLivePocket } from './livepocket';
+import { searchPia, enrichPiaWindows } from './pia';
+import { searchTicketDive, enrichTicketDiveWindows } from './ticketdive';
+import { searchLivePocket, enrichLivePocketWindows } from './livepocket';
 import { searchLawson } from './lawson';
 import { buildPlatformSearchUrl, dedupeEvents, PLATFORM_SEARCH_TIMEOUT_MS, withPlatformTimeout, type TicketSource } from './shared';
 import { aggregateConcerts, eventPlatforms } from './aggregate';
@@ -165,4 +165,14 @@ export async function searchAllPlatforms(query: string, activePlatforms: string[
       handoffUrl: report.handoffUrl,
     })),
   };
+}
+
+// 点开事件详情时按平台懒加载精确受付窗口（best-effort）。聚合事件可能含多平台窗口，逐个尝试；
+// 无对应平台窗口的 enricher 立即原样返回（不发请求）。
+export async function enrichEventWindows(event: ActivityEvent): Promise<ActivityEvent> {
+  let enriched = event;
+  enriched = await enrichPiaWindows(enriched);
+  enriched = await enrichLivePocketWindows(enriched);
+  enriched = await enrichTicketDiveWindows(enriched);
+  return enriched;
 }
