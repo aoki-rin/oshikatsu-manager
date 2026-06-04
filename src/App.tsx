@@ -29,6 +29,11 @@ export default function App() {
     .map(id => store.events.find(event => event.id === id))
     .filter(Boolean) as ActivityEvent[];
 
+  // 关注页「检索最新场次」用的启用平台（与 Discover 一致：已启用且已安装的插件）。
+  const enabledPlatforms = store.extensions
+    .filter(ext => ext.isEnabled && ext.isInstalled)
+    .map(ext => ext.platform);
+
   return (
     <div id="application-container-frame" className="min-h-screen bg-slate-100">
       <PhoneFrame oshiColorHex={oshiColor}>
@@ -97,6 +102,7 @@ export default function App() {
               onToggleFollowArtist={store.handleToggleFollowArtist}
               onToggleFollowVenue={store.handleToggleFollowVenue}
               onSelectEvent={setSelectedEvent}
+              onSearchEntity={async (name) => { await store.handleRunPlatformSearch(name, enabledPlatforms); }}
               oshiColor={oshiColor}
             />
           )}
