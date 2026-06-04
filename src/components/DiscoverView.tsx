@@ -159,7 +159,7 @@ export function DiscoverView({
     .filter(filterEvent);
   const filteredSearchResults = searchResults.filter(filterEvent);
 
-  // 实时结果优先；为空时回退显示已保存/收藏（含刚自填的本地 Live），避免「搜索框有字就把已存事件藏起来」。
+  // 实时结果优先；为空时回退显示已保存/收藏，避免「搜索框有字就把已存事件藏起来」。
   const displayEvents = filteredSearchResults.length > 0
     ? filteredSearchResults
     : filteredSavedEvents;

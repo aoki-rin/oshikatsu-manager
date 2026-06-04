@@ -1,8 +1,7 @@
 // 跨平台「同一场演出」聚合。
 // 把不同票务平台上的同一场 live（同艺人 + 同日期 + 同会场）合并成一个事件，
 // 汇总各平台的多轮受付窗口到一张卡。保守策略（宁可不合并也不错合）：
-//   - 缺日期 / 缺艺人 不合并；
-//   - 用户自填(manual)事件原样保留，不参与聚合；
+//   - 缺日期 / 缺艺人 不合并（原样保留，不参与聚合）；
 //   - 会场名需「核心 token」可信匹配才合并（太短/只有都道府县则视为不可信，不合并）。
 import type { ActivityEvent, TicketPlatform, TicketWindow } from '../types';
 import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, primaryPurchaseUrl } from './shared';
@@ -52,7 +51,7 @@ export function eventPlatforms(event: Pick<ActivityEvent, 'platform' | 'ticketWi
 }
 
 function canAggregate(event: ActivityEvent): boolean {
-  return event.sourceKind !== 'manual' && Boolean(event.date) && Boolean(event.artistName);
+  return Boolean(event.date) && Boolean(event.artistName);
 }
 
 function pickLongest(values: string[]): string {
@@ -101,7 +100,7 @@ function mergeCluster(cluster: ActivityEvent[]): ActivityEvent {
   return { ...merged, purchaseUrl: primaryPurchaseUrl(merged) };
 }
 
-// 主入口：跨平台聚合 + 排序（最近抓取在前）。manual / 无日期事件原样保留。幂等。
+// 主入口：跨平台聚合 + 排序（最近抓取在前）。无日期 / 无艺人事件原样保留。幂等。
 export function aggregateConcerts(events: ActivityEvent[]): ActivityEvent[] {
   const passthrough: ActivityEvent[] = [];
   const candidates: ActivityEvent[] = [];

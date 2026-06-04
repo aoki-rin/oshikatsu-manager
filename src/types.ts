@@ -54,7 +54,7 @@ export interface ActivityEvent {
   description: string;
   category: 'Idol' | 'Anime/Seiyuu' | 'J-Pop' | 'Rock/Metal' | 'VTuber' | 'Dance/Club' | 'VTuber / Vocaloid' | 'Rock/J-Pop';
   tags: string[];
-  sourceKind?: 'live' | 'manual';
+  sourceKind?: 'live';
   sourcePlatformId?: string;
   lastFetchedAt?: string;
   purchaseUrl?: string;
