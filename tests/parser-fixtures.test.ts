@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { parseEplusSearch } from '../src/sources/eplus';
 import { parsePiaArtistCd, parsePiaRlsInfo } from '../src/sources/pia';
 import { parseTicketDiveSearch } from '../src/sources/ticketdive';
+import { parseLawsonSearch } from '../src/sources/lawson';
+import { parseLivePocketSearch } from '../src/sources/livepocket';
+import { canonicalArtistId, canonicalVenueId } from '../src/sources/shared';
 
 // These fixtures mirror the real structure of each platform's response so that a
 // silent parser break (platform redesign, or a refactor) is caught immediately.
@@ -131,5 +134,94 @@ describe('TicketDive search parser', () => {
     assert.equal(e.platform, 'TicketDive');
     assert.equal(e.ticketWindows?.[0].statusText, '受付中');
     assert.equal(e.originalUrl, 'https://ticketdive.com/event/event-slug');
+  });
+});
+
+describe('Lawson search parser (fixture)', () => {
+  // 真实结构：<section class="search-result-item"> 内含 公演日 / 会場 / 販売方法 / 受付期間 / 申込.
+  const html = `
+    <section class="search-result-item">
+      <h3><a href="/event/mevent/?mid=12345">YOASOBI ARENA TOUR 2026</a></h3>
+      <dl>
+        <dt>公演日：</dt><dd>2026/8/15(土)</dd>
+        <dt>会場：</dt><dd>さいたまスーパーアリーナ（埼玉県）</dd>
+      </dl>
+      <h4>販売方法</h4>
+      <ul><li>抽選</li></ul>
+      <h4>受付期間</h4>
+      <p>2026/6/20(土) 12:00 ～ 2026/7/2(木) 23:59</p>
+      <h4>申込/詳細</h4>
+      <a href="/order/?gLcode=98765">お申し込みはこちら</a>
+    </section>`;
+
+  it('parses a result section into a live event with one receive window (JST)', () => {
+    const events = parseLawsonSearch(html, 'YOASOBI', '2026-06-04T00:00:00.000Z');
+    assert.equal(events.length, 1);
+    const [e] = events;
+    assert.equal(e.id, 'lawson-12345');
+    assert.equal(e.title, 'YOASOBI ARENA TOUR 2026');
+    assert.equal(e.date, '2026-08-15');
+    assert.equal(e.venueName, 'さいたまスーパーアリーナ（埼玉県）');
+    assert.equal(e.ticketWindows?.[0].id, 'lawson-12345-0');
+    assert.equal(e.ticketWindows?.[0].applyStart, '2026-06-20T12:00:00+09:00');
+    assert.equal(e.ticketWindows?.[0].applyEnd, '2026-07-02T23:59:00+09:00');
+    // 申込链接必须被绝对化（否则真机会打开 http://localhost/order...）
+    assert.equal(e.purchaseUrl, 'https://l-tike.com/order/?gLcode=98765');
+  });
+
+  it('returns [] for a zero-result page', () => {
+    assert.deepEqual(parseLawsonSearch('<p>検索結果：0件</p>', 'no-one'), []);
+  });
+});
+
+describe('LivePocket search parser (fixture)', () => {
+  const html = `
+    <li class="item">
+      <a href="https://t.livepocket.jp/e/yoa-arena">
+        <img class="thumb-vertical" src="https://img.example/yoa.jpg">
+        <span class="title-inner">YOASOBI SPECIAL LIVE</span>
+      </a>
+      <ul class="status-on_sale"><li>受付中</li><li>12/25</li></ul>
+      <div class="info">東京都・Zepp Tokyo</div>
+    </li>`;
+
+  it('parses an item card into a live event (M/D inferred, year-agnostic check)', () => {
+    const events = parseLivePocketSearch(html, 'YOASOBI');
+    assert.equal(events.length, 1);
+    const [e] = events;
+    assert.equal(e.id, 'lp-yoa-arena');
+    assert.equal(e.title, 'YOASOBI SPECIAL LIVE');
+    assert.equal(e.artistName, 'YOASOBI');
+    assert.match(e.venueName, /東京都/);
+    assert.equal(e.date.slice(5), '12-25'); // 年份按今年/明年推断，仅校验月日，避免随运行日期漂移
+    assert.equal(e.ticketWindows?.[0].id, 'lp-yoa-arena-0');
+    assert.equal(e.ticketWindows?.[0].statusText, '受付中');
+  });
+
+  it('drops cards that do not match the queried artist (no relabeling)', () => {
+    const other = html.replace('YOASOBI SPECIAL LIVE', '別アーティストの公演');
+    assert.deepEqual(parseLivePocketSearch(other, 'YOASOBI'), []);
+  });
+});
+
+describe('ticket id 稳定性 (issue #5)', () => {
+  // 旧 bug：id 把 CJK 名剥成空（如 iki-TicketPia-）。#24 归一 id 后 CJK 名应原样保留。
+  it('CJK 艺人 / 会场名不再被剥成空 id', () => {
+    assert.equal(canonicalArtistId('いきものがかり'), 'artist-いきものがかり');
+    assert.equal(canonicalVenueId('福岡サンパレス'), 'venue-福岡サンパレス');
+  });
+
+  it('ticket_window id 确定且非空（同输入重复解析一致）', () => {
+    const lawson = `
+      <section class="search-result-item">
+        <h3><a href="/event/mevent/?mid=12345">X</a></h3>
+        <dl><dt>公演日：</dt><dd>2026/8/15(土)</dd><dt>会場：</dt><dd>会場A</dd></dl>
+        <h4>受付期間</h4><p>2026/6/20(土) 12:00 ～ 2026/7/2(木) 23:59</p>
+        <h4>申込/詳細</h4><a href="/order/?gLcode=1">申込</a>
+      </section>`;
+    const a = parseLawsonSearch(lawson, 'X', '2026-06-04T00:00:00.000Z');
+    const b = parseLawsonSearch(lawson, 'X', '2026-06-04T00:00:00.000Z');
+    assert.match(a[0].ticketWindows?.[0].id ?? '', /^lawson-12345-0$/);
+    assert.equal(a[0].ticketWindows?.[0].id, b[0].ticketWindows?.[0].id);
   });
 });
