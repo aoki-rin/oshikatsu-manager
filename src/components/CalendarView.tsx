@@ -8,6 +8,7 @@ import {
   downloadAllFollowedEventsIcs, downloadEventIcs, 
   formatDisplayDate, getDaysRemaining, getJstDateKey
 } from '../utils';
+import { isFavorited } from '../favorites';
 import { useI18n } from '../i18n/I18nProvider';
 
 interface CalendarViewProps {
@@ -35,7 +36,7 @@ export function CalendarView({
   const followedVenueSet = new Set(followedVenues);
   // 日历雷达 = 我关心的所有演出：收藏 + 已设提醒 + 关注的艺人/会场的演出。
   const trackedEvents = events.filter(e =>
-    favorites.includes(e.id) ||
+    isFavorited(e, favorites) ||
     alertEventIds.has(e.id) ||
     followedArtistSet.has(e.artistId) ||
     followedVenueSet.has(e.venueId),

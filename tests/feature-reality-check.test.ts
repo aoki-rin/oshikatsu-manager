@@ -8,6 +8,7 @@ import type { ActivityEvent } from '../src/types';
 import { buildEventIcs, formatDisplayDate } from '../src/utils';
 import { buildReminderTargets, isPastReminder } from '../src/notifications';
 import { aggregateConcerts } from '../src/sources/aggregate';
+import { favoriteKey, isFavorited } from '../src/favorites';
 
 function makeEvent(over: Partial<ActivityEvent> = {}): ActivityEvent {
   return {
@@ -91,10 +92,9 @@ describe('提醒：已过期窗口不应再给「设提醒」开关', () => {
   });
 });
 
-describe('收藏在跨平台聚合后的身份脆弱性（记录现状，未修）', () => {
-  // 单平台收藏 → 之后另一平台也搜到同场 → 聚合后 id 变 agg-… →
-  // 重载时 favorites.filter(validEventIds) 会过滤掉旧 id → 收藏静默丢失。
-  it('单平台事件被聚合后 event.id 改变（旧收藏 id 失配）', () => {
+describe('跨平台聚合会改变 event.id（所以收藏键不能用 id）', () => {
+  // 单平台收藏 → 之后另一平台也搜到同场 → 聚合后 id 变 agg-… → 用 id 当键就会丢。
+  it('单平台事件被聚合后 event.id 改变', () => {
     const lawson = makeEvent({ id: 'lawson-1', platform: 'Lawson Ticket', artistName: 'A', date: '2026-08-01', venueName: '東京ドーム' });
     const eplus = makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'A', date: '2026-08-01', venueName: '東京ドーム' });
     assert.equal(aggregateConcerts([lawson])[0].id, 'lawson-1');
@@ -102,5 +102,24 @@ describe('收藏在跨平台聚合后的身份脆弱性（记录现状，未修�
     assert.equal(merged.length, 1);
     assert.match(merged[0].id, /^agg-/);
     assert.notEqual(merged[0].id, 'lawson-1');
+  });
+});
+
+describe('收藏键跨聚合稳定（#7 修复）', () => {
+  // favoriteKey 用 艺人+日期+会场，单平台与聚合后一致 → 收藏不再因 id 变化丢失。
+  it('favoriteKey 跨「单平台 ↔ 聚合」保持一致', () => {
+    const lawson = makeEvent({ id: 'lawson-1', platform: 'Lawson Ticket', artistName: 'A', date: '2026-08-01', venueName: 'GLION ARENA KOBE（兵庫県）' });
+    const eplus = makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'A', date: '2026-08-01', venueName: 'GLION ARENA KOBE' });
+    const singleKey = favoriteKey(aggregateConcerts([lawson])[0]);
+    const merged = aggregateConcerts([lawson, eplus])[0];
+    assert.equal(favoriteKey(merged), singleKey);
+    assert.ok(isFavorited(merged, [singleKey]), '聚合后用单平台时收藏的键仍命中');
+  });
+
+  it('isFavorited 兼容旧的 event.id 收藏', () => {
+    const ev = makeEvent({ id: 'lawson-1' });
+    assert.equal(isFavorited(ev, ['lawson-1']), true);
+    assert.equal(isFavorited(ev, [favoriteKey(ev)]), true);
+    assert.equal(isFavorited(ev, []), false);
   });
 });

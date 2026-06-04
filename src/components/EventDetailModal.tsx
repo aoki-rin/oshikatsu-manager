@@ -44,7 +44,7 @@ interface EventDetailModalProps {
   venues: Venue[];
   onClose: () => void;
   isFavorited: boolean;
-  onToggleFavorite: (eventId: string) => void;
+  onToggleFavorite: (event: ActivityEvent) => void;
   isArtistFollowed: boolean;
   onToggleFollowArtist: (artistId: string) => void;
   isVenueFollowed: boolean;
@@ -123,7 +123,7 @@ export function EventDetailModal({
             {/* Quick Favorite Star Button */}
             <button
               id={`btn-fav-modal-${event.id}`}
-              onClick={() => onToggleFavorite(event.id)}
+              onClick={() => onToggleFavorite(event)}
               className="p-1 px-3 rounded-full flex items-center gap-1.5 text-xs font-medium transition-all"
               style={{
                 color: isFavorited ? '#ffffff' : oshiColor,
