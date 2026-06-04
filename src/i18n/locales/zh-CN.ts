@@ -199,6 +199,8 @@ export const zhCN = {
   'extension.installedTitle': '票源（{count}个）',
   'extension.enabled': '已启用',
   'extension.disabled': '已停用',
+  'extension.lastFetched': '上次抓取 {time} · {count} 件',
+  'extension.neverFetched': '尚未抓取',
   'extension.description.ext-ticketdive': 'TicketDive（地下/indie live 专门）实时搜索：イベント/出演者/会場名。',
   'extension.description.ext-pia': 'Ticket Pia 搜索规则。读取公开搜索结果与多轮受付窗口（抽選 / 一般）。',
   'extension.description.ext-eplus': 'eplus 代理规则。读取公开搜索结果与受付窗口，失败时返回平台报告和官方跳转。',

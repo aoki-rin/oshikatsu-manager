@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityEvent, Artist, Venue, ExtensionSource,
-  NotificationAlert, ReminderTarget, TicketSearchReport, TicketPlatform,
+  NotificationAlert, ReminderTarget, TicketSearchReport, TicketPlatform, SourceStat,
 } from '../types';
 import { INITIAL_EXTENSIONS, OSHI_COLORS } from '../data/mockData';
 import { searchPlatformsStreaming, searchableTargets } from '../sources';
@@ -57,6 +57,8 @@ export function useOshiStore(t: TFunction) {
   const [followedVenues, setFollowedVenues] = useState<string[]>([]);
   // 关注对象的「上次查看」时间戳（entity id → ISO），给 MyOshi 的「新着」角标用。
   const [lastViewed, setLastViewed] = useState<Record<string, string>>({});
+  // 每个源「上次抓取」状态（插件页本地源管理展示），按平台名 key。
+  const [sourceStats, setSourceStats] = useState<Record<string, SourceStat>>({});
 
   // System customized ticket notifications list
   const [activeAlerts, setActiveAlerts] = useState<NotificationAlert[]>([]);
@@ -113,6 +115,9 @@ export function useOshiStore(t: TFunction) {
     const storedLastViewed = localStorage.getItem('oshikatsu_last_viewed');
     if (storedLastViewed) setLastViewed(JSON.parse(storedLastViewed));
 
+    const storedSourceStats = localStorage.getItem('oshikatsu_source_stats');
+    if (storedSourceStats) setSourceStats(JSON.parse(storedSourceStats));
+
     // 4. Alerts and configurations
     const storedAlerts = localStorage.getItem('oshikatsu_alerts');
     if (storedAlerts) setActiveAlerts(JSON.parse(storedAlerts));
@@ -164,6 +169,7 @@ export function useOshiStore(t: TFunction) {
     setFollowedArtists([]);
     setFollowedVenues([]);
     setLastViewed({});
+    setSourceStats({});
     setActiveAlerts([]);
     setSearchResultIds([]);
     setSearchReports([]);
@@ -316,6 +322,17 @@ export function useOshiStore(t: TFunction) {
       setSearchResultIds(ids);
       saveToStorage('oshikatsu_search_result_ids', ids);
       saveToStorage('oshikatsu_search_reports', reports);
+      // 记录每个源这次抓取的时间/命中数/状态（插件页本地源管理展示）。
+      const statsAt = new Date().toISOString();
+      setSourceStats(prev => {
+        const next = { ...prev };
+        for (const report of reports) {
+          if (report.status === 'pending') continue;
+          next[report.platform] = { lastFetchedAt: statsAt, count: report.count, status: report.status };
+        }
+        saveToStorage('oshikatsu_source_stats', next);
+        return next;
+      });
       setEvents(prev => {
         const merged = aggregateConcerts(dedupeEvents([...searchEvents, ...prev]));
         saveToStorage('oshikatsu_events', merged);
@@ -414,6 +431,7 @@ export function useOshiStore(t: TFunction) {
     artists,
     venues,
     extensions,
+    sourceStats,
     searchResultIds,
     searchReports,
     recentSearches,

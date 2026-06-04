@@ -151,3 +151,10 @@ export interface ExtensionSource {
   iconType: 'pia' | 'eplus' | 'livepocket' | 'lawson' | 'all';
   description: string;
 }
+
+// 每个源「上次抓取」状态（插件页本地源管理展示）。
+export interface SourceStat {
+  lastFetchedAt: string; // ISO
+  count: number;
+  status: string; // 'ok' | 'empty' | 'error'
+}

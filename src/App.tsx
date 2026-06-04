@@ -114,6 +114,7 @@ export default function App() {
             <ExtensionView
               extensions={store.extensions}
               onToggleExtension={store.handleToggleExtension}
+              sourceStats={store.sourceStats}
               oshiColor={oshiColor}
             />
           )}

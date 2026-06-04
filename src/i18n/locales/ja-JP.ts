@@ -201,6 +201,8 @@ export const jaJP = {
   'extension.installedTitle': 'ソース（{count}件）',
   'extension.enabled': '有効',
   'extension.disabled': '無効',
+  'extension.lastFetched': '最終取得 {time} · {count} 件',
+  'extension.neverFetched': 'まだ取得していません',
   'extension.description.ext-ticketdive': 'TicketDiveのリアルタイム検索。地下アイドル / インディーズLiveのイベント・出演者・会場名検索に対応。',
   'extension.description.ext-pia': 'チケットぴあ検索。公開検索結果と複数の受付期間（抽選 / 一般発売）を読み取ります。',
   'extension.description.ext-eplus': 'e+検索。公開検索結果と受付期間を取得し、失敗時は公式検索ページへ引き継ぎます。',
