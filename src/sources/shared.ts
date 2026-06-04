@@ -127,6 +127,29 @@ export function isHttpUrl(url?: string | null): url is string {
   return !!url && (url.startsWith('http://') || url.startsWith('https://'));
 }
 
+// 把名称归一成稳定 slug：用于把「同一艺人 / 会场」跨平台、跨搜索合并成同一 id
+// （旧做法 id 含平台前缀 + 查询词/事件码 → 同一会场每场都是不同 id、同一艺人各平台各一份）。
+// NFKC 抹平全/半角差异；占位/空名（如 '—'）不参与合并，返回 '' → 调用方回退到 per-event id。
+function slugifyName(name: string | null | undefined): string {
+  const t = (name || '').normalize('NFKC').trim();
+  if (!t || t === '—' || t === '-') return '';
+  return t.toLowerCase().replace(/\s+/g, '');
+}
+export function canonicalArtistId(name: string | null | undefined): string {
+  const s = slugifyName(name);
+  return s ? `artist-${s}` : '';
+}
+// 多个平台在会场名后缀「都道府县」标注（如 "GLION ARENA KOBE（兵庫県）" vs "GLION ARENA KOBE"），
+// 这是平台注释而非会场名本身。去掉结尾的「（…都/道/府/県）」后缀，让同一会场跨平台合并成同一 id
+// （否则关注会场只能命中带后缀那一个平台的场次）。先 NFKC 把全角括号归一成半角再匹配。
+function stripVenuePrefecture(name: string): string {
+  return name.normalize('NFKC').replace(/\s*\([^()]*[都道府県]\)\s*$/u, '').trim();
+}
+export function canonicalVenueId(name: string | null | undefined): string {
+  const s = slugifyName(stripVenuePrefecture(name || ''));
+  return s ? `venue-${s}` : '';
+}
+
 export function primaryPurchaseUrl(event: Pick<ActivityEvent, 'purchaseUrl' | 'ticketWindows' | 'originalUrl'>): string {
   const candidates = [
     event.purchaseUrl,

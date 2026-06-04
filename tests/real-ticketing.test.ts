@@ -6,6 +6,8 @@ import { parseLivePocketSearch } from '../src/sources/livepocket';
 import {
   absoluteUrl,
   buildPlatformSearchUrl,
+  canonicalArtistId,
+  canonicalVenueId,
   dedupeEvents,
   deriveTimelineFromWindows,
   primaryPurchaseUrl,
@@ -20,6 +22,24 @@ import {
   buildReminderTargets,
   makeReminderNotificationId,
 } from '../src/notifications';
+
+describe('canonical artist/venue ids', () => {
+  it('same name → same id across platform / width / case / spacing', () => {
+    assert.equal(canonicalArtistId('YOASOBI'), canonicalArtistId('yoasobi'));
+    assert.equal(canonicalVenueId('Ｋアリーナ横浜'), canonicalVenueId('Kアリーナ横浜')); // NFKC full→half width
+    assert.equal(canonicalVenueId(' 東京ドーム '), 'venue-東京ドーム');
+    assert.equal(canonicalArtistId('YOASOBI'), 'artist-yoasobi');
+    // 跨平台会场名后缀都道府县（Lawson 加，其他不加）应合并成同一 venueId
+    assert.equal(canonicalVenueId('ＧＬＩＯＮ ＡＲＥＮＡ ＫＯＢＥ（兵庫県）'), canonicalVenueId('GLION ARENA KOBE'));
+    assert.equal(canonicalVenueId('東京ドーム（東京都）'), 'venue-東京ドーム');
+  });
+  it('placeholder / empty names do not merge (return empty → caller keeps per-event id)', () => {
+    assert.equal(canonicalVenueId('—'), '');
+    assert.equal(canonicalVenueId(''), '');
+    assert.equal(canonicalArtistId('   '), '');
+    assert.equal(canonicalArtistId(null), '');
+  });
+});
 
 describe('purchase URL safety', () => {
   it('absoluteUrl drops javascript:/data: and keeps http(s)', () => {

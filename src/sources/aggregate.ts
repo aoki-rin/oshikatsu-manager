@@ -5,7 +5,7 @@
 //   - 用户自填(manual)事件原样保留，不参与聚合；
 //   - 会场名需「核心 token」可信匹配才合并（太短/只有都道府县则视为不可信，不合并）。
 import type { ActivityEvent, TicketPlatform, TicketWindow } from '../types';
-import { deriveTimelineFromWindows, primaryPurchaseUrl } from './shared';
+import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, primaryPurchaseUrl } from './shared';
 
 // 选「主平台」的优先级（信息最全的在前）。
 const PLATFORM_PRIORITY: readonly TicketPlatform[] = ['eplus', 'Ticket Pia', 'Lawson Ticket', 'LivePocket', 'TicketDive'];
@@ -87,6 +87,8 @@ function mergeCluster(cluster: ActivityEvent[]): ActivityEvent {
     ...primary,
     id: `agg-${normalizeArtist(primary.artistName)}-${primary.date}-${venueCore(venueName) || 'x'}`,
     title: pickLongest(cluster.map((event) => event.title)) || primary.title,
+    artistId: canonicalArtistId(primary.artistName) || primary.artistId,
+    venueId: canonicalVenueId(venueName) || primary.venueId,
     venueName,
     region: firstNonEmpty(cluster.map((event) => event.region)),
     time: firstNonEmpty(cluster.map((event) => event.time)),

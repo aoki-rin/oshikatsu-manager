@@ -3,7 +3,7 @@
 // 解析逻辑与 scraper/sources/eplus.mjs 同源：eplus 搜索页内嵌 application/json，data.record_list 直接含多轮受付。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { absoluteUrl, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { absoluteUrl, canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const EPLUS_BASE = 'https://eplus.jp';
 const SEARCH_URL = 'https://eplus.jp/sf/search';
@@ -109,9 +109,9 @@ function toActivityEvent(e: EplusEvent, query: string): ActivityEvent {
   const base: ActivityEvent = {
     id: e.eventId,
     title: e.title,
-    artistId: `eplus-artist-${query}`,
+    artistId: canonicalArtistId(query) || `eplus-artist-${query}`,
     artistName: query,
-    venueId: `eplus-venue-${e.eventId}`,
+    venueId: canonicalVenueId(e.venue) || `eplus-venue-${e.eventId}`,
     venueName: e.venue,
     date: e.date || fallbackDate,
     time: e.time || '18:00',
