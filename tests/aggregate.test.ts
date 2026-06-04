@@ -103,12 +103,12 @@ describe('aggregateConcerts', () => {
     assert.equal(result.id, 'eplus-solo');
   });
 
-  it('passes through manual events untouched (never merged with live)', () => {
-    const manual = ev({ platform: 'eplus', id: 'ev-custom-1', venueName: '東京ドーム', sourceKind: 'manual' });
+  it('passes through non-aggregatable (no-date) events untouched', () => {
+    const dateless = ev({ platform: 'eplus', id: 'lp-x', date: '', venueName: '東京ドーム' });
     const live = ev({ platform: 'Ticket Pia', venueName: '東京ドーム' });
-    const result = aggregateConcerts([manual, live]);
+    const result = aggregateConcerts([dateless, live]);
     assert.equal(result.length, 2);
-    assert.ok(result.some((e) => e.id === 'ev-custom-1'));
+    assert.ok(result.some((e) => e.id === 'lp-x'));
   });
 
   it('is idempotent (re-aggregating an aggregated list is stable)', () => {

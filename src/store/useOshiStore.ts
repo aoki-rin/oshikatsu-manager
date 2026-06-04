@@ -18,10 +18,10 @@ function loadPersistedEvents(raw: string | null): ActivityEvent[] {
   try {
     const parsed = JSON.parse(raw) as ActivityEvent[];
     return parsed
-      .filter(event => event.sourceKind === 'live' || event.sourceKind === 'manual' || event.id.startsWith('ev-custom-') || LIVE_ID_PREFIXES.some(prefix => event.id.startsWith(prefix)))
+      .filter(event => event.sourceKind === 'live' || LIVE_ID_PREFIXES.some(prefix => event.id.startsWith(prefix)))
       .map(event => ({
         ...event,
-        sourceKind: event.sourceKind || (event.id.startsWith('ev-custom-') ? 'manual' : 'live'),
+        sourceKind: event.sourceKind || 'live',
       }));
   } catch {
     return [];
@@ -73,7 +73,7 @@ export function useOshiStore(t: TFunction) {
     setOshiColorId(storedColorId || 'pink'); // Beautiful Sakura Pink default
 
     // 2. Events & Plugins. User-visible event content starts empty and is filled by
-    // real platform searches or explicit manual entries only.
+    // real platform searches only.
     const storedEvents = localStorage.getItem('oshikatsu_events');
     // Aggregate on load so events persisted before cross-platform merge migrate cleanly.
     const loadedEvents = aggregateConcerts(loadPersistedEvents(storedEvents));
