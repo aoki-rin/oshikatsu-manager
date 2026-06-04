@@ -118,6 +118,8 @@ export function buildEventIcs(
   t: TFunction = defaultT,
 ): string {
   const target = targetDateFor(event, targetDateType, t);
+  // 无有效日期 → 不产出 VEVENT（否则 DTSTART 会是裸时间 T…，导致整份 .ics 无法导入）。
+  if (!target.date) return '';
   const startFormatted = formatToIcsDate(target.date, target.time);
   const endFormatted = addMinutesAsJstIcs(target.date, target.time, target.durationMinutes);
   return [
@@ -156,9 +158,10 @@ export function downloadEventIcs(
   t: TFunction = defaultT,
 ) {
   const icsString = buildEventIcs(event, targetDateType, new Date(), t);
+  if (!icsString) return; // 无有效日期：跳过，避免下载损坏文件。
   const blob = new Blob([icsString], { type: 'text/calendar;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  
+
   const link = document.createElement('a');
   link.href = url;
   link.setAttribute('download', `${event.artistName}_${targetDateType}_reminder.ics`);
@@ -186,21 +189,23 @@ export function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFuncti
   ];
 
   events.forEach((event) => {
-    // 1. Live Concert Event
-    const liveStart = formatToIcsDate(event.date, event.time);
-    const liveEnd = addMinutesAsJstIcs(event.date, event.time || '18:00', 180);
-    icsLines.push(
-      'BEGIN:VEVENT',
-      `UID:${event.id}-concert-all@oshikatsu.manager`,
-      `DTSTAMP:${utcStamp()}`,
-      `DTSTART;TZID=${JST_TIME_ZONE}:${liveStart}`,
-      `DTEND;TZID=${JST_TIME_ZONE}:${liveEnd}`,
-      `SUMMARY:${escapeIcs(t('ics.summary.allConcert', { title: event.title }))}`,
-      `DESCRIPTION:${escapeIcs(event.description.slice(0, 100))}`,
-      `LOCATION:${escapeIcs(event.venueName)}`,
-      `URL:${event.purchaseUrl || event.originalUrl}`,
-      'END:VEVENT'
-    );
+    // 1. Live Concert Event（无日期则跳过，避免裸时间 DTSTART 污染整份日历）
+    if (event.date) {
+      const liveStart = formatToIcsDate(event.date, event.time);
+      const liveEnd = addMinutesAsJstIcs(event.date, event.time || '18:00', 180);
+      icsLines.push(
+        'BEGIN:VEVENT',
+        `UID:${event.id}-concert-all@oshikatsu.manager`,
+        `DTSTAMP:${utcStamp()}`,
+        `DTSTART;TZID=${JST_TIME_ZONE}:${liveStart}`,
+        `DTEND;TZID=${JST_TIME_ZONE}:${liveEnd}`,
+        `SUMMARY:${escapeIcs(t('ics.summary.allConcert', { title: event.title }))}`,
+        `DESCRIPTION:${escapeIcs(event.description.slice(0, 100))}`,
+        `LOCATION:${escapeIcs(event.venueName)}`,
+        `URL:${event.purchaseUrl || event.originalUrl}`,
+        'END:VEVENT'
+      );
+    }
 
     // 2. Lottery End Alert if exists
     if (event.timeline.lotteryEndDate) {
@@ -236,7 +241,8 @@ export function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFuncti
 
 // Simple localized helper to format display dates
 export function formatDisplayDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-');
+  const [, month, day] = (dateStr || '').split('-');
+  if (!month || !day) return dateStr || ''; // 缺日期不显示 "undefined月undefined日"
   return `${month}月${day}日`;
 }
 
