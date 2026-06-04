@@ -143,12 +143,24 @@ async function getTicketDiveDetail(url: string): Promise<TicketDiveDetailWindow 
 // 点开详情时懒加载：给还没精确日期的 TicketDive 窗口补 applyStart/applyEnd。best-effort（同上）。
 export async function enrichTicketDiveWindows(event: ActivityEvent): Promise<ActivityEvent> {
   const windows = event.ticketWindows ?? [];
-  const target = windows.find((w) => w.platform === 'TicketDive' && !w.applyStart && (w.sourceUrl || w.applyUrl));
-  if (!target) return event;
-  const detail = await getTicketDiveDetail((target.sourceUrl || target.applyUrl)!);
-  if (!detail || (!detail.applyStart && !detail.applyEnd)) return event;
-  const ticketWindows = windows.map((w) =>
-    w.id === target.id ? { ...w, applyStart: detail.applyStart, applyEnd: detail.applyEnd } : w,
+  // 聚合事件可能含多个 TicketDive 窗口（各自详情页不同）：逐个补，而不是只补第一个。
+  const targets = windows.filter((w) => w.platform === 'TicketDive' && !w.applyStart && (w.sourceUrl || w.applyUrl));
+  if (targets.length === 0) return event;
+  const results = await Promise.allSettled(
+    targets.slice(0, 5).map(async (w) => ({ id: w.id, detail: await getTicketDiveDetail((w.sourceUrl || w.applyUrl)!) })),
   );
+  const byId = new Map(windows.map((w) => [w.id, w] as const));
+  let changed = false;
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.detail && (r.value.detail.applyStart || r.value.detail.applyEnd)) {
+      const w = byId.get(r.value.id);
+      if (w) {
+        byId.set(r.value.id, { ...w, applyStart: r.value.detail.applyStart, applyEnd: r.value.detail.applyEnd });
+        changed = true;
+      }
+    }
+  }
+  if (!changed) return event;
+  const ticketWindows = [...byId.values()];
   return { ...event, ticketWindows, timeline: deriveTimelineFromWindows(ticketWindows) };
 }
