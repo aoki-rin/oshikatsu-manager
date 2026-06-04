@@ -5,7 +5,7 @@ import {
   Sparkles, Bell, Heart, Check, Building, CreditCard 
 } from 'lucide-react';
 import { downloadEventIcs, formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
-import { buildReminderTargets } from '../notifications';
+import { buildReminderTargets, isPastReminder } from '../notifications';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { primaryPurchaseUrl, isHttpUrl } from '../sources/shared';
@@ -91,7 +91,8 @@ export function EventDetailModal({
   const artist = artists.find(a => a.id === event.artistId);
   const venue = venues.find(v => v.id === event.venueId);
 
-  const reminderTargets = buildReminderTargets(event, t);
+  // 过滤掉已过期的窗口：避免对已结束的受付显示一个「点了就立刻弹/无反应」的提醒开关。
+  const reminderTargets = buildReminderTargets(event, t).filter((target) => !isPastReminder(target));
   const isReminderActive = (target: ReminderTarget) => activeAlerts.some(a => a.notificationId === target.notificationId);
 
   const [activeTab, setActiveTab] = useState<'info' | 'timeline' | 'reminders'>('info');
