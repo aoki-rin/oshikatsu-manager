@@ -9,7 +9,7 @@ export interface TicketTimeline {
 }
 
 // R3: 多轮抽選/发售 — 一场演出(或一段巡演)对应 N 个 ticket_window。
-// 这是 scraper 产出的权威结构。platform 用 string（抓来的边界数据，不收紧成 union）。
+// 各 source（src/sources/*）解析产出的权威结构。platform 用 string（抓来的边界数据，不收紧成 union）。
 // 时间均为带时区的 ISO 字符串，存 JST (+09:00)。
 export interface TicketWindow {
   id: string;
@@ -48,7 +48,7 @@ export interface ActivityEvent {
   price: string;
   imageUrl: string;
   timeline: TicketTimeline;   // 派生兼容字段（取最近一轮窗口填充，给未迁移的组件用）
-  ticketWindows?: TicketWindow[]; // R3 权威多轮数据（来自 scraper）
+  ticketWindows?: TicketWindow[]; // R3 权威多轮数据（来自各 source 解析）
   performances?: TourPerformance[]; // 巡演多场（best-effort）
   originalUrl: string;
   description: string;

@@ -169,7 +169,7 @@ export const zhCN = {
   'oshi.venuesTab': '关注场馆（{count}）',
   'oshi.focusedSearch': '专属巡演检索',
   'oshi.closeFocused': '关闭聚合',
-  'oshi.noFocusedEvents': '目前日本各大票仓 Pia / e+ 暂不包含其名目下的近期开票实况。',
+  'oshi.noFocusedEvents': '这次没检索到近期场次（已查 ぴあ / e+ / ローチケ / LivePocket / TicketDive）。可换个写法或晚点再试。',
   'oshi.followedArtistsTitle': '已在推名单 (MY SPECIAL OSHIS)',
   'oshi.followedArtistsEmpty': '在任意演出详情里点「关注该艺人」，就会出现在这里。',
   'oshi.followedArtistButton': '已推 ♥',

@@ -35,8 +35,8 @@
 | **Lawson** | `l-tike.com/search/?keyword=` | ⚠️ 后端代理解析官方搜索页；反爬/异常时明确失败并提供ローチケ跳转 |
 
 ## 当前状态
-- ✅ **eplus 平台搜索插件**（`scraper/sources/eplus.mjs`）：search(艺人) → 事件 + 多轮受付窗口（プレオーダー/抽選/先着, JST）。通用、非写死。
-- ✅ **Capacitor Android**（+iOS）已搭好（`capacitor.config.ts`，CapacitorHttp 已启用）；Android 用 Android Studio JBR 21 构建，真机 USB 调试。
+- ✅ **eplus 平台搜索插件**（`src/sources/eplus.ts`）：search(艺人) → 事件 + 多轮受付窗口（プレオーダー/抽選/先着, JST）。通用、非写死。
+- ✅ **Capacitor Android** 已搭好（`capacitor.config.ts`，CapacitorHttp 已启用）；Android 用 Android Studio JBR 21 构建，真机调试（自用，仅 Android）。
 - ✅ R3 多轮 `ticket_window` 类型 + EventDetailModal 多轮渲染，搜索结果会写入本地缓存。
 - ✅ 搜索框已接入平台实时搜索，代理优先、CapacitorHttp 直连兜底。
 - ✅ Pia / eplus / LivePocket / TicketDive / Lawson 已接入统一 source/report；Lawson 失败会明确给出ローチケ跳转。
@@ -50,14 +50,13 @@
 - `search(query, ctx) → ActivityEvent[]`
 
 自带 fixture 测试（存一份响应快照断言解析结果，平台改版第一时间发现）。
-> 旧的 `scraper/parse-ikimonogakari.mjs`（按官网解析）+ `build-events.mjs` 是早期 spike，已被平台搜索插件取代，保留作参考/兜底源。
 
 ## 运行（安卓真机为主）
 ```bash
 npm install
 
-# 测平台插件（终端）
-node scraper/sources/eplus.mjs いきものがかり
+# 跑解析器 / 聚合等单元测试
+npm test
 
 # 开发预览（浏览器，注意下方 node 说明）
 npm run dev                 # http://localhost:3000

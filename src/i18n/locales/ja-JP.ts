@@ -171,7 +171,7 @@ export const jaJP = {
   'oshi.venuesTab': 'フォロー会場（{count}）',
   'oshi.focusedSearch': '関連公演の絞り込み',
   'oshi.closeFocused': '閉じる',
-  'oshi.noFocusedEvents': '現在、Pia / e+ など主要プレイガイドにこの対象の近期チケット情報はありません。',
+  'oshi.noFocusedEvents': '直近の公演は見つかりませんでした（ぴあ / e+ / ローチケ / LivePocket / TicketDive を検索済み）。表記を変えるか、後ほどお試しください。',
   'oshi.followedArtistsTitle': '推しリスト',
   'oshi.followedArtistsEmpty': '公演詳細で「アーティストをフォロー」を押すと、ここに表示されます。',
   'oshi.followedArtistButton': '推し中 ♥',
