@@ -1,5 +1,6 @@
 import { ActivityEvent, TicketPlatform } from './types';
 import { createTranslator, type TFunction } from './i18n/core';
+import { deliverIcs } from './native';
 
 const JST_TIME_ZONE = 'Asia/Tokyo';
 const defaultT = createTranslator('zh-CN');
@@ -152,26 +153,18 @@ export function buildEventIcs(
 }
 
 // Generate an ICS string and trigger a download for a clean Japanese Live Event
-export function downloadEventIcs(
+export async function downloadEventIcs(
   event: ActivityEvent,
   targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert',
   t: TFunction = defaultT,
-) {
+): Promise<void> {
   const icsString = buildEventIcs(event, targetDateType, new Date(), t);
-  if (!icsString) return; // 无有效日期：跳过，避免下载损坏文件。
-  const blob = new Blob([icsString], { type: 'text/calendar;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `${event.artistName}_${targetDateType}_reminder.ics`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  if (!icsString) return; // 无有效日期：跳过，避免导出损坏文件。
+  await deliverIcs(`${event.artistName}_${targetDateType}_reminder.ics`, icsString);
 }
 
 // Generate dynamic ICS Calendar comprising all followed items
-export function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFunction = defaultT) {
+export async function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFunction = defaultT): Promise<void> {
   const icsLines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -228,15 +221,7 @@ export function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFuncti
   icsLines.push('END:VCALENDAR');
 
   const icsString = icsLines.join('\r\n');
-  const blob = new Blob([icsString], { type: 'text/calendar;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `oshikatsu_all_schedule.ics`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  await deliverIcs('oshikatsu_all_schedule.ics', icsString);
 }
 
 // Simple localized helper to format display dates

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityEvent } from './types';
 import { isFavorited } from './favorites';
 import { PhoneFrame } from './components/PhoneFrame';
@@ -12,6 +12,8 @@ import { BottomTabBar, type TabId } from './components/BottomTabBar';
 import { BellRing, X } from 'lucide-react';
 import { useOshiStore } from './store/useOshiStore';
 import { useI18n } from './i18n/I18nProvider';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 export type OShiColorId = 'pink' | 'blue' | 'green' | 'yellow' | 'purple' | 'red' | 'black' | 'orange';
 
@@ -34,6 +36,23 @@ export default function App() {
   const enabledPlatforms = store.extensions
     .filter(ext => ext.isEnabled && ext.isInstalled)
     .map(ext => ext.platform);
+
+  // 点击已触发的提醒通知 → 跳到对应演出详情（原生）。找不到该事件（如已被聚合改了 id）
+  // 则切到「票务日程」让用户看追踪列表，而不是停在原页面、像没反应。
+  const eventsRef = useRef(store.events);
+  eventsRef.current = store.events;
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let handle: { remove: () => void } | undefined;
+    LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+      const eventId = action.notification?.extra?.eventId as string | undefined;
+      if (!eventId) return;
+      const ev = eventsRef.current.find((event) => event.id === eventId);
+      if (ev) setSelectedEvent(ev);
+      else setCurrentTab('calendar');
+    }).then((h) => { handle = h; });
+    return () => { handle?.remove(); };
+  }, []);
 
   return (
     <div id="application-container-frame" className="min-h-screen bg-slate-100">
