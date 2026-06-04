@@ -1,6 +1,6 @@
 // 前端 eplus 平台搜索插件（Mihon 式）。
 // 用 CapacitorHttp 发请求：真机(原生)绕开 CORS + 走真机网络；浏览器端会因 CORS 失败（属正常，去真机测）。
-// 解析逻辑与 scraper/sources/eplus.mjs 同源：eplus 搜索页内嵌 application/json，data.record_list 直接含多轮受付。
+// eplus 搜索页内嵌 application/json，data.record_list 直接含多轮受付。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
 import { absoluteUrl, canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';

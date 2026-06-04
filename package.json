@@ -15,8 +15,7 @@
     "lint": "tsc --noEmit",
     "cap:build": "vite build && cap sync",
     "cap:sync": "cap sync",
-    "android": "cap open android",
-    "ios": "cap open ios"
+    "android": "cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -25,7 +24,6 @@
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
     "@capacitor/filesystem": "^8.1.2",
-    "@capacitor/ios": "^8.3.4",
     "@capacitor/local-notifications": "^8.2.0",
     "@capacitor/share": "^8.0.1",
     "@tailwindcss/vite": "^4.1.14",
