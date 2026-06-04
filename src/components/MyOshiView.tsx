@@ -4,6 +4,8 @@ import {
   Heart, MapPin, Building, Star, Sparkles,
   Trash2, ChevronRight, Hash, Users
 } from 'lucide-react';
+import { nextDeadlineForArtist, nextDeadlineForVenue, hasNewSince } from '../followed';
+import { formatDisplayDate, getDaysRemaining } from '../utils';
 import { useI18n } from '../i18n/I18nProvider';
 
 interface MyOshiViewProps {
@@ -16,6 +18,8 @@ interface MyOshiViewProps {
   onToggleFollowVenue: (id: string) => void;
   onSelectEvent: (event: ActivityEvent) => void;
   onSearchEntity: (name: string) => Promise<void>;
+  lastViewed: Record<string, string>;
+  onViewEntity: (id: string) => void;
   oshiColor: string; // hex
 }
 
@@ -29,6 +33,8 @@ export function MyOshiView({
   onToggleFollowVenue,
   onSelectEvent,
   onSearchEntity,
+  lastViewed,
+  onViewEntity,
   oshiColor
 }: MyOshiViewProps) {
   const { locale, t } = useI18n();
@@ -49,6 +55,13 @@ export function MyOshiView({
       setSearchingId(null);
     }
     setFilterFocusId(id);
+    onViewEntity(id); // 看过了 → 清掉「新着」角标
+  };
+
+  // 倒计时短文案：T-N / 今日。
+  const countdown = (date: string) => {
+    const days = getDaysRemaining(date);
+    return days > 0 ? `T-${days}` : t('common.today');
   };
 
   // 没有独立的 Artist/Venue 库：实时搜索事件只带 artistId/venueId + 名称。
@@ -208,22 +221,30 @@ export function MyOshiView({
                   {t('oshi.followedArtistsEmpty')}
                 </p>
               ) : (
-                followedArtistList.map(artist => (
-                  <div 
+                followedArtistList.map(artist => {
+                  const dl = nextDeadlineForArtist(events, artist.id);
+                  const isNew = hasNewSince(events, (e) => e.artistId === artist.id, lastViewed[artist.id]);
+                  return (
+                  <div
                     key={artist.id}
                     className="bg-white rounded-2xl border border-slate-100 p-3.5 flex gap-3 transition hover:shadow-xs"
                   >
-                    <img 
+                    <img
                       referrerPolicy="no-referrer"
-                      src={artist.avatarUrl} 
-                      alt={artist.name} 
+                      src={artist.avatarUrl}
+                      alt={artist.name}
                       className="w-12 h-12 rounded-full object-cover shrink-0 border-2 p-0.5"
                       style={{ borderColor: oshiColor }}
                     />
 
                     <div className="flex-1 min-w-0 font-sans">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-black text-slate-900 tracking-tight">{artist.name}</h4>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <h4 className="text-xs font-black text-slate-900 tracking-tight truncate">{artist.name}</h4>
+                          {isNew && (
+                            <span className="text-[8px] font-bold text-white px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: oshiColor }}>{t('oshi.newBadge')}</span>
+                          )}
+                        </div>
                         <button
                           id={`btn-unfollow-artist-${artist.id}`}
                           onClick={() => onToggleFollowArtist(artist.id)}
@@ -247,6 +268,17 @@ export function MyOshiView({
                         <p className="text-[10.5px] text-slate-500 line-clamp-1 leading-snug mt-1">{artist.description}</p>
                       )}
                       
+                      {/* 下一个临期受付（按推しカラー着色）：一眼看到该 oshi 最近要抢的票 */}
+                      <div className="mt-1.5">
+                        {dl ? (
+                          <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ color: oshiColor, backgroundColor: `${oshiColor}14` }}>
+                            {t(`oshi.deadline.${dl.kind}`)} · {formatDisplayDate(dl.date)} · {countdown(dl.date)}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-slate-400">{t('oshi.noDeadline')}</span>
+                        )}
+                      </div>
+
                       {/* 检索最新场次：真的跑实时搜索（关注=订阅），结果并入后即时显示 */}
                       <button
                         onClick={() => runEntitySearch(artist.id, artist.name)}
@@ -257,7 +289,8 @@ export function MyOshiView({
                       </button>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -318,23 +351,31 @@ export function MyOshiView({
                   {t('oshi.followedVenuesEmpty')}
                 </p>
               ) : (
-                followedVenueList.map(venue => (
-                  <div 
+                followedVenueList.map(venue => {
+                  const dl = nextDeadlineForVenue(events, venue.id);
+                  const isNew = hasNewSince(events, (e) => e.venueId === venue.id, lastViewed[venue.id]);
+                  return (
+                  <div
                     key={venue.id}
                     className="bg-white rounded-2xl border border-slate-100 p-3.5 flex gap-3 transition hover:shadow-xs"
                   >
                     <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden shrink-0">
-                      <img 
+                      <img
                         referrerPolicy="no-referrer"
-                        src={venue.imageUrl} 
-                        alt={venue.name} 
+                        src={venue.imageUrl}
+                        alt={venue.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
 
                     <div className="flex-1 min-w-0 font-sans">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-black text-slate-900 truncate tracking-tight">{venue.name}</h4>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <h4 className="text-xs font-black text-slate-900 truncate tracking-tight">{venue.name}</h4>
+                          {isNew && (
+                            <span className="text-[8px] font-bold text-white px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: oshiColor }}>{t('oshi.newBadge')}</span>
+                          )}
+                        </div>
                         <button
                           id={`btn-unfollow-venue-${venue.id}`}
                           onClick={() => onToggleFollowVenue(venue.id)}
@@ -355,6 +396,16 @@ export function MyOshiView({
                           : t('oshi.venueRegionOnly', { region: venue.region })}
                       </p>
                       
+                      <div className="mt-1.5">
+                        {dl ? (
+                          <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ color: oshiColor, backgroundColor: `${oshiColor}14` }}>
+                            {t(`oshi.deadline.${dl.kind}`)} · {formatDisplayDate(dl.date)} · {countdown(dl.date)}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-slate-400">{t('oshi.noDeadline')}</span>
+                        )}
+                      </div>
+
                       <button
                         onClick={() => runEntitySearch(venue.id, venue.name)}
                         disabled={searchingId === venue.id}
@@ -364,7 +415,8 @@ export function MyOshiView({
                       </button>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 

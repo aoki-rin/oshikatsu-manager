@@ -1,21 +1,25 @@
 import React, { useState } from 'react';
-import { ExtensionSource } from '../types';
+import { ExtensionSource, SourceStat } from '../types';
 import { Puzzle, Search } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
 interface ExtensionViewProps {
   extensions: ExtensionSource[];
   onToggleExtension: (id: string) => void;
+  sourceStats: Record<string, SourceStat>;
   oshiColor: string; // hex
 }
 
 export function ExtensionView({
   extensions,
   onToggleExtension,
+  sourceStats,
   oshiColor
 }: ExtensionViewProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [extSearchText, setExtSearchText] = useState('');
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' });
 
   const installedExtensions = extensions.filter(
     e => e.isInstalled && e.name.toLowerCase().includes(extSearchText.toLowerCase())
@@ -61,7 +65,9 @@ export function ExtensionView({
             {t('extension.installedTitle', { count: installedExtensions.length })}
           </span>
 
-          {installedExtensions.map(ext => (
+          {installedExtensions.map(ext => {
+            const stat = sourceStats[ext.platform];
+            return (
             <div
               key={ext.id}
               id={`ext-installed-${ext.id}`}
@@ -73,6 +79,16 @@ export function ExtensionView({
                 <p className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
                   {t(`extension.description.${ext.id}`)}
                 </p>
+
+                {/* 本地源管理：上次抓取时间 + 命中数 + 状态点 */}
+                {stat ? (
+                  <p className="text-[9px] text-slate-400 font-mono mt-1.5 flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${stat.status === 'error' ? 'bg-rose-500' : stat.status === 'empty' ? 'bg-slate-300' : 'bg-emerald-500'}`}></span>
+                    {t('extension.lastFetched', { time: fmtTime(stat.lastFetchedAt), count: stat.count })}
+                  </p>
+                ) : (
+                  <p className="text-[9px] text-slate-400 font-mono mt-1.5">{t('extension.neverFetched')}</p>
+                )}
               </div>
 
               {/* Enable/disable toggle (real: controls which platforms search) */}
@@ -89,7 +105,8 @@ export function ExtensionView({
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
       </div>

@@ -104,6 +104,8 @@ export default function App() {
               onToggleFollowVenue={store.handleToggleFollowVenue}
               onSelectEvent={setSelectedEvent}
               onSearchEntity={async (name) => { await store.handleRunPlatformSearch(name, enabledPlatforms); }}
+              lastViewed={store.lastViewed}
+              onViewEntity={store.markViewed}
               oshiColor={oshiColor}
             />
           )}
@@ -112,6 +114,7 @@ export default function App() {
             <ExtensionView
               extensions={store.extensions}
               onToggleExtension={store.handleToggleExtension}
+              sourceStats={store.sourceStats}
               oshiColor={oshiColor}
             />
           )}
