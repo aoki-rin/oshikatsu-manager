@@ -9,7 +9,7 @@ import { buildReminderTargets, isPastReminder } from '../notifications';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { primaryPurchaseUrl, isHttpUrl } from '../sources/shared';
-import { enrichPiaWindows } from '../sources/pia';
+import { enrichEventWindows } from '../sources';
 import { useI18n } from '../i18n/I18nProvider';
 import type { Locale, TFunction } from '../i18n/core';
 
@@ -79,7 +79,7 @@ export function EventDetailModal({
   useEffect(() => {
     setEvent(eventProp);
     let cancelled = false;
-    enrichPiaWindows(eventProp).then((enriched) => {
+    enrichEventWindows(eventProp).then((enriched) => {
       if (cancelled || enriched === eventProp) return;
       setEvent(enriched);
       onEnrichEvent?.(enriched);

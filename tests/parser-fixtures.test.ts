@@ -2,9 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseEplusSearch } from '../src/sources/eplus';
 import { parsePiaArtistCd, parsePiaRlsInfo } from '../src/sources/pia';
-import { parseTicketDiveSearch } from '../src/sources/ticketdive';
+import { parseTicketDiveSearch, parseTicketDiveDetailWindow } from '../src/sources/ticketdive';
 import { parseLawsonSearch } from '../src/sources/lawson';
-import { parseLivePocketSearch } from '../src/sources/livepocket';
+import { parseLivePocketSearch, parseLivePocketDetailWindow } from '../src/sources/livepocket';
 import { canonicalArtistId, canonicalVenueId } from '../src/sources/shared';
 
 // These fixtures mirror the real structure of each platform's response so that a
@@ -223,5 +223,39 @@ describe('ticket id 稳定性 (issue #5)', () => {
     const b = parseLawsonSearch(lawson, 'X', '2026-06-04T00:00:00.000Z');
     assert.match(a[0].ticketWindows?.[0].id ?? '', /^lawson-12345-0$/);
     assert.equal(a[0].ticketWindows?.[0].id, b[0].ticketWindows?.[0].id);
+  });
+});
+
+describe('LivePocket detail window (fixture, issue A1)', () => {
+  // 详情页内嵌实体编码 JSON：group_starttime/endtime + 各 plan starttime/endtime（JST）。
+  it('parses earliest start / latest end across plans (JST)', () => {
+    const html = `<script>x = &quot;a&quot;</script>
+      &quot;group_starttime&quot;:&quot;2026-04-18 12:00:00&quot;,&quot;group_endtime&quot;:&quot;2026-06-13 18:00:59&quot;
+      ,&quot;price&quot;:4950,&quot;starttime&quot;:&quot;2026-04-20 10:00:00&quot;,&quot;endtime&quot;:&quot;2026-06-10 23:59:00&quot;`;
+    const w = parseLivePocketDetailWindow(html);
+    assert.equal(w.applyStart, '2026-04-18T12:00:00+09:00');
+    assert.equal(w.applyEnd, '2026-06-13T18:00:59+09:00');
+  });
+
+  it('returns nulls when no sale window present', () => {
+    assert.deepEqual(parseLivePocketDetailWindow('<html>no json here</html>'), { applyStart: null, applyEnd: null });
+  });
+});
+
+describe('TicketDive detail window (fixture, issue A1)', () => {
+  // 详情页 __NEXT_DATA__ 的 eventDetail.ticketInfoList[].startApply/endApply（UTC → JST）。
+  it('parses earliest startApply / latest endApply (UTC→JST)', () => {
+    const nextData = { props: { pageProps: { __superjsonProps: { json: { eventDetail: { ticketInfoList: [
+      { startApply: '2026-05-30T13:00:00.000Z', endApply: '2026-06-05T14:59:59.000Z' },
+      { startApply: '2026-05-28T10:00:00.000Z', endApply: '2026-06-04T10:00:00.000Z' },
+    ] } } } } } };
+    const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`;
+    const w = parseTicketDiveDetailWindow(html);
+    assert.equal(w.applyStart, '2026-05-28T19:00:00+09:00'); // 2026-05-28T10:00Z + 9h
+    assert.equal(w.applyEnd, '2026-06-05T23:59:59+09:00');   // 2026-06-05T14:59:59Z + 9h
+  });
+
+  it('returns nulls when __NEXT_DATA__ missing', () => {
+    assert.deepEqual(parseTicketDiveDetailWindow('<html>nope</html>'), { applyStart: null, applyEnd: null });
   });
 });

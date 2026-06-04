@@ -4,7 +4,7 @@
 // 注：M/D 无年份(推断)；精确受付窗口需详情页(后续)。indie/地下偶像为主。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { canonicalArtistId, canonicalVenueId, decodeHtml, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -96,4 +96,51 @@ export async function searchLivePocket(artist: string): Promise<ActivityEvent[]>
   });
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
   return parseLivePocketSearch(html, artist);
+}
+
+// ---- 详情页(/e/<slug>)富集：取精确受付期间 ----
+// 详情页内嵌实体编码 JSON：各售票 plan 的 starttime/endtime + 整体 group_starttime/group_endtime
+// （"YYYY-MM-DD HH:MM:SS" JST）。搜索页只有粗略状态，没有精确窗口——点开详情时懒加载补齐。
+function lpJstIso(value: string): string | null {
+  const m = value.match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || '00'}+09:00` : null;
+}
+
+export interface LivePocketDetailWindow {
+  applyStart: string | null;
+  applyEnd: string | null;
+}
+
+// 纯函数：从详情页 HTML 解析整体受付期间（最早开始 / 最晚结束）。
+export function parseLivePocketDetailWindow(html: string): LivePocketDetailWindow {
+  const text = decodeHtml(html); // &quot; → " ，让内嵌 JSON 能被正则命中
+  const starts = [...text.matchAll(/"(?:group_)?starttime"\s*:\s*"([\d :-]+)"/g)]
+    .map((m) => lpJstIso(m[1])).filter((v): v is string => !!v).sort();
+  const ends = [...text.matchAll(/"(?:group_)?endtime"\s*:\s*"([\d :-]+)"/g)]
+    .map((m) => lpJstIso(m[1])).filter((v): v is string => !!v).sort();
+  return { applyStart: starts[0] ?? null, applyEnd: ends.pop() ?? null };
+}
+
+async function getLivePocketDetail(url: string): Promise<LivePocketDetailWindow | null> {
+  try {
+    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
+    const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+    return parseLivePocketDetailWindow(html);
+  } catch {
+    return null;
+  }
+}
+
+// 点开详情时懒加载：给还没精确日期的 LivePocket 窗口补 applyStart/applyEnd。
+// best-effort：网页端 CORS 失败则原样返回；真机经 CapacitorHttp 可用。
+export async function enrichLivePocketWindows(event: ActivityEvent): Promise<ActivityEvent> {
+  const windows = event.ticketWindows ?? [];
+  const target = windows.find((w) => w.platform === 'LivePocket' && !w.applyStart && (w.sourceUrl || w.applyUrl));
+  if (!target) return event;
+  const detail = await getLivePocketDetail((target.sourceUrl || target.applyUrl)!);
+  if (!detail || (!detail.applyStart && !detail.applyEnd)) return event;
+  const ticketWindows = windows.map((w) =>
+    w.id === target.id ? { ...w, applyStart: detail.applyStart, applyEnd: detail.applyEnd } : w,
+  );
+  return { ...event, ticketWindows, timeline: deriveTimelineFromWindows(ticketWindows) };
 }
