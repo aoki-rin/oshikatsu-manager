@@ -14,6 +14,7 @@ import { useOshiStore } from './store/useOshiStore';
 import { useI18n } from './i18n/I18nProvider';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { App as CapApp } from '@capacitor/app';
 
 export type OShiColorId = 'pink' | 'blue' | 'green' | 'yellow' | 'purple' | 'red' | 'black' | 'orange';
 
@@ -50,6 +51,23 @@ export default function App() {
       const ev = eventsRef.current.find((event) => event.id === eventId);
       if (ev) setSelectedEvent(ev);
       else setCurrentTab('calendar');
+    }).then((h) => { handle = h; });
+    return () => { handle?.remove(); };
+  }, []);
+
+  // 硬件返回键：先关详情弹窗 → 其次回到「发现」→ 最后才最小化。
+  // 否则 Capacitor 默认行为是直接退出 App（弹窗开着按返回也会整个退出，体验割裂）。
+  const selectedEventRef = useRef(selectedEvent);
+  selectedEventRef.current = selectedEvent;
+  const currentTabRef = useRef(currentTab);
+  currentTabRef.current = currentTab;
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let handle: { remove: () => void } | undefined;
+    CapApp.addListener('backButton', () => {
+      if (selectedEventRef.current) { setSelectedEvent(null); return; }
+      if (currentTabRef.current !== 'discover') { setCurrentTab('discover'); return; }
+      CapApp.minimizeApp();
     }).then((h) => { handle = h; });
     return () => { handle?.remove(); };
   }, []);
