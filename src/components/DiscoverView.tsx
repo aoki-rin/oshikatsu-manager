@@ -4,6 +4,7 @@ import { Search, Sparkles, AlertCircle, Star, ChevronDown } from 'lucide-react';
 import { formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
+import { isFavorited } from '../favorites';
 import { AppSelect } from './AppSelect';
 import { useI18n } from '../i18n/I18nProvider';
 import type { Locale, TFunction } from '../i18n/core';
@@ -58,7 +59,7 @@ interface DiscoverViewProps {
   venues: Venue[];
   onSelectEvent: (event: ActivityEvent) => void;
   favorites: string[];
-  onToggleFavorite: (eventId: string) => void;
+  onToggleFavorite: (event: ActivityEvent) => void;
   onRunPlatformSearch: (query: string, activePlatforms: string[]) => Promise<{ events: ActivityEvent[]; reports: TicketSearchReport[] }>;
   onClearSearchResults: () => void;
   oshiColor: string; // hex
@@ -154,7 +155,7 @@ export function DiscoverView({
     ...presentRegions.map(pref => ({ value: pref, label: pref })),
   ];
   const filteredSavedEvents = events
-    .filter(event => favorites.includes(event.id))
+    .filter(event => isFavorited(event, favorites))
     .filter(filterEvent);
   const filteredSearchResults = searchResults.filter(filterEvent);
 
@@ -368,7 +369,7 @@ export function DiscoverView({
           ) : (
             displayEvents.map(event => {
               const daysLeft = event.timeline.lotteryEndDate ? getDaysRemaining(event.timeline.lotteryEndDate) : -1;
-              const isFav = favorites.includes(event.id);
+              const isFav = isFavorited(event, favorites);
 
               return (
                 <div
@@ -381,7 +382,7 @@ export function DiscoverView({
                     id={`btn-fav-card-${event.id}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onToggleFavorite(event.id);
+                      onToggleFavorite(event);
                     }}
                     aria-label={isFav ? t('discover.favoriteRemove') : t('discover.favoriteAdd')}
                     aria-pressed={isFav}

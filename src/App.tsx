@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityEvent } from './types';
+import { isFavorited } from './favorites';
 import { PhoneFrame } from './components/PhoneFrame';
 import { DiscoverView } from './components/DiscoverView';
 import { CalendarView } from './components/CalendarView';
@@ -136,7 +137,7 @@ export default function App() {
             artists={store.artists}
             venues={store.venues}
             onClose={() => setSelectedEvent(null)}
-            isFavorited={store.favorites.includes(selectedEvent.id)}
+            isFavorited={isFavorited(selectedEvent, store.favorites)}
             onToggleFavorite={store.handleToggleFavorite}
             isArtistFollowed={store.followedArtists.includes(selectedEvent.artistId)}
             onToggleFollowArtist={store.handleToggleFollowArtist}

@@ -8,6 +8,7 @@ import { searchPlatformsStreaming, searchableTargets } from '../sources';
 import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
 import { aggregateConcerts } from '../sources/aggregate';
 import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
+import { favoriteKey } from '../favorites';
 import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
 const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
@@ -96,7 +97,9 @@ export function useOshiStore(t: TFunction) {
     // 3. User relationships
     const storedFavs = localStorage.getItem('oshikatsu_favorites');
     if (storedFavs) {
-      setFavorites((JSON.parse(storedFavs) as string[]).filter(id => validEventIds.has(id)));
+      // 收藏键可能是稳定键(新)或 event.id(旧)：两者都算有效，避免聚合后丢收藏。
+      const validFavKeys = new Set(loadedEvents.flatMap(event => [event.id, favoriteKey(event)]));
+      setFavorites((JSON.parse(storedFavs) as string[]).filter(id => validFavKeys.has(id)));
     }
 
     const storedFollowedArt = localStorage.getItem('oshikatsu_followed_artists');
@@ -162,16 +165,18 @@ export function useOshiStore(t: TFunction) {
   };
 
   // Follow/Favorite toggles
-  const handleToggleFavorite = (eventId: string) => {
-    const isFav = favorites.includes(eventId);
+  const handleToggleFavorite = (event: ActivityEvent) => {
+    // 用稳定身份键收藏（见 favorites.ts）：单平台演出被跨平台聚合后 id 会变，
+    // 用 id 当键会丢收藏。兼容旧数据：移除时连旧 event.id 一并清掉。
+    const key = favoriteKey(event);
+    const isFav = favorites.includes(key) || favorites.includes(event.id);
     let updated;
     if (isFav) {
-      updated = favorites.filter(id => id !== eventId);
+      updated = favorites.filter(id => id !== key && id !== event.id);
       triggerToast(t('toast.favoriteRemovedTitle'), t('toast.favoriteRemovedBody'));
     } else {
-      updated = [...favorites, eventId];
-      const ev = events.find(e => e.id === eventId);
-      triggerToast(t('toast.favoriteAddedTitle'), t('toast.favoriteAddedBody', { title: ev?.title.slice(0, 15) || '' }));
+      updated = [...favorites, key];
+      triggerToast(t('toast.favoriteAddedTitle'), t('toast.favoriteAddedBody', { title: event.title.slice(0, 15) || '' }));
     }
     setFavorites(updated);
     saveToStorage('oshikatsu_favorites', updated);
