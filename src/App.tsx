@@ -8,6 +8,7 @@ import { MyOshiView } from './components/MyOshiView';
 import { ExtensionView } from './components/ExtensionView';
 import { SettingsView } from './components/SettingsView';
 import { EventDetailModal } from './components/EventDetailModal';
+import { SplashScreen } from './components/SplashScreen';
 import { BottomTabBar, type TabId } from './components/BottomTabBar';
 import { BellRing, X } from 'lucide-react';
 import { useOshiStore } from './store/useOshiStore';
@@ -23,6 +24,7 @@ export default function App() {
   // Pure view state: active tab + the event whose detail sheet is open.
   const [currentTab, setCurrentTab] = useState<TabId>('discover');
   const [selectedEvent, setSelectedEvent] = useState<ActivityEvent | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
 
   // All domain state, persistence and business handlers live in the store hook.
   const store = useOshiStore(t);
@@ -75,6 +77,9 @@ export default function App() {
   return (
     <div id="application-container-frame" className="min-h-screen bg-slate-100">
       <PhoneFrame oshiColorHex={oshiColor}>
+
+        {/* 开屏动画（参考 oshibeta）：启动时盖在最上层，~1.25s 后淡出 */}
+        {showSplash && <SplashScreen oshiColor={oshiColor} onDone={() => setShowSplash(false)} />}
 
         {/* Realtime floating toast banner simulating a mobile push popup */}
         {toastMessage && (
