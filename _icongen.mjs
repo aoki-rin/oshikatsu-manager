@@ -1,3 +1,7 @@
+// ⚠️ 运行方式：必须用 Homebrew 的 node 跑 —— `/opt/homebrew/bin/node _icongen.mjs`
+//    原因：sharp 的 darwin-arm64 预编译二进制在系统默认/硬化运行时下会因 Team ID 不匹配报签名错误
+//    （"code signature ... different Team IDs"）；Homebrew node 为 adhoc 签名，可正常加载。
+//    （@capacitor/assets 同理。）用默认 `node` 跑大概率直接崩在这一行的 import。
 import sharp from 'sharp';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
