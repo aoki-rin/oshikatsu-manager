@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import type { ActivityEvent, TicketPlatform, TicketWindow } from '../src/types';
 import { aggregateConcerts, eventPlatforms, venueCore } from '../src/sources/aggregate';
