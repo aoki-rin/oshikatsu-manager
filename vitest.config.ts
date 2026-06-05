@@ -42,12 +42,12 @@ export default defineConfig({
         'src/components/SplashScreen.tsx',
         '**/*.d.ts',
       ],
-      // 起步阈值（锁住当前水平，后续逐步棘轮到 80%）。当前 ~stmts75/lines77/funcs70/branch53。
+      // 阈值锁住当前水平（后续逐步棘轮到 80%）。当前 ~stmts76/lines79/funcs72/branch55。
       thresholds: {
-        statements: 70,
-        lines: 70,
-        functions: 65,
-        branches: 50,
+        statements: 74,
+        lines: 77,
+        functions: 70,
+        branches: 52,
       },
     },
   },

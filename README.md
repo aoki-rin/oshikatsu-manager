@@ -41,7 +41,8 @@
 - ✅ 搜索框已接入平台实时搜索，代理优先、CapacitorHttp 直连兜底。
 - ✅ Pia / eplus / LivePocket / TicketDive / Lawson 已接入统一 source/report；Lawson 失败会明确给出ローチケ跳转。
 - ✅ `.ics` 时区、提醒 ID、Lawson fixture、代理 fallback 等已有自动化测试。
-- ⬜ follow/MyOshi(应援色) + 新着角标。
+- ✅ follow/MyOshi（应援色）仪表盘 + 新着角标 + 下一受付倒计时。
+- ✅ 分层自动化测试（Vitest 单元/组件/原生 + Playwright E2E）+ CI 覆盖率门禁（见下「测试」）。
 
 ## 源插件接口（加新平台时）
 每个平台一个 `server/sources/<platform>.ts` adapter，导出统一接口：
@@ -73,14 +74,14 @@ npm run android             # cap open android（在 Android Studio 里 Run）
 2. `npm run android` 打开 Android Studio → 顶部设备下拉选你的手机 → ▶ Run。
 - **Gradle JDK 自动用 Android Studio 自带的 JBR 21**（满足 Capacitor 8），命令行的 Java 11 不影响。
 - 改完前端：`npm run cap:build` 再在 Studio Run（或配 Live Reload，见 Capacitor 文档）。
-- iOS 工程也已 scaffold（`ios/`），你用安卓可忽略；不想要可 `git rm -r ios`。
+- 仅 Android（iOS 工程已移除，纯自用安卓）。
 
 ## 测试
 分层自动化测试（Vitest + Testing Library + Playwright）。每个 PR 经 GitHub Actions 跑 `tsc` + 覆盖率门禁 + E2E。
 
 ```bash
-npm test            # 单元/store/组件/原生分支（Vitest，124 例）
-npm run test:cov    # 同上 + 覆盖率门禁（v8 阈值：stmts/lines 70、funcs 65、branch 50，逐步棘轮到 80）
+npm test            # 单元/store/组件/原生分支（Vitest，131 例）
+npm run test:cov    # 同上 + 覆盖率门禁（v8 阈值：stmts 74 / lines 77 / funcs 70 / branch 52，逐步棘轮到 80）
 npm run test:e2e    # Playwright 端到端（5 条 Web 关键流，page.route 用 fixture 拦截 /api）
 ```
 - **纯函数**：解析器、跨平台聚合、收藏稳定键、提醒窗口、i18n、代理反爬分类。
