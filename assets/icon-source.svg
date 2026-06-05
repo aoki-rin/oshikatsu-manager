@@ -35,5 +35,5 @@
   <rect x="180" y="180" width="152" height="152" rx="36" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" />
   
   <!-- 5. 核心文字字符（推） -->
-  <text x="256" y="288" font-family="'SF Pro Display', 'Inter', 'Noto Sans JP', sans-serif" font-weight="900" font-size="88" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">推</text>
+  <text x="256" y="296" font-family="'SF Pro Display', 'Inter', 'Noto Sans JP', sans-serif" font-weight="900" font-size="108" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">推</text>
 </svg>
