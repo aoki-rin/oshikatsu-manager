@@ -6,22 +6,39 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: tsc + vitest
+  unit:
+    name: tsc + vitest (coverage gate)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
-
       - name: Install deps
         run: npm ci
-
       - name: Typecheck
         run: npm run lint
+      - name: Unit tests + coverage gate
+        run: npm run test:cov
 
-      - name: Unit tests
-        run: npm test
+  e2e:
+    name: playwright e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install --with-deps chromium
+      - name: E2E tests
+        run: npm run test:e2e

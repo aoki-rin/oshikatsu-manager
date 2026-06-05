@@ -25,5 +25,30 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    coverage: {
+      provider: 'v8',
+      // Vitest 4：include 即决定报告范围（含未被测到的文件，按 0% 计），无需旧的 all:true。
+      include: ['src/**/*.{ts,tsx}'],
+      // 排除：入口/外壳、纯类型/数据、纯展示组件（无逻辑分支，价值低）。
+      exclude: [
+        'src/main.tsx',
+        'src/App.tsx',
+        'src/types.ts',
+        'src/data/**',
+        'src/i18n/locales/**',
+        'src/components/PhoneFrame.tsx',
+        'src/components/BottomTabBar.tsx',
+        'src/components/AppSelect.tsx',
+        'src/components/SplashScreen.tsx',
+        '**/*.d.ts',
+      ],
+      // 起步阈值（锁住当前水平，后续逐步棘轮到 80%）。当前 ~stmts75/lines77/funcs70/branch53。
+      thresholds: {
+        statements: 70,
+        lines: 70,
+        functions: 65,
+        branches: 50,
+      },
+    },
   },
 });
