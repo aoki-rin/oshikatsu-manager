@@ -30,7 +30,9 @@ body {
 
 #root {
   min-height: 100dvh;
-  background-color: #f8fafc;
+  /* 启动期（React 挂载前）保持深色，与原生启动屏 + 开屏动画 #121212 无缝衔接；
+     挂载后 app 容器（不透明）完全覆盖 #root，故不影响正常浅色界面。 */
+  background-color: #121212;
 }
 
 /* Animations */
@@ -57,4 +59,9 @@ body {
 }
 .sheet-panel {
   animation: sheet-slide-up 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 开屏动画旋转环 */
+@keyframes oshi-spin {
+  to { transform: rotate(360deg); }
 }
