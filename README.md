@@ -75,6 +75,22 @@ npm run android             # cap open android（在 Android Studio 里 Run）
 - 改完前端：`npm run cap:build` 再在 Studio Run（或配 Live Reload，见 Capacitor 文档）。
 - iOS 工程也已 scaffold（`ios/`），你用安卓可忽略；不想要可 `git rm -r ios`。
 
+## 测试
+分层自动化测试（Vitest + Testing Library + Playwright）。每个 PR 经 GitHub Actions 跑 `tsc` + 覆盖率门禁 + E2E。
+
+```bash
+npm test            # 单元/store/组件/原生分支（Vitest，124 例）
+npm run test:cov    # 同上 + 覆盖率门禁（v8 阈值：stmts/lines 70、funcs 65、branch 50，逐步棘轮到 80）
+npm run test:e2e    # Playwright 端到端（5 条 Web 关键流，page.route 用 fixture 拦截 /api）
+```
+- **纯函数**：解析器、跨平台聚合、收藏稳定键、提醒窗口、i18n、代理反爬分类。
+- **store**：`useOshiStore`（jsdom + `renderHook`，mock `../sources`/`../notifications`）。
+- **组件**：MyOshi / EventDetail / Discover / Calendar（Testing Library，靠 `id` 锚点不依赖文案）。
+- **原生分支**：`native`/`notifications`/`enrich`（mock Capacitor；真机系统行为另行手验，不进自动化）。
+- **E2E**：搜索→结果卡 / 详情弹窗 / 收藏持久 / 票务日程导出 / 关注仪表盘（Playwright + 预置 localStorage）。
+- ⚠️ **macOS 本地**跑测试/E2E 需用 Homebrew node（同下「开发环境注意」的原生模块签名问题）：
+  `PATH="/opt/homebrew/bin:$PATH" npm run test:e2e`。CI（ubuntu）无此问题。
+
 ## 法务（自用诚实版）
 仅抓**公开页/接口**、**不碰登录态/账号区**、低频、自用、不重新发布。各平台 ToS 仍可能限制自动化（LivePocket 明文禁 bot），实际风险仅限自己被限流/封 IP。
 
