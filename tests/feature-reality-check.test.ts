@@ -2,7 +2,7 @@
 // 针对 #24 同一类问题：UI 看着正常、点了有反应，但真正依赖时拿不到结果。
 // 这里只覆盖纯函数层能验证的部分；平台 API 层的坑（如 Android WebView 不支持
 // blob 下载导致「导出到手机日历」点了没反应）在 PR 说明里单列。
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import type { ActivityEvent } from '../src/types';
 import { buildEventIcs, formatDisplayDate } from '../src/utils';

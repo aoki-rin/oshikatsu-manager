@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { parseEplusSearch } from '../src/sources/eplus';
 import { parsePiaArtistCd, parsePiaRlsInfo } from '../src/sources/pia';
