@@ -2,6 +2,10 @@ node_modules/
 build/
 dist/
 coverage/
+# Playwright E2E 产物
+test-results/
+playwright-report/
+playwright/.cache/
 .DS_Store
 *.log
 server.js
