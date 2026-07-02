@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
 import { Search, Sparkles, AlertCircle, Star, ChevronDown } from 'lucide-react';
-import { formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
+import { formatDisplayDate, getDaysRemaining, platformLabel, primaryDeadline } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { isFavorited } from '../favorites';
@@ -368,7 +368,8 @@ export function DiscoverView({
             </div>
           ) : (
             displayEvents.map(event => {
-              const daysLeft = event.timeline.lotteryEndDate ? getDaysRemaining(event.timeline.lotteryEndDate) : -1;
+              // 卡片截止条：取最相关轮次（未截止优先），别让过期先行盖住还在受付的一般発売（QA #3）
+              const deadline = primaryDeadline(event.timeline);
               const isFav = isFavorited(event, favorites);
 
               return (
@@ -451,19 +452,21 @@ export function DiscoverView({
                     </div>
                   </div>
 
-                  {/* Lottery countdown bar panel — only when a 抽選/先行 deadline exists */}
-                  {event.timeline.lotteryEndDate && (
+                  {/* 截止倒计时条：展示最相关轮次（未截止的先行/一般优先；全过期才显示已截止） */}
+                  {deadline && (
                     <div className="px-3.5 pb-2.5 pt-1.5 bg-slate-50/70 border-t border-slate-150/50">
                       <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
-                        <span className="font-bold uppercase tracking-wider">{t('discover.lotteryBadge')}</span>
-                        <span>{daysLeft >= 0 ? t('discover.deadlinePrefix', { days: daysLeft }) : t('discover.deadlineClosed')}</span>
+                        <span className="font-bold uppercase tracking-wider">
+                          {deadline.kind === 'general' ? t('discover.generalBadge') : t('discover.lotteryBadge')}
+                        </span>
+                        <span>{!deadline.closed ? t('discover.deadlinePrefix', { days: deadline.daysLeft }) : t('discover.deadlineClosed')}</span>
                       </div>
                       {/* Simulate simple visual heatbar */}
                       <div className="w-full bg-slate-205 h-1.5 rounded-full mt-1 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
-                            width: daysLeft >= 0 ? `${Math.max(15, Math.min(100, 100 - (daysLeft * 10)))}%` : '100%',
+                            width: !deadline.closed ? `${Math.max(15, Math.min(100, 100 - (deadline.daysLeft * 10)))}%` : '100%',
                             backgroundColor: oshiColor
                           }}
                         ></div>

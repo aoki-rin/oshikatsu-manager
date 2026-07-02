@@ -33,6 +33,7 @@ export const jaJP = {
   'discover.deadlinePrefix': '⏰ あと {days} 日',
   'discover.deadlineClosed': '締切済み',
   'discover.lotteryBadge': '先行 抽選受付',
+  'discover.generalBadge': '★一般発売 受付',
   'discover.noteSearching': '検索中…',
   'discover.noteFound': 'リアルタイム {count} 件（{summary}）',
   'discover.noteEmpty': '直接まとめられる結果はありません（{summary}）',

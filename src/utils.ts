@@ -239,3 +239,33 @@ export function getDaysRemaining(targetDateStr: string, currentDateStr: string =
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
 }
+
+export interface PrimaryDeadline {
+  kind: 'lottery' | 'general';
+  endDate: string; // YYYY-MM-DD (JST)
+  daysLeft: number;
+  closed: boolean;
+}
+
+// 卡片摘要用的「最相关截止」（QA #3 回归）：
+// 旧卡片只看 lotteryEndDate → 先行早已截止而一般発売还在受付时，卡片错误显示「已截止」，
+// 用户扫列表会直接跳过还能报名的场次。规则：优先取【未截止】的轮次里截止最早的那个；
+// 全部已过才标 closed（取最晚结束的那轮展示）。timeline 无任何截止日期 → null（不渲染条）。
+export function primaryDeadline(
+  timeline: Pick<ActivityEvent, 'timeline'>['timeline'],
+  currentDateStr: string = getJstDateKey(),
+): PrimaryDeadline | null {
+  const candidates: Array<{ kind: PrimaryDeadline['kind']; endDate: string }> = [];
+  if (timeline.lotteryEndDate) candidates.push({ kind: 'lottery', endDate: timeline.lotteryEndDate });
+  if (timeline.generalEndDate) candidates.push({ kind: 'general', endDate: timeline.generalEndDate });
+  if (candidates.length === 0) return null;
+
+  const withDays = candidates.map((candidate) => ({
+    ...candidate,
+    daysLeft: getDaysRemaining(candidate.endDate, currentDateStr),
+  }));
+  const open = withDays.filter((candidate) => candidate.daysLeft >= 0).sort((a, b) => a.daysLeft - b.daysLeft);
+  if (open.length > 0) return { ...open[0], closed: false };
+  const latest = [...withDays].sort((a, b) => b.daysLeft - a.daysLeft)[0];
+  return { ...latest, closed: true };
+}

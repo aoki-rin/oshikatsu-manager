@@ -5,7 +5,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import type { ActivityEvent } from '../src/types';
-import { buildEventIcs, formatDisplayDate } from '../src/utils';
+import { buildEventIcs, formatDisplayDate, primaryDeadline } from '../src/utils';
 import { buildReminderTargets, isPastReminder } from '../src/notifications';
 import { aggregateConcerts } from '../src/sources/aggregate';
 import { favoriteAliases, favoriteKey, isFavorited } from '../src/favorites';
@@ -121,6 +121,41 @@ describe('收藏键跨聚合稳定（#7 修复）', () => {
     assert.equal(isFavorited(ev, ['lawson-1']), true);
     assert.equal(isFavorited(ev, [favoriteKey(ev)]), true);
     assert.equal(isFavorited(ev, []), false);
+  });
+});
+
+describe('卡片「最相关截止」选择（QA ISSUE-003 回归）', () => {
+  // 真机实测坑：先行已截止 + 一般発売还在受付 → 旧卡片只看 lotteryEndDate，显示「已截止」。
+  it('先行已过、一般还在受付 → 取一般発売（不显示已截止）', () => {
+    const picked = primaryDeadline(
+      { lotteryEndDate: '2026-03-08', generalEndDate: '2026-07-26' },
+      '2026-07-02',
+    );
+    assert.equal(picked?.kind, 'general');
+    assert.equal(picked?.closed, false);
+    assert.equal(picked?.daysLeft, 24);
+  });
+
+  it('两轮都在受付 → 取截止更早的那轮', () => {
+    const picked = primaryDeadline(
+      { lotteryEndDate: '2026-07-10', generalEndDate: '2026-07-26' },
+      '2026-07-02',
+    );
+    assert.equal(picked?.kind, 'lottery');
+    assert.equal(picked?.daysLeft, 8);
+  });
+
+  it('全部已过 → closed=true 且取最晚结束的那轮', () => {
+    const picked = primaryDeadline(
+      { lotteryEndDate: '2026-03-08', generalEndDate: '2026-05-01' },
+      '2026-07-02',
+    );
+    assert.equal(picked?.closed, true);
+    assert.equal(picked?.kind, 'general');
+  });
+
+  it('无任何截止日期 → null（卡片不渲染条）', () => {
+    assert.equal(primaryDeadline({}, '2026-07-02'), null);
   });
 });
 

@@ -31,6 +31,7 @@ export const zhCN = {
   'discover.deadlinePrefix': '⏰ 仅剩 {days} 天',
   'discover.deadlineClosed': '已截止',
   'discover.lotteryBadge': '先行 抽選受付',
+  'discover.generalBadge': '★一般発売 受付',
   'discover.noteSearching': '搜索中…',
   'discover.noteFound': '平台实时 {count} 条（{summary}）',
   'discover.noteEmpty': '没有可直接聚合的结果（{summary}）',
