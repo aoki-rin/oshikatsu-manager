@@ -6,9 +6,9 @@ import { searchPia, enrichPiaWindows } from './pia';
 import { searchTicketDive, enrichTicketDiveWindows } from './ticketdive';
 import { searchLivePocket, enrichLivePocketWindows } from './livepocket';
 import { searchLawson } from './lawson';
-import { buildPlatformSearchUrl, dedupeEvents, PLATFORM_SEARCH_TIMEOUT_MS, withPlatformTimeout, type TicketSource } from './shared';
+import { buildPlatformSearchUrl, dedupeEvents, platformSearchTimeoutMs, withPlatformTimeout, type TicketSource } from './shared';
 import { aggregateConcerts, eventPlatforms } from './aggregate';
-import { searchViaProxy, searchWithProxyFallback } from './proxy';
+import { isProxyConfigured, searchViaProxy, searchWithProxyFallback } from './proxy';
 
 // platform 名（与 ExtensionSource.platform / TicketPlatform 对齐）→ 插件 search
 const REGISTRY: Record<TicketPlatform, TicketSource> = {
@@ -29,8 +29,14 @@ export function searchableTargets(activePlatforms: string[]): TicketPlatform[] {
   return configured.filter((p): p is TicketPlatform => p in REGISTRY);
 }
 
+export interface StreamMeta {
+  // 配置了代理但本次请求失败（走了客户端直连兜底）。UI 用于显示降级提示。
+  proxyDegraded: boolean;
+}
+
 export interface StreamOptions {
   signal?: AbortSignal;
+  onMeta?: (meta: StreamMeta) => void;
 }
 
 // 流式搜索：每个源 settle 就立刻回调 onSource，UI 可增量渲染、不必等最慢的源（Mihon 式全局搜索）。
@@ -47,11 +53,15 @@ export async function searchPlatformsStreaming(
 
   // 代理优先（未配置代理时 searchViaProxy 返回 null → 走客户端流式）
   let proxyResult: TicketSearchResult | null = null;
+  let proxyDegraded = false;
   try {
     proxyResult = await searchViaProxy(q, activePlatforms);
   } catch {
     proxyResult = null;
+    // 配置了代理但请求失败 = 降级（Tailscale/代理进程没开等）。通知 UI 明示，别静默退化（QA #2）。
+    proxyDegraded = isProxyConfigured();
   }
+  options.onMeta?.({ proxyDegraded });
   if (proxyResult) {
     for (const report of proxyResult.reports) {
       if (options.signal?.aborted) return;
@@ -61,13 +71,13 @@ export async function searchPlatformsStreaming(
     return;
   }
 
-  // 客户端：各源并发，谁先回来谁先回调
+  // 客户端：各源并发，谁先回来谁先回调（每平台超时上限见 platformSearchTimeoutMs）
   await Promise.all(targets.map(async (platform) => {
     if (options.signal?.aborted) return;
     const startedAt = Date.now();
     const handoffUrl = REGISTRY[platform].buildSearchUrl(q);
     try {
-      const events = await withPlatformTimeout(REGISTRY[platform].search(q), PLATFORM_SEARCH_TIMEOUT_MS, platform);
+      const events = await withPlatformTimeout(REGISTRY[platform].search(q), platformSearchTimeoutMs(platform), platform);
       if (options.signal?.aborted) return;
       onSource({
         platform,
@@ -107,7 +117,7 @@ export async function searchClientPlatforms(query: string, activePlatforms: stri
   const targets = configured.filter((p): p is TicketPlatform => p in REGISTRY);
   if (!q || targets.length === 0) return { events: [], reports: [], perPlatform: [] };
 
-  const settled = await Promise.allSettled(targets.map((p) => withPlatformTimeout(REGISTRY[p].search(q), PLATFORM_SEARCH_TIMEOUT_MS, p)));
+  const settled = await Promise.allSettled(targets.map((p) => withPlatformTimeout(REGISTRY[p].search(q), platformSearchTimeoutMs(p), p)));
   const reports: TicketSearchReport[] = [];
   const events: ActivityEvent[] = [];
 

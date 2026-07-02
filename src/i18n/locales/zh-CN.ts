@@ -32,6 +32,7 @@ export const zhCN = {
   'discover.deadlineClosed': '已截止',
   'discover.lotteryBadge': '先行 抽選受付',
   'discover.generalBadge': '★一般発売 受付',
+  'discover.proxyDegraded': '⚠️ 代理不可达，本次已用手机直连（ローチケ等需代理的源受限）。检查 Mac 代理与 Tailscale。',
   'discover.noteSearching': '搜索中…',
   'discover.noteFound': '平台实时 {count} 条（{summary}）',
   'discover.noteEmpty': '没有可直接聚合的结果（{summary}）',

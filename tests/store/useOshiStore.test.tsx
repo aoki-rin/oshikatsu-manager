@@ -235,6 +235,21 @@ describe('useOshiStore — 搜索编排', () => {
     expect(JSON.parse(localStorage.getItem('oshikatsu_source_stats')!).eplus.status).toBe('ok');
   });
 
+  it('代理降级（配置了但连不上）→ searchDegraded 置 true 供 UI 提示（QA #2）', async () => {
+    vi.mocked(sources.searchableTargets).mockReturnValue(['eplus']);
+    vi.mocked(sources.searchPlatformsStreaming).mockImplementation(async (_q, _p, onSource, options) => {
+      options?.onMeta?.({ proxyDegraded: true });
+      onSource({ platform: 'eplus', status: 'ok', count: 1, handoffUrl: 'h', runtime: 'client' }, [makeEvent()]);
+    });
+
+    const { result } = render();
+    expect(result.current.searchDegraded).toBe(false);
+    await act(async () => {
+      await result.current.handleRunPlatformSearch('FRUITS ZIPPER', ['eplus']);
+    });
+    expect(result.current.searchDegraded).toBe(true);
+  });
+
   it('空 query 直接返回且不触发搜索', async () => {
     const { result } = render();
     let ret;

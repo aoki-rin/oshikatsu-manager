@@ -48,6 +48,15 @@ export const PLATFORM_IDS: Record<TicketPlatform, string> = {
 
 export const PLATFORM_SEARCH_TIMEOUT_MS = 25000;
 
+// 每平台超时上限（QA #2）：Lawson 手机直连基本必被反爬拖死（见 ADR-0002，需住宅代理），
+// 真机实测每次搜索陪跑 20s+ 才超时 —— 8s 内没结果就明确失败，别拖住整个「搜索中」状态。
+const PLATFORM_TIMEOUT_OVERRIDES: Partial<Record<string, number>> = {
+  'Lawson Ticket': 8000,
+};
+export function platformSearchTimeoutMs(platform: string): number {
+  return PLATFORM_TIMEOUT_OVERRIDES[platform] ?? PLATFORM_SEARCH_TIMEOUT_MS;
+}
+
 export function withPlatformTimeout<T>(promise: Promise<T>, timeoutMs: number, platform: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {

@@ -111,6 +111,7 @@ export default function App() {
               searchReports={store.searchReports}
               recentSearches={store.recentSearches}
               searching={store.isSearching}
+              searchDegraded={store.searchDegraded}
               extensions={store.extensions}
               artists={store.artists}
               venues={store.venues}

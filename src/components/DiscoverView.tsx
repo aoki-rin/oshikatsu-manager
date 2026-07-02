@@ -54,6 +54,8 @@ interface DiscoverViewProps {
   searchReports: TicketSearchReport[];
   recentSearches: string[];
   searching: boolean;
+  // 代理配置了但连不上（本次走手机直连兜底）→ 显示降级提示
+  searchDegraded: boolean;
   extensions: ExtensionSource[];
   artists: Artist[];
   venues: Venue[];
@@ -71,6 +73,7 @@ export function DiscoverView({
   searchReports,
   recentSearches,
   searching,
+  searchDegraded,
   extensions,
   artists,
   venues,
@@ -219,6 +222,15 @@ export function DiscoverView({
           </button>
           {searchNote && <span className="text-[10px] text-slate-500 truncate flex-1">{searchNote}</span>}
         </div>
+        {/* 代理降级提示：别静默退化——告诉用户 Lawson 等代理依赖源本次不可用（QA #2） */}
+        {searchDegraded && (
+          <div
+            id="proxy-degraded-note"
+            className="mt-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5"
+          >
+            {t('discover.proxyDegraded')}
+          </div>
+        )}
       </div>
 
       {/* Screen Interactive scrollable core body */}

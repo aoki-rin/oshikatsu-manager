@@ -34,6 +34,7 @@ export const jaJP = {
   'discover.deadlineClosed': '締切済み',
   'discover.lotteryBadge': '先行 抽選受付',
   'discover.generalBadge': '★一般発売 受付',
+  'discover.proxyDegraded': '⚠️ プロキシに接続できず、今回は端末から直接取得（ローチケ等プロキシ依存ソースは制限）。Mac のプロキシと Tailscale を確認してください。',
   'discover.noteSearching': '検索中…',
   'discover.noteFound': 'リアルタイム {count} 件（{summary}）',
   'discover.noteEmpty': '直接まとめられる結果はありません（{summary}）',

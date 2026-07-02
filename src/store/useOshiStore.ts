@@ -48,6 +48,8 @@ export function useOshiStore(t: TFunction) {
   const [searchReports, setSearchReports] = useState<TicketSearchReport[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  // 配置了代理但本次搜索连不上（走了手机直连兜底）→ UI 显示降级提示（QA #2）。
+  const [searchDegraded, setSearchDegraded] = useState(false);
   // Cancels the previous in-flight search when a new one starts (stale results ignored).
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -284,6 +286,7 @@ export function useOshiStore(t: TFunction) {
     searchAbortRef.current = controller;
 
     setIsSearching(true);
+    setSearchDegraded(false);
     const recent = [q, ...recentSearches.filter(item => item !== q)].slice(0, 8);
     setRecentSearches(recent);
     saveToStorage('oshikatsu_recent_searches', recent);
@@ -311,7 +314,12 @@ export function useOshiStore(t: TFunction) {
         reportsByPlatform.set(report.platform, report);
         for (const event of evs) rawEventsById.set(event.id, event);
         apply();
-      }, { signal: controller.signal });
+      }, {
+        signal: controller.signal,
+        onMeta: (meta) => {
+          if (!controller.signal.aborted) setSearchDegraded(meta.proxyDegraded);
+        },
+      });
 
       if (controller.signal.aborted) return { events: [], reports: [] };
 
@@ -437,6 +445,7 @@ export function useOshiStore(t: TFunction) {
     searchReports,
     recentSearches,
     isSearching,
+    searchDegraded,
     favorites,
     followedArtists,
     followedVenues,
