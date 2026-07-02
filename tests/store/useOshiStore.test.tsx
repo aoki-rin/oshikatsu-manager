@@ -122,7 +122,7 @@ describe('useOshiStore — 持久化加载', () => {
 });
 
 describe('useOshiStore — 收藏稳定键（#36 回归）', () => {
-  it('收藏用 favoriteKey 存（非 event.id）并持久化', () => {
+  it('收藏写入稳定键 + id 别名并持久化', () => {
     const ev = makeEvent({ id: 'lawson-1', platform: 'Lawson Ticket' });
     const { result } = render();
 
@@ -130,8 +130,8 @@ describe('useOshiStore — 收藏稳定键（#36 回归）', () => {
 
     const key = favoriteKey(ev);
     expect(key.startsWith('fav:')).toBe(true);
-    expect(result.current.favorites).toEqual([key]);
-    expect(JSON.parse(localStorage.getItem('oshikatsu_favorites')!)).toEqual([key]);
+    expect(result.current.favorites).toEqual([key, 'lawson-1']);
+    expect(JSON.parse(localStorage.getItem('oshikatsu_favorites')!)).toEqual([key, 'lawson-1']);
   });
 
   it('再次 toggle 取消收藏（清掉 key 与旧 id）', () => {
@@ -153,6 +153,20 @@ describe('useOshiStore — 收藏稳定键（#36 回归）', () => {
     const { result } = render();
 
     expect(result.current.favorites).toContain(favoriteKey(ev));
+  });
+
+  it('收藏写入别名全集（键+id+成员平台 id），取消时全部清掉（QA ISSUE-001）', () => {
+    const ev = makeEvent({ id: 'agg-x-2030-08-10-v', memberIds: ['eplus-9', 'pia-B1'] });
+    const { result } = render();
+
+    act(() => result.current.handleToggleFavorite(ev));
+    const stored = JSON.parse(localStorage.getItem('oshikatsu_favorites')!) as string[];
+    expect(stored).toEqual(expect.arrayContaining(['eplus-9', 'pia-B1', 'agg-x-2030-08-10-v']));
+
+    // 换关键词重搜后的同一场（艺人名/聚合 id 漂移，但成员平台 id 相同）仍算已收藏 → 再点是取消
+    const refound = makeEvent({ id: 'agg-y-2030-08-10-v', artistName: '別の検索語', memberIds: ['eplus-9'] });
+    act(() => result.current.handleToggleFavorite(refound));
+    expect(JSON.parse(localStorage.getItem('oshikatsu_favorites')!)).not.toContain('eplus-9');
   });
 });
 

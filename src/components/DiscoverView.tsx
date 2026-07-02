@@ -413,7 +413,8 @@ export function DiscoverView({
                         {event.title}
                       </h3>
                       <p className="text-[10px] text-slate-500 font-medium truncate flex items-center gap-1">
-                        <span>⭐ {event.artistName}</span>
+                        {/* 检索词回显（artistSource:'query'）用 🔍 展示，不冒充出演者 */}
+                        <span>{event.artistSource === 'query' ? '🔍' : '⭐'} {event.artistName}</span>
                         <span className="text-slate-300">|</span>
                         <span>📍 {event.venueName}</span>
                       </p>

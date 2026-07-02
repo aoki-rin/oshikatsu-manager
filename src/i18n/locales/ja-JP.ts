@@ -70,6 +70,7 @@ export const jaJP = {
   'detail.priceTitle': '参考料金 / 席種',
   'detail.priceUnavailable': '未定 · 公式ページで確認',
   'detail.artistTitle': '出演アーティスト: {name}',
+  'detail.searchTermTitle': '検索ワード: {name}（購読用）',
   'detail.followArtistOn': '♥ 推しリスト入り',
   'detail.followArtistOff': '+ 推しに追加',
   'detail.artistPower': '推し指数: {count}人',

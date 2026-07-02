@@ -82,11 +82,23 @@ function mergeCluster(cluster: ActivityEvent[]): ActivityEvent {
   const tags = [...new Set(cluster.flatMap((event) => event.tags || []))];
   const lastFetchedAt = cluster.map((event) => event.lastFetchedAt).filter(Boolean).sort().pop() || primary.lastFetchedAt;
 
+  // 出演者名优先取平台真实名（如 Pia artistnm）；检索词回显只是兜底。
+  const attributed = sorted.find((event) => event.artistSource === 'platform' && event.artistName);
+  const artistName = attributed?.artistName || primary.artistName;
+
+  // 成员平台事件 id（查询无关，如 eplus-xxx / pia-yyy）：收藏用它做稳定别名。
+  // 排除 agg- 前缀（聚合 id 含检索词，换关键词会漂移）；幂等（成员本身可能已是聚合产物）。
+  const memberIds = [...new Set(cluster.flatMap((event) => [event.id, ...(event.memberIds ?? [])]))]
+    .filter((id) => !id.startsWith('agg-'));
+
   const merged: ActivityEvent = {
     ...primary,
-    id: `agg-${normalizeArtist(primary.artistName)}-${primary.date}-${venueCore(venueName) || 'x'}`,
+    id: `agg-${normalizeArtist(artistName)}-${primary.date}-${venueCore(venueName) || 'x'}`,
     title: pickLongest(cluster.map((event) => event.title)) || primary.title,
-    artistId: canonicalArtistId(primary.artistName) || primary.artistId,
+    artistId: canonicalArtistId(artistName) || primary.artistId,
+    artistName,
+    artistSource: attributed ? 'platform' : primary.artistSource,
+    memberIds,
     venueId: canonicalVenueId(venueName) || primary.venueId,
     venueName,
     region: firstNonEmpty(cluster.map((event) => event.region)),

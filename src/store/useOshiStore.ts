@@ -8,7 +8,7 @@ import { searchPlatformsStreaming, searchableTargets } from '../sources';
 import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
 import { aggregateConcerts } from '../sources/aggregate';
 import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
-import { favoriteKey } from '../favorites';
+import { favoriteAliases } from '../favorites';
 import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
 const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
@@ -101,8 +101,8 @@ export function useOshiStore(t: TFunction) {
     // 3. User relationships
     const storedFavs = localStorage.getItem('oshikatsu_favorites');
     if (storedFavs) {
-      // 收藏键可能是稳定键(新)或 event.id(旧)：两者都算有效，避免聚合后丢收藏。
-      const validFavKeys = new Set(loadedEvents.flatMap(event => [event.id, favoriteKey(event)]));
+      // 收藏项可能是稳定键(新)、event.id(旧)或成员平台 id(别名)：任一仍指向现存事件即有效。
+      const validFavKeys = new Set(loadedEvents.flatMap(event => favoriteAliases(event)));
       setFavorites((JSON.parse(storedFavs) as string[]).filter(id => validFavKeys.has(id)));
     }
 
@@ -178,16 +178,17 @@ export function useOshiStore(t: TFunction) {
 
   // Follow/Favorite toggles
   const handleToggleFavorite = (event: ActivityEvent) => {
-    // 用稳定身份键收藏（见 favorites.ts）：单平台演出被跨平台聚合后 id 会变，
-    // 用 id 当键会丢收藏。兼容旧数据：移除时连旧 event.id 一并清掉。
-    const key = favoriteKey(event);
-    const isFav = favorites.includes(key) || favorites.includes(event.id);
+    // 收藏写入「别名全集」（见 favorites.ts）：稳定键 + id + 成员平台 id。
+    // 平台 id 查询无关 → 换个关键词重搜同一场（artistName/聚合 id 漂移）收藏仍命中；
+    // 取消时把全部别名清掉（含旧数据的 event.id）。
+    const aliases = favoriteAliases(event);
+    const isFav = aliases.some(alias => favorites.includes(alias));
     let updated;
     if (isFav) {
-      updated = favorites.filter(id => id !== key && id !== event.id);
+      updated = favorites.filter(id => !aliases.includes(id));
       triggerToast(t('toast.favoriteRemovedTitle'), t('toast.favoriteRemovedBody'));
     } else {
-      updated = [...favorites, key];
+      updated = [...favorites, ...aliases.filter(alias => !favorites.includes(alias))];
       triggerToast(t('toast.favoriteAddedTitle'), t('toast.favoriteAddedBody', { title: event.title.slice(0, 15) || '' }));
     }
     setFavorites(updated);

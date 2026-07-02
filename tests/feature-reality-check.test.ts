@@ -8,7 +8,7 @@ import type { ActivityEvent } from '../src/types';
 import { buildEventIcs, formatDisplayDate } from '../src/utils';
 import { buildReminderTargets, isPastReminder } from '../src/notifications';
 import { aggregateConcerts } from '../src/sources/aggregate';
-import { favoriteKey, isFavorited } from '../src/favorites';
+import { favoriteAliases, favoriteKey, isFavorited } from '../src/favorites';
 
 function makeEvent(over: Partial<ActivityEvent> = {}): ActivityEvent {
   return {
@@ -121,5 +121,39 @@ describe('收藏键跨聚合稳定（#7 修复）', () => {
     assert.equal(isFavorited(ev, ['lawson-1']), true);
     assert.equal(isFavorited(ev, [favoriteKey(ev)]), true);
     assert.equal(isFavorited(ev, []), false);
+  });
+});
+
+describe('收藏别名跨「换关键词重搜」稳定（QA ISSUE-001 回归）', () => {
+  // 真机实测坑：artistName 是搜索词回显 → 搜 "FRUITS" 收藏、改搜 "藍井エイル" 再命中同一场
+  // （艺人名/聚合 id 全变）时，稳定键漂移收藏丢失，且票务日程 vs 发现页状态分裂。
+  // 修法：收藏写入别名全集（键+id+成员平台 id），平台 id 查询无关 → 任一命中即算收藏。
+  it('favoriteAliases 含 稳定键 + id + 成员平台 id', () => {
+    const eplus = makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' });
+    const pia = makeEvent({ id: 'pia-B1', platform: 'Ticket Pia', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' });
+    const merged = aggregateConcerts([eplus, pia])[0];
+    const aliases = favoriteAliases(merged);
+    assert.ok(aliases.includes(favoriteKey(merged)));
+    assert.ok(aliases.includes(merged.id));
+    assert.ok(aliases.includes('eplus-9'));
+    assert.ok(aliases.includes('pia-B1'));
+  });
+
+  it('换关键词重搜（艺人名漂移）后，凭成员平台 id 仍命中收藏', () => {
+    // 第一次：搜 "FRUITS" → 聚合 → 收藏（存入别名全集）
+    const first = aggregateConcerts([
+      makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+      makeEvent({ id: 'pia-B1', platform: 'Ticket Pia', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+    ])[0];
+    const favorites = favoriteAliases(first);
+
+    // 第二次：搜 "藍井エイル" → 同一场（相同平台事件 id）但 artistName/聚合 id 都变了
+    const second = aggregateConcerts([
+      makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: '藍井エイル', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+      makeEvent({ id: 'pia-B1', platform: 'Ticket Pia', artistName: '藍井エイル', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+    ])[0];
+    assert.notEqual(second.id, first.id, '前提：聚合 id 确实随关键词漂移');
+    assert.notEqual(favoriteKey(second), favoriteKey(first), '前提：稳定键确实漂移');
+    assert.equal(isFavorited(second, favorites), true, '成员平台 id 别名兜住收藏');
   });
 });

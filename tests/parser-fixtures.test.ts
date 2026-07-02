@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { parseEplusSearch } from '../src/sources/eplus';
-import { parsePiaArtistCd, parsePiaRlsInfo } from '../src/sources/pia';
+import { parsePiaArtistCd, parsePiaArtistInfo, parsePiaRlsInfo } from '../src/sources/pia';
 import { parseTicketDiveSearch, parseTicketDiveDetailWindow } from '../src/sources/ticketdive';
 import { parseLawsonSearch } from '../src/sources/lawson';
 import { parseLivePocketSearch, parseLivePocketDetailWindow } from '../src/sources/livepocket';
@@ -75,6 +75,16 @@ describe('Ticket Pia search parser', () => {
     const searchHtml = 'var artistArray = "[score: 9, artistcd: 49240081, artistnm: いきものがかり]";';
     assert.equal(parsePiaArtistCd(searchHtml), '49240081');
     assert.equal(parsePiaArtistCd('<html>no artist here</html>'), null);
+  });
+
+  it('extracts alphanumeric artistCd + real artist name (NFKC-normalized)', () => {
+    // 实测：cd 可带字母前缀（M4140001），artistnm 为全角。旧正则 \d+ 会漏配 → 该艺人「无结果」。
+    const searchHtml =
+      'var artistArray = "[score: 2.08, artistcd: M4140001, artistnm: ＦＲＵＩＴＳ ＺＩＰＰＥＲ, artistkn: フルーツジッパー, title: null]";';
+    const info = parsePiaArtistInfo(searchHtml);
+    assert.equal(info?.cd, 'M4140001');
+    assert.equal(info?.name, 'FRUITS ZIPPER');
+    assert.equal(parsePiaArtistCd(searchHtml), 'M4140001');
   });
 
   it('parses rlsInfo sales_data sections into events with rounds', () => {

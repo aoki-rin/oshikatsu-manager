@@ -64,6 +64,7 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
       title: e.title || artist,
       artistId: canonicalArtistId(artist) || `td-artist-${artist}`,
       artistName: artist,
+      artistSource: 'query',
       venueId: canonicalVenueId(e.venueName) || `td-venue-${e.id}`,
       venueName: e.venueName || '—',
       date: jstDate(e.startEventDate),

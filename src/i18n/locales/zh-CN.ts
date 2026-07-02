@@ -68,6 +68,7 @@ export const zhCN = {
   'detail.priceTitle': '参考票价/席位',
   'detail.priceUnavailable': '未定 · 详见官方页',
   'detail.artistTitle': '演职艺人：{name}',
+  'detail.searchTermTitle': '检索词：{name}（订阅用）',
   'detail.followArtistOn': '♥ 已在推し名单',
   'detail.followArtistOff': '+ 加入推し',
   'detail.artistPower': '推心指数: {count} 粉丝',
