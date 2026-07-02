@@ -3,6 +3,7 @@ build/
 dist/
 coverage/
 # Playwright E2E 产物
+dist-e2e/
 test-results/
 playwright-report/
 playwright/.cache/
