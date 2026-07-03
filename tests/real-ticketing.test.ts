@@ -143,30 +143,27 @@ describe('Lawson source parsing', () => {
 
 describe('ticket source helpers', () => {
   it('filters unrelated LivePocket cards instead of relabeling them as the searched artist', () => {
-    const html = `
-      <li class="item">
-        <a href="https://t.livepocket.jp/e/unrelated">
-          <img class="thumb-vertical" src="https://example.com/a.jpg">
-          <span class="title-inner">Unrelated talk event</span>
+    // 2026-07 新版结构：event-card-list__item + event-card__* 字段
+    const card = (slug: string, title: string, cast: string) => `
+      <li class="event-card-list__item">
+        <a class="event-card" href="/e/${slug}">
+          <span class="tag-normal-primary event-card__tag">販売中</span>
+          <div class="event-card__info">
+            <h3 class="event-card__title">${title}</h3>
+            <p class="event-card__text event-card__text--date"><span class="event-card__date">日程</span> 2026年6月4日(木)</p>
+            <p class="event-card__text"><span class="event-card__place">会場</span> Zepp Tokyo（東京都）</p>
+            <p class="event-card__text event-card__text--cast"><span class="event-card__cast">出演者</span> ${cast}</p>
+          </div>
         </a>
-        <ul class="status-on_sale"><li>販売中</li><li>6/3</li></ul>
-        <div class="info">東京都</div>
-      </li>
-      <li class="item">
-        <a href="https://t.livepocket.jp/e/relevant">
-          <img class="thumb-vertical" src="https://example.com/b.jpg">
-          <span class="title-inner">YOASOBI fan night</span>
-        </a>
-        <ul class="status-on_sale"><li>販売中</li><li>6/4</li></ul>
-        <div class="info">東京都</div>
-      </li>
-    `;
+      </li>`;
+    const html = card('unrelated', 'Unrelated talk event', '誰か / 別人') + card('relevant', 'YOASOBI fan night', 'YOASOBI');
 
     const events = parseLivePocketSearch(html, 'YOASOBI');
 
     assert.equal(events.length, 1);
     assert.equal(events[0].id, 'lp-relevant');
     assert.equal(events[0].artistName, 'YOASOBI');
+    assert.equal(events[0].artistSource, 'platform');
   });
 
   it('rejects a hung platform request with a clear timeout error', async () => {

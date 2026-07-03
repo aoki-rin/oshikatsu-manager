@@ -210,7 +210,8 @@ export function buildPlatformSearchUrl(platform: TicketPlatform, query: string):
     case 'eplus':
       return `https://eplus.jp/sf/search?keyword=${q}`;
     case 'LivePocket':
-      return `https://t.livepocket.jp/event/search?word=${q}`;
+      // 2026-07 改版：新站在裸域名（旧 t.livepocket.jp 只剩【旧サイト】残页）
+      return `https://livepocket.jp/event/search?word=${q}`;
     case 'TicketDive':
       return `https://ticketdive.com/search?q=${q}`;
     case 'Lawson Ticket':
