@@ -4,7 +4,7 @@ import { parseEplusSearch } from '../src/sources/eplus';
 import { parsePiaArtistCd, parsePiaArtistInfo, parsePiaRlsInfo } from '../src/sources/pia';
 import { parseTicketDiveSearch, parseTicketDiveDetailWindow } from '../src/sources/ticketdive';
 import { parseLawsonSearch } from '../src/sources/lawson';
-import { parseLivePocketSearch, parseLivePocketDetailWindow } from '../src/sources/livepocket';
+import { parseLivePocketSearch, parseLivePocketDetailWindow, parseLivePocketDetailRounds, toNewLivePocketUrl } from '../src/sources/livepocket';
 import { canonicalArtistId, canonicalVenueId } from '../src/sources/shared';
 
 // These fixtures mirror the real structure of each platform's response so that a
@@ -184,33 +184,62 @@ describe('Lawson search parser (fixture)', () => {
   });
 });
 
-describe('LivePocket search parser (fixture)', () => {
-  const html = `
-    <li class="item">
-      <a href="https://t.livepocket.jp/e/yoa-arena">
-        <img class="thumb-vertical" src="https://img.example/yoa.jpg">
-        <span class="title-inner">YOASOBI SPECIAL LIVE</span>
+describe('LivePocket search parser (fixture, 2026-07 新版站点)', () => {
+  // 按 livepocket.jp/event/search 真实结构裁剪：结果卡 = event-card-list__item；
+  // 页面下方「ピックアップ/新着」轮播用别的 item 类 + --sp-column 修饰，必须整体排除。
+  const resultCard = (slug: string, title: string, cast: string) => `
+    <li class="event-card-list__item">
+      <a class="event-card" data-turbo="false" href="/e/${slug}">
+        <div class="event-card__image-box">
+          <span class="tag-normal-primary event-card__tag">販売中</span>
+          <div class="event-card__image"><img alt="" src="https://livepocket.jp/public/event_image/${slug}.webp" /></div>
+        </div>
+        <div class="event-card__info">
+          <h3 class="event-card__title">${title}</h3>
+          <p class="event-card__text event-card__text--date"><span class="event-card__date">日程</span> 2026年3月28日(土)</p>
+          <p class="event-card__text"><span class="event-card__time">時間</span> 18:00〜</p>
+          <p class="event-card__text"><span class="event-card__place">会場</span> オンラインイベント（東京都）</p>
+          <p class="event-card__text event-card__text--cast"><span class="event-card__cast">出演者</span> ${cast}</p>
+        </div>
       </a>
-      <ul class="status-on_sale"><li>受付中</li><li>12/25</li></ul>
-      <div class="info">東京都・Zepp Tokyo</div>
     </li>`;
+  const html = `
+    <ul class="event-card-list">
+      ${resultCard('oi4sy', '松本かれん生誕2026 オンラインカンパ', '松本かれん / FRUITS ZIPPER')}
+      ${resultCard('other1', 'ぱっちわーく コピーダンス単独公演', 'りん / りこ / ぱっちわーく')}
+    </ul>
+    <section class="event-list-pickup"><ul><li class="event-list-pickup__item">
+      <a class="event-card event-card event-card--sp-column" href="/e/pickup-noise">
+        <h3 class="event-card__title">FRUITS ZIPPER PICKUP（轮播噪音，不得入结果）</h3>
+      </a>
+    </li></ul></section>`;
 
-  it('parses an item card into a live event (M/D inferred, year-agnostic check)', () => {
-    const events = parseLivePocketSearch(html, 'YOASOBI');
+  it('解析结果卡：完整年份日期/時間/会場+地区/出演者→平台真实艺人名/状态 tag/相对链接补全', () => {
+    const events = parseLivePocketSearch(html, 'FRUITS ZIPPER');
     assert.equal(events.length, 1);
     const [e] = events;
-    assert.equal(e.id, 'lp-yoa-arena');
-    assert.equal(e.title, 'YOASOBI SPECIAL LIVE');
-    assert.equal(e.artistName, 'YOASOBI');
-    assert.match(e.venueName, /東京都/);
-    assert.equal(e.date.slice(5), '12-25'); // 年份按今年/明年推断，仅校验月日，避免随运行日期漂移
-    assert.equal(e.ticketWindows?.[0].id, 'lp-yoa-arena-0');
-    assert.equal(e.ticketWindows?.[0].statusText, '受付中');
+    assert.equal(e.id, 'lp-oi4sy');
+    assert.equal(e.title, '松本かれん生誕2026 オンラインカンパ');
+    assert.equal(e.date, '2026-03-28'); // 新站带年份，不再推断
+    assert.equal(e.time, '18:00');
+    assert.equal(e.venueName, 'オンラインイベント');
+    assert.equal(e.region, '東京都');
+    assert.equal(e.artistName, 'FRUITS ZIPPER'); // 出演者列表里匹配查询的真实名
+    assert.equal(e.artistSource, 'platform');
+    assert.equal(e.originalUrl, 'https://livepocket.jp/e/oi4sy'); // 相对 href 补全到新域名
+    assert.equal(e.ticketWindows?.[0].id, 'lp-oi4sy-0');
+    assert.equal(e.ticketWindows?.[0].statusText, '販売中');
   });
 
-  it('drops cards that do not match the queried artist (no relabeling)', () => {
-    const other = html.replace('YOASOBI SPECIAL LIVE', '別アーティストの公演');
-    assert.deepEqual(parseLivePocketSearch(other, 'YOASOBI'), []);
+  it('出演者不含查询词的卡被过滤（不冒名顶替）；轮播卡结构性排除', () => {
+    const events = parseLivePocketSearch(html, 'FRUITS ZIPPER');
+    assert.ok(!events.some((e) => e.id === 'lp-other1'), '翻跳团卡应被相关性过滤');
+    assert.ok(!events.some((e) => e.id === 'lp-pickup-noise'), '轮播噪音卡应被容器范围排除');
+  });
+
+  it('toNewLivePocketUrl：旧域名链接改写到新站', () => {
+    assert.equal(toNewLivePocketUrl('https://t.livepocket.jp/e/abc'), 'https://livepocket.jp/e/abc');
+    assert.equal(toNewLivePocketUrl('https://livepocket.jp/e/abc'), 'https://livepocket.jp/e/abc');
   });
 });
 
@@ -249,6 +278,53 @@ describe('LivePocket detail window (fixture, issue A1)', () => {
 
   it('returns nulls when no sale window present', () => {
     assert.deepEqual(parseLivePocketDetailWindow('<html>no json here</html>'), { applyStart: null, applyEnd: null });
+  });
+});
+
+describe('LivePocket detail rounds (fixture, 2026-07 新版 #ticket 区)', () => {
+  // 新版详情页每轮一个 event-detail-ticket__item：轮次名 + 状态 tag + 販売受付期間 起〜止。
+  // 按真实页面（/e/vpkyj）裁剪。
+  const html = `
+    <ul class="event-detail-ticket">
+      <li class="event-detail-ticket__item js-toggle is-open">
+        <a href="" class="event-detail-ticket-head js-toggle-trigger">
+          <div class="event-detail-ticket-head__status"> <span class="tag-primary">販売中</span> </div>
+          <h3 class="event-detail-ticket-head__title"> <span class="label-order">先着</span> 先着販売受付 </h3>
+          <dl class="event-detail-ticket-head__list">
+            <dt class="event-detail-ticket-head__list-title">販売受付期間</dt>
+            <dd class="event-detail-ticket-head__list-data"> 2026年5月10日(日) 19:00<br class="only-sp" />〜2026年7月4日(土) 23:59 </dd>
+          </dl>
+        </a>
+      </li>
+      <li class="event-detail-ticket__item js-toggle">
+        <a href="" class="event-detail-ticket-head js-toggle-trigger">
+          <div class="event-detail-ticket-head__status"> <span class="tag-primary">販売前</span> </div>
+          <h3 class="event-detail-ticket-head__title"> <span class="label-order">先着</span> 当日販売受付 </h3>
+          <dl class="event-detail-ticket-head__list">
+            <dt class="event-detail-ticket-head__list-title">販売受付期間</dt>
+            <dd class="event-detail-ticket-head__list-data"> 2026年7月5日(日) 00:00〜2026年7月5日(日) 20:00 </dd>
+          </dl>
+        </a>
+      </li>
+    </ul>`;
+
+  it('逐轮解析：轮次名/状态/販売受付期間起止（JST ISO）', () => {
+    const rounds = parseLivePocketDetailRounds(html);
+    assert.equal(rounds.length, 2);
+    assert.deepEqual(rounds[0], {
+      roundType: '先着販売受付',
+      statusText: '販売中',
+      applyStart: '2026-05-10T19:00:00+09:00',
+      applyEnd: '2026-07-04T23:59:00+09:00',
+    });
+    assert.equal(rounds[1].roundType, '当日販売受付');
+    assert.equal(rounds[1].statusText, '販売前');
+    assert.equal(rounds[1].applyStart, '2026-07-05T00:00:00+09:00');
+    assert.equal(rounds[1].applyEnd, '2026-07-05T20:00:00+09:00');
+  });
+
+  it('无 #ticket 区 → 空数组（enrich 退回 legacy JSON 兜底）', () => {
+    assert.deepEqual(parseLivePocketDetailRounds('<html>nothing</html>'), []);
   });
 });
 
