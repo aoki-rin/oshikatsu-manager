@@ -55,3 +55,51 @@ export function hasNewSince(events: ActivityEvent[], match: Match, lastViewedIso
   const since = lastViewedIso ? new Date(lastViewedIso).getTime() : 0;
   return events.some((event) => match(event) && !!event.lastFetchedAt && new Date(event.lastFetchedAt).getTime() > since);
 }
+
+export type TicketDeadlineKind = 'apply_end' | 'result_end';
+
+export interface UpcomingDeadline {
+  event: ActivityEvent;
+  kind: TicketDeadlineKind; // 受付締切 / 当落・入金締切
+  label: string; // 轮次名（roundType），如「★一般発売」
+  at: string; // ISO(+09:00)
+  date: string; // YYYY-MM-DD（倒计时/展示用）
+}
+
+// 票务日程的「截止雷达」（QA #5）：未来 horizonDays 天内，已追踪演出的所有
+// 受付締切(applyEnd) / 当落・入金締切(resultEnd)，按时间升序。
+// 旧卡片只在截止=今天/明天时才冒头，7 天纵轴外的截止完全不可见 → 容易错过申込。
+// 无窗口数据的老事件退回 timeline 字段（按当日 23:59 JST 计）。
+export function upcomingTicketDeadlines(
+  events: ActivityEvent[],
+  horizonDays = 14,
+  now: Date = new Date(),
+): UpcomingDeadline[] {
+  const nowMs = now.getTime();
+  const horizonMs = nowMs + horizonDays * 24 * 60 * 60 * 1000;
+  const out: UpcomingDeadline[] = [];
+
+  const push = (event: ActivityEvent, kind: TicketDeadlineKind, label: string, at: string | null | undefined) => {
+    if (!at) return;
+    const ms = new Date(at).getTime();
+    if (Number.isNaN(ms) || ms <= nowMs || ms > horizonMs) return;
+    out.push({ event, kind, label, at, date: at.slice(0, 10) });
+  };
+
+  for (const event of events) {
+    const windows = event.ticketWindows ?? [];
+    if (windows.length > 0) {
+      for (const window of windows) {
+        push(event, 'apply_end', window.roundType || '', window.applyEnd);
+        push(event, 'result_end', window.roundType || '', window.resultEnd);
+      }
+      continue;
+    }
+    const timeline = event.timeline || {};
+    push(event, 'apply_end', '抽選', timeline.lotteryEndDate ? `${timeline.lotteryEndDate}T23:59:00+09:00` : null);
+    push(event, 'apply_end', '一般', timeline.generalEndDate ? `${timeline.generalEndDate}T23:59:00+09:00` : null);
+    push(event, 'result_end', '入金', timeline.paymentDeadlineDate ? `${timeline.paymentDeadlineDate}T23:59:00+09:00` : null);
+  }
+
+  return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
