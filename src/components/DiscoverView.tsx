@@ -380,8 +380,9 @@ export function DiscoverView({
             </div>
           ) : (
             displayEvents.map(event => {
-              // 卡片截止条：取最相关轮次（未截止优先），别让过期先行盖住还在受付的一般発売（QA #3）
-              const deadline = primaryDeadline(event.timeline);
+              // 卡片截止条：直接读 ticketWindows 取最相关轮次（未截止优先），
+              // 别让过期先行/最早先着盖住还在受付的一般発売（QA #3）
+              const deadline = primaryDeadline(event);
               const isFav = isFavorited(event, favorites);
 
               return (
@@ -469,7 +470,7 @@ export function DiscoverView({
                     <div className="px-3.5 pb-2.5 pt-1.5 bg-slate-50/70 border-t border-slate-150/50">
                       <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
                         <span className="font-bold uppercase tracking-wider">
-                          {deadline.kind === 'general' ? t('discover.generalBadge') : t('discover.lotteryBadge')}
+                          {deadline.label || (deadline.kind === 'general' ? t('discover.generalBadge') : t('discover.lotteryBadge'))}
                         </span>
                         <span>{!deadline.closed ? t('discover.deadlinePrefix', { days: deadline.daysLeft }) : t('discover.deadlineClosed')}</span>
                       </div>

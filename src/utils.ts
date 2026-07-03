@@ -1,6 +1,7 @@
 import { ActivityEvent, TicketPlatform } from './types';
 import { createTranslator, type TFunction } from './i18n/core';
 import { deliverIcs } from './native';
+import { isGeneralWindow } from './sources/shared';
 
 const JST_TIME_ZONE = 'Asia/Tokyo';
 const defaultT = createTranslator('zh-CN');
@@ -242,22 +243,36 @@ export function getDaysRemaining(targetDateStr: string, currentDateStr: string =
 
 export interface PrimaryDeadline {
   kind: 'lottery' | 'general';
+  label?: string; // 轮次名（来自 window.roundType，如「★一般発売」），有则卡片直接显示
   endDate: string; // YYYY-MM-DD (JST)
   daysLeft: number;
   closed: boolean;
 }
 
 // 卡片摘要用的「最相关截止」（QA #3 回归）：
-// 旧卡片只看 lotteryEndDate → 先行早已截止而一般発売还在受付时，卡片错误显示「已截止」，
-// 用户扫列表会直接跳过还能报名的场次。规则：优先取【未截止】的轮次里截止最早的那个；
-// 全部已过才标 closed（取最晚结束的那轮展示）。timeline 无任何截止日期 → null（不渲染条）。
+// 旧卡片只看 timeline.lotteryEndDate → 先行早截止而一般発売还在受付时错误显示「已截止」。
+// 且 deriveTimelineFromWindows 的 general 取「最早结束」的先着/一般轮（多轮时活跃轮被丢，
+// 真机实测 GIGA 7 轮数据仍显示已截止）——所以这里【直接读 ticketWindows】选轮：
+// 未截止的轮里取截止最早的；全过期取最晚那轮标 closed；无窗口数据的老事件退回 timeline 字段。
 export function primaryDeadline(
-  timeline: Pick<ActivityEvent, 'timeline'>['timeline'],
+  event: Pick<ActivityEvent, 'timeline' | 'ticketWindows'>,
   currentDateStr: string = getJstDateKey(),
 ): PrimaryDeadline | null {
-  const candidates: Array<{ kind: PrimaryDeadline['kind']; endDate: string }> = [];
-  if (timeline.lotteryEndDate) candidates.push({ kind: 'lottery', endDate: timeline.lotteryEndDate });
-  if (timeline.generalEndDate) candidates.push({ kind: 'general', endDate: timeline.generalEndDate });
+  const candidates: Array<Omit<PrimaryDeadline, 'daysLeft' | 'closed'>> = [];
+
+  for (const window of event.ticketWindows ?? []) {
+    if (!window.applyEnd) continue;
+    candidates.push({
+      kind: isGeneralWindow(window) ? 'general' : 'lottery',
+      label: window.roundType || undefined,
+      endDate: window.applyEnd.slice(0, 10),
+    });
+  }
+  if (candidates.length === 0) {
+    const timeline = event.timeline || {};
+    if (timeline.lotteryEndDate) candidates.push({ kind: 'lottery', endDate: timeline.lotteryEndDate });
+    if (timeline.generalEndDate) candidates.push({ kind: 'general', endDate: timeline.generalEndDate });
+  }
   if (candidates.length === 0) return null;
 
   const withDays = candidates.map((candidate) => ({

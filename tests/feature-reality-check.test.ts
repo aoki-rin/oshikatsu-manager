@@ -125,37 +125,57 @@ describe('收藏键跨聚合稳定（#7 修复）', () => {
 });
 
 describe('卡片「最相关截止」选择（QA ISSUE-003 回归）', () => {
-  // 真机实测坑：先行已截止 + 一般発売还在受付 → 旧卡片只看 lotteryEndDate，显示「已截止」。
-  it('先行已过、一般还在受付 → 取一般発売（不显示已截止）', () => {
-    const picked = primaryDeadline(
-      { lotteryEndDate: '2026-03-08', generalEndDate: '2026-07-26' },
-      '2026-07-02',
-    );
+  // 真机实测坑 ×2：
+  //  a) 先行已截止 + 一般発売还在受付 → 旧卡片只看 lotteryEndDate，显示「已截止」；
+  //  b) deriveTimelineFromWindows 的 general 取「最早结束」的先着/一般轮 → GIGA 7 轮数据里
+  //     活跃的 ★一般発売 被更早结束的先着轮盖掉，timeline 修不动 → 必须直接读 ticketWindows。
+  const win = (id: string, roundType: string, applyEnd: string): import('../src/types').TicketWindow => ({
+    id, platform: 'eplus', roundType, applyStart: null, applyEnd,
+  });
+  const eventWith = (windows: import('../src/types').TicketWindow[]) =>
+    makeEvent({ ticketWindows: windows, timeline: {} });
+
+  it('GIGA 实测形态：先行/先着全过期 + ★一般発売受付中 → 取一般、带真实轮次名', () => {
+    const picked = primaryDeadline(eventWith([
+      win('w1', 'オフィシャル抽選先行受付', '2026-03-08T23:59:00+09:00'),
+      win('w2', 'プレイガイド最速先着', '2026-06-01T23:59:00+09:00'),
+      win('w3', '★一般発売', '2026-07-26T18:00:00+09:00'),
+    ]), '2026-07-02');
     assert.equal(picked?.kind, 'general');
     assert.equal(picked?.closed, false);
     assert.equal(picked?.daysLeft, 24);
+    assert.equal(picked?.label, '★一般発売');
   });
 
-  it('两轮都在受付 → 取截止更早的那轮', () => {
-    const picked = primaryDeadline(
-      { lotteryEndDate: '2026-07-10', generalEndDate: '2026-07-26' },
-      '2026-07-02',
-    );
-    assert.equal(picked?.kind, 'lottery');
+  it('多轮都在受付 → 取截止更早的那轮', () => {
+    const picked = primaryDeadline(eventWith([
+      win('w1', '2次抽選', '2026-07-10T23:59:00+09:00'),
+      win('w2', '★一般発売', '2026-07-26T18:00:00+09:00'),
+    ]), '2026-07-02');
+    assert.equal(picked?.label, '2次抽選');
     assert.equal(picked?.daysLeft, 8);
   });
 
   it('全部已过 → closed=true 且取最晚结束的那轮', () => {
-    const picked = primaryDeadline(
-      { lotteryEndDate: '2026-03-08', generalEndDate: '2026-05-01' },
-      '2026-07-02',
-    );
+    const picked = primaryDeadline(eventWith([
+      win('w1', '抽選', '2026-03-08T23:59:00+09:00'),
+      win('w2', '先着', '2026-05-01T23:59:00+09:00'),
+    ]), '2026-07-02');
     assert.equal(picked?.closed, true);
-    assert.equal(picked?.kind, 'general');
+    assert.equal(picked?.label, '先着');
   });
 
-  it('无任何截止日期 → null（卡片不渲染条）', () => {
-    assert.equal(primaryDeadline({}, '2026-07-02'), null);
+  it('无窗口数据的老事件退回 timeline 字段', () => {
+    const picked = primaryDeadline(
+      makeEvent({ ticketWindows: [], timeline: { lotteryEndDate: '2026-03-08', generalEndDate: '2026-07-26' } }),
+      '2026-07-02',
+    );
+    assert.equal(picked?.kind, 'general');
+    assert.equal(picked?.closed, false);
+  });
+
+  it('窗口/时间线都无截止 → null（卡片不渲染条）', () => {
+    assert.equal(primaryDeadline(makeEvent({ ticketWindows: [], timeline: {} }), '2026-07-02'), null);
   });
 });
 

@@ -101,7 +101,7 @@ export function absoluteUrl(url: string | null | undefined, base = 'https://l-ti
 
 const datePart = (iso?: string | null): string | undefined => iso ? iso.slice(0, 10) : undefined;
 
-function isGeneralWindow(window: TicketWindow): boolean {
+export function isGeneralWindow(window: TicketWindow): boolean {
   return /一般|先着|発売/.test(`${window.roundType} ${window.labelRaw || ''}`);
 }
 
