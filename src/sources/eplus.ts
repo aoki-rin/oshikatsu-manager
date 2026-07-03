@@ -109,8 +109,11 @@ function toActivityEvent(e: EplusEvent, query: string): ActivityEvent {
   const base: ActivityEvent = {
     id: e.eventId,
     title: e.title,
+    // eplus 搜索 JSON 无出演者字段（实测 kanren_word_list 为 null）：艺人名只能回显搜索词。
+    // 打 artistSource:'query'，UI 据此用 🔍 展示为检索词而非 ⭐ 艺人。
     artistId: canonicalArtistId(query) || `eplus-artist-${query}`,
     artistName: query,
+    artistSource: 'query',
     venueId: canonicalVenueId(e.venue) || `eplus-venue-${e.eventId}`,
     venueName: e.venue,
     date: e.date || fallbackDate,

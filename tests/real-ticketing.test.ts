@@ -10,6 +10,8 @@ import {
   canonicalVenueId,
   dedupeEvents,
   deriveTimelineFromWindows,
+  PLATFORM_SEARCH_TIMEOUT_MS,
+  platformSearchTimeoutMs,
   primaryPurchaseUrl,
   withPlatformTimeout,
 } from '../src/sources/shared';
@@ -172,6 +174,12 @@ describe('ticket source helpers', () => {
       withPlatformTimeout(new Promise(() => undefined), 10, 'Lawson Ticket'),
       /Lawson Ticket search timed out/,
     );
+  });
+
+  it('Lawson 直连超时收敛到 8s，其他平台维持默认（QA #2）', () => {
+    assert.equal(platformSearchTimeoutMs('Lawson Ticket'), 8000);
+    assert.equal(platformSearchTimeoutMs('eplus'), PLATFORM_SEARCH_TIMEOUT_MS);
+    assert.equal(platformSearchTimeoutMs('Ticket Pia'), PLATFORM_SEARCH_TIMEOUT_MS);
   });
 
   it('derives compatible timeline fields from ticket windows', () => {

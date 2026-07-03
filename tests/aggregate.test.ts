@@ -35,6 +35,8 @@ function ev(over: Partial<ActivityEvent> & { platform: TicketPlatform }): Activi
     tags: over.tags || [],
     sourceKind: over.sourceKind || 'live',
     lastFetchedAt: over.lastFetchedAt || '2026-05-29T00:00:00.000Z',
+    artistSource: over.artistSource,
+    memberIds: over.memberIds,
   };
 }
 
@@ -74,6 +76,30 @@ describe('aggregateConcerts', () => {
     // primary = eplus (higher priority); longest title wins
     assert.equal(merged.platform, 'eplus');
     assert.equal(merged.title, 'いきものがかり LIVE TOUR 2026');
+    // 成员平台 id 保留为收藏别名（查询无关）
+    assert.deepEqual([...(merged.memberIds ?? [])].sort(), [eplus.id, pia.id].sort());
+  });
+
+  it('prefers platform-sourced artist name over query echo when merging', () => {
+    // eplus 只能回显搜索词（artistSource:'query'），Pia 带真实艺人名（'platform'）。
+    // 同名同日同会场合并后：出演者名/来源采用平台真实名（primary 仍是 eplus）。
+    const eplus = ev({ platform: 'eplus', artistName: 'FRUITS ZIPPER', artistSource: 'query' });
+    const pia = ev({ platform: 'Ticket Pia', venueName: '東京ドーム（東京都）', artistName: 'FRUITS ZIPPER', artistSource: 'platform' });
+
+    const merged = aggregateConcerts([eplus, pia])[0];
+    assert.equal(merged.platform, 'eplus');
+    assert.equal(merged.artistName, 'FRUITS ZIPPER');
+    assert.equal(merged.artistSource, 'platform');
+  });
+
+  it('memberIds exclude agg- ids and stay idempotent across re-aggregation', () => {
+    const eplus = ev({ platform: 'eplus' });
+    const pia = ev({ platform: 'Ticket Pia', venueName: '東京ドーム（東京都）' });
+    const once = aggregateConcerts([eplus, pia]);
+    const twice = aggregateConcerts(once);
+    const [merged] = twice;
+    assert.ok(merged.memberIds?.every((id) => !id.startsWith('agg-')));
+    assert.deepEqual([...(merged.memberIds ?? [])].sort(), [eplus.id, pia.id].sort());
   });
 
   it('does NOT merge same artist+date at different venues', () => {

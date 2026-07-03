@@ -301,7 +301,10 @@ export function EventDetailModal({
                   )}
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-slate-900">{t('detail.artistTitle', { name: event.artistName })}</h4>
+                      {/* 检索词回显时诚实标注（关注它=订阅该检索词，仍有效但不是真实出演者名） */}
+                      <h4 className="text-xs font-bold text-slate-900">
+                        {t(event.artistSource === 'query' ? 'detail.searchTermTitle' : 'detail.artistTitle', { name: event.artistName })}
+                      </h4>
                       <button
                         onClick={() => onToggleFollowArtist(event.artistId)}
                         className={`text-[9px] px-2 py-0.5 rounded-full font-bold transition-all border ${

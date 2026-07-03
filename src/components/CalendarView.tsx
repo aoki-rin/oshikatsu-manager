@@ -9,7 +9,11 @@ import {
   formatDisplayDate, getDaysRemaining, getJstDateKey
 } from '../utils';
 import { isFavorited } from '../favorites';
+import { upcomingTicketDeadlines } from '../followed';
 import { useI18n } from '../i18n/I18nProvider';
+
+// 截止雷达的展望窗口（天）：覆盖 7 天纵轴之外、又不至于列出太远的噪音。
+const RADAR_HORIZON_DAYS = 14;
 
 interface CalendarViewProps {
   events: ActivityEvent[];
@@ -41,6 +45,8 @@ export function CalendarView({
     followedArtistSet.has(e.artistId) ||
     followedVenueSet.has(e.venueId),
   );
+  // 截止雷达数据：未来 14 天内已追踪演出的所有受付/入金締切（QA #5）
+  const deadlineRadar = upcomingTicketDeadlines(trackedEvents, RADAR_HORIZON_DAYS);
   const todayKey = getJstDateKey();
   const tomorrowKey = getJstDateKey(new Date(new Date(`${todayKey}T00:00:00+09:00`).getTime() + 86400000));
   const monthFormatter = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'Asia/Tokyo' });
@@ -252,6 +258,48 @@ export function CalendarView({
             )}
           </div>
         </div>
+
+        {/* 截止雷达（QA #5）：未来 14 天内已追踪演出的受付/入金締切，按时间升序。
+            旧逻辑只在截止=今天/明天时冒头，7 天纵轴外的截止完全不可见 → 容易错过申込。 */}
+        {deadlineRadar.length > 0 && (
+          <div id="deadline-radar" className="space-y-2 pt-1">
+            <h3 className="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <Clock className="w-4 h-4 text-rose-500" />
+              {t('calendar.radarTitle', { days: RADAR_HORIZON_DAYS })}
+            </h3>
+            <div className="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+              {deadlineRadar.map((deadlineItem) => {
+                const days = getDaysRemaining(deadlineItem.date);
+                return (
+                  <button
+                    key={`${deadlineItem.event.id}-${deadlineItem.kind}-${deadlineItem.at}`}
+                    id={`radar-${deadlineItem.event.id}-${deadlineItem.kind}`}
+                    onClick={() => onSelectEvent(deadlineItem.event)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-50 transition"
+                  >
+                    <span
+                      className="text-[10px] font-black font-mono px-1.5 py-0.5 rounded-md text-white shrink-0"
+                      style={{ backgroundColor: days <= 1 ? '#f43f5e' : oshiColor }}
+                    >
+                      {days > 0 ? `T-${days}` : t('common.today')}
+                    </span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                      deadlineItem.kind === 'apply_end' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-600'
+                    }`}>
+                      {t(deadlineItem.kind === 'apply_end' ? 'calendar.radarApplyEnd' : 'calendar.radarResultEnd')}
+                    </span>
+                    <span className="flex-1 min-w-0 text-[11px] font-bold text-slate-800 truncate">
+                      {deadlineItem.event.title}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-mono shrink-0">
+                      {formatDisplayDate(deadlineItem.date)}{deadlineItem.label ? ` · ${deadlineItem.label.slice(0, 10)}` : ''}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* My Favorites tick timelines deadlines */}
         <div className="space-y-3 pt-1">

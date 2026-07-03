@@ -5,10 +5,10 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import type { ActivityEvent } from '../src/types';
-import { buildEventIcs, formatDisplayDate } from '../src/utils';
+import { buildEventIcs, formatDisplayDate, primaryDeadline } from '../src/utils';
 import { buildReminderTargets, isPastReminder } from '../src/notifications';
 import { aggregateConcerts } from '../src/sources/aggregate';
-import { favoriteKey, isFavorited } from '../src/favorites';
+import { favoriteAliases, favoriteKey, isFavorited } from '../src/favorites';
 
 function makeEvent(over: Partial<ActivityEvent> = {}): ActivityEvent {
   return {
@@ -121,5 +121,94 @@ describe('收藏键跨聚合稳定（#7 修复）', () => {
     assert.equal(isFavorited(ev, ['lawson-1']), true);
     assert.equal(isFavorited(ev, [favoriteKey(ev)]), true);
     assert.equal(isFavorited(ev, []), false);
+  });
+});
+
+describe('卡片「最相关截止」选择（QA ISSUE-003 回归）', () => {
+  // 真机实测坑 ×2：
+  //  a) 先行已截止 + 一般発売还在受付 → 旧卡片只看 lotteryEndDate，显示「已截止」；
+  //  b) deriveTimelineFromWindows 的 general 取「最早结束」的先着/一般轮 → GIGA 7 轮数据里
+  //     活跃的 ★一般発売 被更早结束的先着轮盖掉，timeline 修不动 → 必须直接读 ticketWindows。
+  const win = (id: string, roundType: string, applyEnd: string): import('../src/types').TicketWindow => ({
+    id, platform: 'eplus', roundType, applyStart: null, applyEnd,
+  });
+  const eventWith = (windows: import('../src/types').TicketWindow[]) =>
+    makeEvent({ ticketWindows: windows, timeline: {} });
+
+  it('GIGA 实测形态：先行/先着全过期 + ★一般発売受付中 → 取一般、带真实轮次名', () => {
+    const picked = primaryDeadline(eventWith([
+      win('w1', 'オフィシャル抽選先行受付', '2026-03-08T23:59:00+09:00'),
+      win('w2', 'プレイガイド最速先着', '2026-06-01T23:59:00+09:00'),
+      win('w3', '★一般発売', '2026-07-26T18:00:00+09:00'),
+    ]), '2026-07-02');
+    assert.equal(picked?.kind, 'general');
+    assert.equal(picked?.closed, false);
+    assert.equal(picked?.daysLeft, 24);
+    assert.equal(picked?.label, '★一般発売');
+  });
+
+  it('多轮都在受付 → 取截止更早的那轮', () => {
+    const picked = primaryDeadline(eventWith([
+      win('w1', '2次抽選', '2026-07-10T23:59:00+09:00'),
+      win('w2', '★一般発売', '2026-07-26T18:00:00+09:00'),
+    ]), '2026-07-02');
+    assert.equal(picked?.label, '2次抽選');
+    assert.equal(picked?.daysLeft, 8);
+  });
+
+  it('全部已过 → closed=true 且取最晚结束的那轮', () => {
+    const picked = primaryDeadline(eventWith([
+      win('w1', '抽選', '2026-03-08T23:59:00+09:00'),
+      win('w2', '先着', '2026-05-01T23:59:00+09:00'),
+    ]), '2026-07-02');
+    assert.equal(picked?.closed, true);
+    assert.equal(picked?.label, '先着');
+  });
+
+  it('无窗口数据的老事件退回 timeline 字段', () => {
+    const picked = primaryDeadline(
+      makeEvent({ ticketWindows: [], timeline: { lotteryEndDate: '2026-03-08', generalEndDate: '2026-07-26' } }),
+      '2026-07-02',
+    );
+    assert.equal(picked?.kind, 'general');
+    assert.equal(picked?.closed, false);
+  });
+
+  it('窗口/时间线都无截止 → null（卡片不渲染条）', () => {
+    assert.equal(primaryDeadline(makeEvent({ ticketWindows: [], timeline: {} }), '2026-07-02'), null);
+  });
+});
+
+describe('收藏别名跨「换关键词重搜」稳定（QA ISSUE-001 回归）', () => {
+  // 真机实测坑：artistName 是搜索词回显 → 搜 "FRUITS" 收藏、改搜 "藍井エイル" 再命中同一场
+  // （艺人名/聚合 id 全变）时，稳定键漂移收藏丢失，且票务日程 vs 发现页状态分裂。
+  // 修法：收藏写入别名全集（键+id+成员平台 id），平台 id 查询无关 → 任一命中即算收藏。
+  it('favoriteAliases 含 稳定键 + id + 成员平台 id', () => {
+    const eplus = makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' });
+    const pia = makeEvent({ id: 'pia-B1', platform: 'Ticket Pia', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' });
+    const merged = aggregateConcerts([eplus, pia])[0];
+    const aliases = favoriteAliases(merged);
+    assert.ok(aliases.includes(favoriteKey(merged)));
+    assert.ok(aliases.includes(merged.id));
+    assert.ok(aliases.includes('eplus-9'));
+    assert.ok(aliases.includes('pia-B1'));
+  });
+
+  it('换关键词重搜（艺人名漂移）后，凭成员平台 id 仍命中收藏', () => {
+    // 第一次：搜 "FRUITS" → 聚合 → 收藏（存入别名全集）
+    const first = aggregateConcerts([
+      makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+      makeEvent({ id: 'pia-B1', platform: 'Ticket Pia', artistName: 'FRUITS', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+    ])[0];
+    const favorites = favoriteAliases(first);
+
+    // 第二次：搜 "藍井エイル" → 同一场（相同平台事件 id）但 artistName/聚合 id 都变了
+    const second = aggregateConcerts([
+      makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: '藍井エイル', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+      makeEvent({ id: 'pia-B1', platform: 'Ticket Pia', artistName: '藍井エイル', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
+    ])[0];
+    assert.notEqual(second.id, first.id, '前提：聚合 id 确实随关键词漂移');
+    assert.notEqual(favoriteKey(second), favoriteKey(first), '前提：稳定键确实漂移');
+    assert.equal(isFavorited(second, favorites), true, '成员平台 id 别名兜住收藏');
   });
 });

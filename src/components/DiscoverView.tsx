@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
 import { Search, Sparkles, AlertCircle, Star, ChevronDown } from 'lucide-react';
-import { formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
+import { formatDisplayDate, getDaysRemaining, platformLabel, primaryDeadline } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { isFavorited } from '../favorites';
@@ -54,6 +54,8 @@ interface DiscoverViewProps {
   searchReports: TicketSearchReport[];
   recentSearches: string[];
   searching: boolean;
+  // 代理配置了但连不上（本次走手机直连兜底）→ 显示降级提示
+  searchDegraded: boolean;
   extensions: ExtensionSource[];
   artists: Artist[];
   venues: Venue[];
@@ -71,6 +73,7 @@ export function DiscoverView({
   searchReports,
   recentSearches,
   searching,
+  searchDegraded,
   extensions,
   artists,
   venues,
@@ -219,6 +222,15 @@ export function DiscoverView({
           </button>
           {searchNote && <span className="text-[10px] text-slate-500 truncate flex-1">{searchNote}</span>}
         </div>
+        {/* 代理降级提示：别静默退化——告诉用户 Lawson 等代理依赖源本次不可用（QA #2） */}
+        {searchDegraded && (
+          <div
+            id="proxy-degraded-note"
+            className="mt-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5"
+          >
+            {t('discover.proxyDegraded')}
+          </div>
+        )}
       </div>
 
       {/* Screen Interactive scrollable core body */}
@@ -368,7 +380,9 @@ export function DiscoverView({
             </div>
           ) : (
             displayEvents.map(event => {
-              const daysLeft = event.timeline.lotteryEndDate ? getDaysRemaining(event.timeline.lotteryEndDate) : -1;
+              // 卡片截止条：直接读 ticketWindows 取最相关轮次（未截止优先），
+              // 别让过期先行/最早先着盖住还在受付的一般発売（QA #3）
+              const deadline = primaryDeadline(event);
               const isFav = isFavorited(event, favorites);
 
               return (
@@ -413,7 +427,8 @@ export function DiscoverView({
                         {event.title}
                       </h3>
                       <p className="text-[10px] text-slate-500 font-medium truncate flex items-center gap-1">
-                        <span>⭐ {event.artistName}</span>
+                        {/* 检索词回显（artistSource:'query'）用 🔍 展示，不冒充出演者 */}
+                        <span>{event.artistSource === 'query' ? '🔍' : '⭐'} {event.artistName}</span>
                         <span className="text-slate-300">|</span>
                         <span>📍 {event.venueName}</span>
                       </p>
@@ -450,19 +465,21 @@ export function DiscoverView({
                     </div>
                   </div>
 
-                  {/* Lottery countdown bar panel — only when a 抽選/先行 deadline exists */}
-                  {event.timeline.lotteryEndDate && (
+                  {/* 截止倒计时条：展示最相关轮次（未截止的先行/一般优先；全过期才显示已截止） */}
+                  {deadline && (
                     <div className="px-3.5 pb-2.5 pt-1.5 bg-slate-50/70 border-t border-slate-150/50">
                       <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
-                        <span className="font-bold uppercase tracking-wider">{t('discover.lotteryBadge')}</span>
-                        <span>{daysLeft >= 0 ? t('discover.deadlinePrefix', { days: daysLeft }) : t('discover.deadlineClosed')}</span>
+                        <span className="font-bold uppercase tracking-wider">
+                          {deadline.label || (deadline.kind === 'general' ? t('discover.generalBadge') : t('discover.lotteryBadge'))}
+                        </span>
+                        <span>{!deadline.closed ? t('discover.deadlinePrefix', { days: deadline.daysLeft }) : t('discover.deadlineClosed')}</span>
                       </div>
                       {/* Simulate simple visual heatbar */}
                       <div className="w-full bg-slate-205 h-1.5 rounded-full mt-1 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
-                            width: daysLeft >= 0 ? `${Math.max(15, Math.min(100, 100 - (daysLeft * 10)))}%` : '100%',
+                            width: !deadline.closed ? `${Math.max(15, Math.min(100, 100 - (deadline.daysLeft * 10)))}%` : '100%',
                             backgroundColor: oshiColor
                           }}
                         ></div>

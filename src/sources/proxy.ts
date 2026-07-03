@@ -23,6 +23,12 @@ function configuredProxyBaseUrl(): string | null {
   return null;
 }
 
+// 是否配置了代理（.env 的 Tailscale 地址 / dev 同源代理）。配置了但请求失败 = 「降级」，
+// UI 据此提示用户代理链路断了（QA #2：此前静默退化，用户只觉得 Lawson 永远坏）。
+export function isProxyConfigured(): boolean {
+  return configuredProxyBaseUrl() !== null;
+}
+
 function platformToSourceId(platform: string): string {
   switch (platform) {
     case 'Ticket Pia':

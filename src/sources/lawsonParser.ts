@@ -126,6 +126,7 @@ export function parseLawsonSearch(html: string, query: string, fetchedAt = new D
       title,
       artistId: canonicalArtistId(query) || `lawson-artist-${query}`,
       artistName: query,
+      artistSource: 'query',
       venueId: canonicalVenueId(venue) || `lawson-venue-${code}`,
       venueName: venue,
       date: date || windows[0]?.applyEnd?.slice(0, 10) || '',

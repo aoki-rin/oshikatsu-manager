@@ -67,6 +67,7 @@ export function parseLivePocketSearch(html: string, artist: string): ActivityEve
       title,
       artistId: canonicalArtistId(artist) || `lp-artist-${artist}`,
       artistName: artist,
+      artistSource: 'query',
       venueId: canonicalVenueId(venue) || `lp-venue-${slug}`,
       venueName: venue,
       date,

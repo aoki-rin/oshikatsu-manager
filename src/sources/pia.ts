@@ -16,13 +16,31 @@ const dec = (s: string) =>
   s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'");
 const m1 = (s: string, re: RegExp): string | null => { const m = s.match(re); return m ? m[1] : null; };
 
-// search_all.do 内联 JS: var artistArray = "[score: ..., artistcd: 49240081, ...]"
+export interface PiaArtistInfo {
+  cd: string;
+  // Pia 页面自带的真实艺人名（artistnm，常为全角 → NFKC 归一），有则 UI 可展示真实出演者。
+  name: string | null;
+}
+
+// search_all.do 内联 JS:
+//   var artistArray = "[score: 2.08, artistcd: M4140001, artistnm: ＦＲＵＩＴＳ ＺＩＰＰＥＲ, artistkn: ..., ...]"
+// ⚠️ artistcd 可以带字母前缀（如 M4140001）——旧正则 \d+ 会漏配，导致这类艺人「无结果」。
+export function parsePiaArtistInfo(searchHtml: string): PiaArtistInfo | null {
+  const cd = m1(searchHtml, /artistcd:\s*([A-Za-z0-9]+)/);
+  if (!cd) return null;
+  const rawName = m1(searchHtml, /artistnm:\s*([^,\]]+)/);
+  const name = rawName ? rawName.normalize('NFKC').trim() : null;
+  return { cd, name: name || null };
+}
+
+// 兼容旧调用：只取 artistCd。
 export function parsePiaArtistCd(searchHtml: string): string | null {
-  return m1(searchHtml, /artistcd:\s*(\d+)/);
+  return parsePiaArtistInfo(searchHtml)?.cd ?? null;
 }
 
 // 解析 rlsInfo.do 的 HTML 片段 → ActivityEvent[]
-export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
+// artistSource：artist 是 Pia 页面的真实艺人名时传 'platform'，是搜索词回显时传 'query'。
+export function parsePiaRlsInfo(html: string, artist: string, artistSource: 'platform' | 'query' = 'query'): ActivityEvent[] {
   const blocks = html.split('<section class="sales_data">').slice(1);
   const events: ActivityEvent[] = [];
 
@@ -68,6 +86,7 @@ export function parsePiaRlsInfo(html: string, artist: string): ActivityEvent[] {
       title,
       artistId: canonicalArtistId(artist) || `pia-artist-${artist}`,
       artistName: artist,
+      artistSource,
       venueId: canonicalVenueId(region) || `pia-venue-${bundle}`,
       venueName: region || '—',
       date: eventDate || '',
@@ -139,8 +158,9 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
     readTimeout: 20000,
   });
   const searchHtml = typeof s.data === 'string' ? s.data : String(s.data ?? '');
-  const artistCd = parsePiaArtistCd(searchHtml);
-  if (!artistCd) return [];
+  const artistInfo = parsePiaArtistInfo(searchHtml);
+  if (!artistInfo) return [];
+  const artistCd = artistInfo.cd;
 
   // 2) 取该艺人发售/抽選信息（注意：apiRequest 格式须与 Pia 一致——functions 不带引号）
   const apiRequest = `{functions:[{"functionId":"SA403001","parameters":{"page":1,"artistCd":"${artistCd}","includeSaleEnd":"fuzzy","mode":"2","dispMode":"1","responsive":"true"}}]}`;
@@ -153,7 +173,8 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
   });
   const html = typeof r.data === 'string' ? r.data : String(r.data ?? '');
   // 搜索只返回 rlsInfo（状态 + 链接，快）。精确受付日期由 enrichPiaWindows 在点开详情时懒加载。
-  return parsePiaRlsInfo(html, artist);
+  // Pia 自带真实艺人名（artistnm）→ 优先用它做出演者展示（artistSource:'platform'）。
+  return parsePiaRlsInfo(html, artistInfo.name || artist, artistInfo.name ? 'platform' : 'query');
 }
 
 // 点开事件详情时懒加载：对【受付中】且还没精确日期的 Pia 轮次抓详情页补 applyStart/End/resultStart。
