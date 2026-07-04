@@ -58,6 +58,24 @@ export function MyOshiView({
     onViewEntity(id); // 看过了 → 清掉「新着」角标
   };
 
+  // 一键刷新全部关注（QA #13-lite）：顺序检索每位推し的最新场次（顺序而非并发，
+  // 避免同时轰各平台）。结果并入 events，新着角标随 onViewEntity 清零。
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const refreshAllArtists = async () => {
+    if (refreshingAll) return;
+    setRefreshingAll(true);
+    try {
+      for (const artist of followedArtistList) {
+        setSearchingId(artist.id);
+        await onSearchEntity(artist.name);
+        onViewEntity(artist.id);
+      }
+    } finally {
+      setSearchingId(null);
+      setRefreshingAll(false);
+    }
+  };
+
   // 倒计时短文案：T-N / 今日。
   const countdown = (date: string) => {
     const days = getDaysRemaining(date);
@@ -212,9 +230,23 @@ export function MyOshiView({
             
             {/* Followed list */}
             <div className="space-y-2.5">
-              <span className="text-[10px] font-bold text-slate-400 font-mono block">
-                {t('oshi.followedArtistsTitle')}
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 font-mono block">
+                  {t('oshi.followedArtistsTitle')}
+                </span>
+                {/* 一键刷新全部关注（QA #13-lite） */}
+                {followedArtistList.length > 0 && (
+                  <button
+                    id="btn-refresh-all-follows"
+                    onClick={refreshAllArtists}
+                    disabled={refreshingAll}
+                    className="text-[9px] font-bold px-2 py-1 rounded-lg border transition disabled:opacity-60"
+                    style={{ color: oshiColor, borderColor: `${oshiColor}40`, backgroundColor: `${oshiColor}08` }}
+                  >
+                    {refreshingAll ? t('oshi.refreshingAll') : t('oshi.refreshAll')}
+                  </button>
+                )}
+              </div>
 
               {followedArtistList.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-4 bg-white rounded-2xl border border-slate-100/80">
@@ -242,7 +274,7 @@ export function MyOshiView({
                         <div className="flex items-center gap-1.5 min-w-0">
                           <h4 className="text-xs font-black text-slate-900 tracking-tight truncate">{artist.name}</h4>
                           {isNew && (
-                            <span className="text-[8px] font-bold text-white px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: oshiColor }}>{t('oshi.newBadge')}</span>
+                            <span data-testid="new-badge" className="text-[8px] font-bold text-white px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: oshiColor }}>{t('oshi.newBadge')}</span>
                           )}
                         </div>
                         <button
@@ -281,6 +313,7 @@ export function MyOshiView({
 
                       {/* 检索最新场次：真的跑实时搜索（关注=订阅），结果并入后即时显示 */}
                       <button
+                        id={`btn-search-artist-${artist.id}`}
                         onClick={() => runEntitySearch(artist.id, artist.name)}
                         disabled={searchingId === artist.id}
                         className="text-[9px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded mt-2.5 hover:bg-slate-200 transition font-bold disabled:opacity-60"

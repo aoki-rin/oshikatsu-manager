@@ -240,3 +240,25 @@ describe('local notification reminders', () => {
     assert.equal(targets[1].scheduleAt, '2026-06-01T23:59:00+09:00');
   });
 });
+
+describe('提醒项去重（QA ISSUE-009 回归）', () => {
+  it('多窗口共享同一入金/受付时刻 → 同类型只生成一条提醒', () => {
+    const mk = (id: string, roundType: string): TicketWindow => ({
+      id, platform: 'eplus', roundType,
+      applyStart: '2026-05-01T10:00:00+09:00',
+      applyEnd: '2026-07-26T18:00:00+09:00',
+      resultEnd: '2026-08-03T23:59:00+09:00',
+    });
+    const event: ActivityEvent = {
+      id: 'e1', title: 'GIGA', artistId: 'a', artistName: 'A', venueId: 'v', venueName: 'V',
+      date: '2026-08-10', time: '18:00', region: '', platform: 'eplus', price: '—', imageUrl: '',
+      timeline: {}, ticketWindows: [mk('w1', '先行'), mk('w2', '2次'), mk('w3', '3次'), mk('w4', '一般')],
+      originalUrl: 'https://e.example', description: '', category: 'J-Pop', tags: [], sourceKind: 'live',
+    };
+    const targets = buildReminderTargets(event);
+    const paymentTargets = targets.filter((x) => x.type === 'payment_deadline');
+    assert.equal(paymentTargets.length, 1, '4 个窗口同一入金截止只留 1 条');
+    const ends = targets.filter((x) => x.type === 'lottery_end');
+    assert.equal(ends.length, 1, '同一受付締切也只留 1 条');
+  });
+});

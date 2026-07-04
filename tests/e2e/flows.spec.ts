@@ -25,13 +25,14 @@ async function seed(page: Page, data: SeedData = {}): Promise<void> {
   const payload = {
     ext: JSON.stringify(EXT),
     events: JSON.stringify(data.events ?? []),
-    favorites: JSON.stringify(data.favorites ?? []),
+    // undefined = 不种收藏（保留 app 自己写入的持久化，供「收藏写路径」用例断言）
+    favorites: data.favorites === undefined ? null : JSON.stringify(data.favorites),
     followedArtists: JSON.stringify(data.followedArtists ?? []),
   };
   await page.addInitScript((d) => {
     localStorage.setItem('oshikatsu_extensions', d.ext);
     localStorage.setItem('oshikatsu_events', d.events);
-    localStorage.setItem('oshikatsu_favorites', d.favorites);
+    if (d.favorites !== null) localStorage.setItem('oshikatsu_favorites', d.favorites);
     localStorage.setItem('oshikatsu_followed_artists', d.followedArtists);
   }, payload);
 }
@@ -50,7 +51,7 @@ test('搜索 → 渲染结果卡（/api 用 fixture 拦截）', async ({ page })
 test('点卡 → 详情弹窗打开 → 关闭', async ({ page }) => {
   await seed(page, { events: [EV], favorites: [favoriteKey(EV)] });
   await page.goto('/');
-  await page.locator('#event-card-eplus-1 .cursor-pointer').first().click();
+  await page.locator('#btn-open-detail-eplus-1').click();
   await expect(page.locator('#bottom-sheet-container')).toBeVisible();
   await page.click('#btn-close-bottom-sheet');
   await expect(page.locator('#bottom-sheet-container')).toHaveCount(0);
@@ -62,6 +63,25 @@ test('收藏持久化：reload 后仍展示', async ({ page }) => {
   await expect(page.locator('#event-card-eplus-1')).toBeVisible();
   await page.reload();
   await expect(page.locator('#event-card-eplus-1')).toBeVisible();
+});
+
+test('收藏写路径：UI 点收藏 → reload 后仍在（app 自己写的持久化）', async ({ page }) => {
+  await seed(page, { events: [EV] }); // 不种 favorites
+  await page.goto('/');
+  await expect(page.locator('#event-card-eplus-1')).toHaveCount(0); // 未收藏时发现页无卡
+  await page.fill('#search-input-field', ''); // 保持空查询,走已保存回退
+  // 通过搜索结果路径收藏不可行(无 route mock),改从日历?发现页无卡 → 先种 favorites 版已有覆盖。
+  // 这里直接注入一次性搜索结果:route mock 返回 EV → 收藏 → reload(不再 mock)后凭收藏回退可见。
+  await page.route('**/api/search**', (route) =>
+    route.fulfill({ json: { events: [EV], reports: [{ platform: 'eplus', status: 'ok', count: 1 }] } }),
+  );
+  await page.fill('#search-input-field', 'FRUITS ZIPPER');
+  await page.click('#btn-platform-search');
+  await expect(page.locator('#event-card-eplus-1')).toBeVisible();
+  await page.click('#btn-fav-card-eplus-1');
+  await page.unroute('**/api/search**');
+  await page.reload();
+  await expect(page.locator('#event-card-eplus-1')).toBeVisible(); // 收藏回退路径 + app 写的 favorites 存活
 });
 
 test('收藏的演出 → 票务日程页可见 + 可导出', async ({ page }) => {

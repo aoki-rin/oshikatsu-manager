@@ -250,6 +250,33 @@ describe('useOshiStore — 搜索编排', () => {
     expect(result.current.searchDegraded).toBe(true);
   });
 
+  it('搜索完成记录抓取时间并标 live；clear 归零（QA #6）', async () => {
+    vi.mocked(sources.searchableTargets).mockReturnValue(['eplus']);
+    vi.mocked(sources.searchPlatformsStreaming).mockImplementation(async (_q, _p, onSource) => {
+      onSource({ platform: 'eplus', status: 'ok', count: 1, handoffUrl: 'h', runtime: 'client' }, [makeEvent()]);
+    });
+    const { result } = render();
+    expect(result.current.searchIsLive).toBe(false);
+    await act(async () => { await result.current.handleRunPlatformSearch('X', ['eplus']); });
+    expect(result.current.searchIsLive).toBe(true);
+    expect(typeof result.current.searchFetchedAt).toBe('string');
+    expect(JSON.parse(localStorage.getItem('oshikatsu_search_fetched_at')!)).toBeTruthy();
+
+    act(() => result.current.clearSearchResults());
+    expect(result.current.searchIsLive).toBe(false);
+    expect(result.current.searchFetchedAt).toBeNull();
+    expect(localStorage.getItem('oshikatsu_search_fetched_at')).toBeNull();
+  });
+
+  it('装载持久化结果 → searchIsLive=false 但保留抓取时间（「上次搜索」标注）', () => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify([makeEvent({ id: 'eplus-1' })]));
+    localStorage.setItem('oshikatsu_search_result_ids', JSON.stringify(['eplus-1']));
+    localStorage.setItem('oshikatsu_search_fetched_at', JSON.stringify('2026-07-03T12:00:00.000Z'));
+    const { result } = render();
+    expect(result.current.searchFetchedAt).toBe('2026-07-03T12:00:00.000Z');
+    expect(result.current.searchIsLive).toBe(false);
+  });
+
   it('空 query 直接返回且不触发搜索', async () => {
     const { result } = render();
     let ret;

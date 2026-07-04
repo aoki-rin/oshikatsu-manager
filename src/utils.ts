@@ -284,3 +284,26 @@ export function primaryDeadline(
   const latest = [...withDays].sort((a, b) => b.daysLeft - a.daysLeft)[0];
   return { ...latest, closed: true };
 }
+
+type ActionSortable = Pick<ActivityEvent, 'timeline' | 'ticketWindows' | 'date'>;
+
+// 列表「可行动性」排序（QA #7）：旧排序按抓取时间，已截止的场次常年霸榜首。
+// 新规则：①还能报名的（截止越近越靠前）→ ②无截止信息的（开演日近的在前）→ ③已全截止的（垫底）。
+function actionabilityKey(event: ActionSortable, currentDateStr: string): [number, number] {
+  const deadline = primaryDeadline(event, currentDateStr);
+  const dateMs = event.date ? new Date(`${event.date}T00:00:00+09:00`).getTime() : Number.MAX_SAFE_INTEGER;
+  if (deadline && !deadline.closed) return [0, deadline.daysLeft * 1e15 + dateMs / 1e3];
+  if (!deadline) return [1, dateMs];
+  return [2, dateMs];
+}
+
+export function sortByActionability<T extends ActionSortable>(
+  list: readonly T[],
+  currentDateStr: string = getJstDateKey(),
+): T[] {
+  return [...list].sort((a, b) => {
+    const ka = actionabilityKey(a, currentDateStr);
+    const kb = actionabilityKey(b, currentDateStr);
+    return ka[0] - kb[0] || ka[1] - kb[1];
+  });
+}

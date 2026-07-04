@@ -80,7 +80,7 @@ npm run android             # cap open android（在 Android Studio 里 Run）
 分层自动化测试（Vitest + Testing Library + Playwright）。每个 PR 经 GitHub Actions 跑 `tsc` + 覆盖率门禁 + E2E。
 
 ```bash
-npm test            # 单元/store/组件/原生分支（Vitest，131 例）
+npm test            # 单元/store/组件/原生分支（Vitest；用例数见输出，勿在此硬编码）
 npm run test:cov    # 同上 + 覆盖率门禁（v8 阈值：stmts 74 / lines 77 / funcs 70 / branch 52，逐步棘轮到 80）
 npm run test:e2e    # Playwright 端到端（5 条 Web 关键流，page.route 用 fixture 拦截 /api）
 ```

@@ -56,6 +56,6 @@ describe('SettingsView', () => {
     const langButtons = [...container.querySelectorAll('button')].filter((b) => !b.id);
     expect(langButtons.length).toBeGreaterThanOrEqual(3);
     fireEvent.click(langButtons[1]); // zh-CN
-    expect(props.onSelectLocaleMode).toHaveBeenCalled();
+    expect(props.onSelectLocaleMode).toHaveBeenCalledWith('zh-CN');
   });
 });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityEvent, TicketPlatform, ExtensionSource, Artist, Venue, TicketSearchReport } from '../types';
 import { Search, Sparkles, AlertCircle, Star, ChevronDown } from 'lucide-react';
-import { formatDisplayDate, getDaysRemaining, platformLabel, primaryDeadline } from '../utils';
+import { formatDisplayDate, getDaysRemaining, platformLabel, primaryDeadline, sortByActionability } from '../utils';
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { isFavorited } from '../favorites';
@@ -56,6 +56,9 @@ interface DiscoverViewProps {
   searching: boolean;
   // 代理配置了但连不上（本次走手机直连兜底）→ 显示降级提示
   searchDegraded: boolean;
+  // 结果抓取时间(ISO) 与 是否本次会话抓取（列表头「实时 vs 上次搜索」标注用）
+  searchFetchedAt: string | null;
+  searchIsLive: boolean;
   extensions: ExtensionSource[];
   artists: Artist[];
   venues: Venue[];
@@ -74,6 +77,8 @@ export function DiscoverView({
   recentSearches,
   searching,
   searchDegraded,
+  searchFetchedAt,
+  searchIsLive,
   extensions,
   artists,
   venues,
@@ -163,9 +168,15 @@ export function DiscoverView({
   const filteredSearchResults = searchResults.filter(filterEvent);
 
   // 实时结果优先；为空时回退显示已保存/收藏，避免「搜索框有字就把已存事件藏起来」。
-  const displayEvents = filteredSearchResults.length > 0
-    ? filteredSearchResults
-    : filteredSavedEvents;
+  // 排序按「可行动性」（QA #7）：还能报名的靠前（截止近者优先），已截止垫底——不再按抓取时间霸榜。
+  const displayEvents = sortByActionability(
+    filteredSearchResults.length > 0 ? filteredSearchResults : filteredSavedEvents,
+  );
+
+  // 结果头时间标注（QA #6）：本次会话搜的才叫「实时」；装载的持久化结果标「上次搜索 + 时间」。
+  const fetchedAtLabel = searchFetchedAt
+    ? new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Tokyo' }).format(new Date(searchFetchedAt))
+    : '';
 
   return (
     <div id="discover-view-root" className="flex-1 flex flex-col overflow-hidden">
@@ -220,7 +231,7 @@ export function DiscoverView({
             <Search className="w-3 h-3" />
             {searching ? t('discover.searching') : t('discover.searchButton')}
           </button>
-          {searchNote && <span className="text-[10px] text-slate-500 truncate flex-1">{searchNote}</span>}
+          {searchNote && <span className="text-[10px] text-slate-500 flex-1 line-clamp-2">{searchNote}</span>}
         </div>
         {/* 代理降级提示：别静默退化——告诉用户 Lawson 等代理依赖源本次不可用（QA #2） */}
         {searchDegraded && (
@@ -350,14 +361,28 @@ export function DiscoverView({
         {/* Unified Search Outputs */}
         <div className="space-y-3.5">
           <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-bold text-slate-700">
+            <span className="text-xs font-bold text-slate-700" id="results-heading">
               {filteredSearchResults.length > 0
-                ? t('discover.resultsTitle', { count: displayEvents.length })
+                ? searchIsLive
+                  ? t('discover.resultsTitle', { count: displayEvents.length })
+                  : fetchedAtLabel
+                    ? t('discover.resultsStaleTitle', { count: displayEvents.length, time: fetchedAtLabel })
+                    : t('discover.resultsStaleTitleNoTime', { count: displayEvents.length })
                 : t('discover.savedTitle', { count: displayEvents.length })}
             </span>
           </div>
 
-          {displayEvents.length === 0 ? (
+          {displayEvents.length === 0 && searching ? (
+            /* 搜索进行中不给「未找到」误导（QA #4）——结果会流式并入 */
+            <div id="searching-placeholder" className="text-center py-10 bg-white rounded-2xl border border-slate-100 p-5 space-y-2.5">
+              <div
+                className="w-7 h-7 mx-auto rounded-full border-[3px] border-slate-200 border-t-transparent"
+                style={{ borderLeftColor: oshiColor, animation: 'oshi-spin 0.9s linear infinite' }}
+              />
+              <p className="text-xs font-semibold text-slate-600">{t('discover.searchingEmptyTitle')}</p>
+              <p className="text-[10px] text-slate-400">{t('discover.searchingEmptyBody')}</p>
+            </div>
+          ) : displayEvents.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl border border-slate-100 p-5 space-y-2">
               <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
               <p className="text-xs font-semibold text-slate-600">{t('discover.emptyTitle')}</p>
@@ -406,7 +431,7 @@ export function DiscoverView({
                     <Star className="w-3.5 h-3.5 fill-current" />
                   </button>
 
-                  <div className="p-3 flex items-center gap-3.5 cursor-pointer" onClick={() => onSelectEvent(event)}>
+                  <div id={`btn-open-detail-${event.id}`} className="p-3 flex items-center gap-3.5 cursor-pointer" onClick={() => onSelectEvent(event)}>
                     
                     {/* Left: Geometric Date Box Indicator */}
                     <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center border border-slate-200 shrink-0 select-none overflow-hidden bg-slate-50">
@@ -423,7 +448,7 @@ export function DiscoverView({
 
                     {/* Middle: Title, venue and badges */}
                     <div className="flex-1 min-w-0 space-y-1">
-                      <h3 className="text-xs font-black text-slate-900 tracking-tight leading-snug line-clamp-1">
+                      <h3 className="text-xs font-black text-slate-900 tracking-tight leading-snug line-clamp-2">
                         {event.title}
                       </h3>
                       <p className="text-[10px] text-slate-500 font-medium truncate flex items-center gap-1">
