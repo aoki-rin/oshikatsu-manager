@@ -62,8 +62,8 @@ npm test
 # 开发预览（浏览器，注意下方 node 说明）
 npm run dev                 # http://localhost:3000
 
-# 轻量代理（开发）
-npm run server:dev          # http://127.0.0.1:8787
+# 轻量代理（开发）。⚠️ 给真机走 Tailscale 用时必须绑全接口，否则只听 127.0.0.1 手机够不着：
+HOST=0.0.0.0 npm run server:dev   # http://<tailscale-ip>:8787
 
 # 安卓真机：构建 + 同步，再用 Android Studio 跑到手机
 npm run cap:build           # = vite build && cap sync（android + ios）
