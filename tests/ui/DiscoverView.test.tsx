@@ -99,6 +99,16 @@ describe('DiscoverView', () => {
     const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
 
     expect(container.querySelector('#results-heading')?.textContent).toContain('上次搜索结果');
+    expect(container.querySelector('#results-heading')?.textContent).toContain('07/03');
+  });
+
+  it('旧数据无抓取时间 → 标题不悬空分隔符', () => {
+    const result = makeEvent({ id: 'pia-9' });
+    const props = makeProps({ searchResults: [result], searchIsLive: false, searchFetchedAt: null });
+    const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
+    const text = container.querySelector('#results-heading')?.textContent ?? '';
+    expect(text).toContain('上次搜索结果');
+    expect(text).not.toContain('· ）');
   });
 
   it('搜索进行中显示搜索占位而非「未找到」（QA #4）', () => {

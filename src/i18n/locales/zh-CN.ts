@@ -34,6 +34,7 @@ export const zhCN = {
   'discover.generalBadge': '★一般発売 受付',
   'discover.proxyDegraded': '⚠️ 代理不可达，本次已用手机直连（ローチケ等需代理的源受限）。检查 Mac 代理与 Tailscale。',
   'discover.resultsStaleTitle': '上次搜索结果（{count}场 · {time}）',
+  'discover.resultsStaleTitleNoTime': '上次搜索结果（{count}场）',
   'discover.searchingEmptyTitle': '正在搜索各平台…',
   'discover.searchingEmptyBody': '结果将随各平台返回实时并入列表。',
   'discover.noteSearching': '搜索中…',

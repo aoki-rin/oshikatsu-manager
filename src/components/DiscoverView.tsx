@@ -363,9 +363,11 @@ export function DiscoverView({
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-slate-700" id="results-heading">
               {filteredSearchResults.length > 0
-                ? (searchIsLive
-                    ? t('discover.resultsTitle', { count: displayEvents.length })
-                    : t('discover.resultsStaleTitle', { count: displayEvents.length, time: fetchedAtLabel }))
+                ? searchIsLive
+                  ? t('discover.resultsTitle', { count: displayEvents.length })
+                  : fetchedAtLabel
+                    ? t('discover.resultsStaleTitle', { count: displayEvents.length, time: fetchedAtLabel })
+                    : t('discover.resultsStaleTitleNoTime', { count: displayEvents.length })
                 : t('discover.savedTitle', { count: displayEvents.length })}
             </span>
           </div>
