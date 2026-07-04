@@ -65,11 +65,7 @@ describe('MyOshiView', () => {
     });
     const { container } = renderWithI18n(<MyOshiView {...(props as unknown as ComponentProps<typeof MyOshiView>)} />);
 
-    const card = container.querySelector('#btn-unfollow-artist-art-fz')!.closest('[class*="rounded-2xl"]')!;
-    const buttons = [...card.querySelectorAll('button')];
-    const searchBtn = buttons.find(b => b.id !== 'btn-unfollow-artist-art-fz')!;
-
-    fireEvent.click(searchBtn);
+    fireEvent.click(container.querySelector('#btn-search-artist-art-fz') as HTMLButtonElement);
     expect(props.onSearchEntity).toHaveBeenCalledWith('FRUITS ZIPPER');
     await waitFor(() => expect(props.onViewEntity).toHaveBeenCalledWith('art-fz'));
   });
@@ -82,9 +78,7 @@ describe('MyOshiView', () => {
     });
     const { container } = renderWithI18n(<MyOshiView {...(props as unknown as ComponentProps<typeof MyOshiView>)} />);
 
-    const card = container.querySelector('#btn-unfollow-artist-art-fz')!.closest('[class*="rounded-2xl"]')!;
-    const hasBadge = [...card.querySelectorAll('span')].some(s => s.style.backgroundColor === 'rgb(18, 52, 86)');
-    expect(hasBadge).toBe(true);
+    expect(container.querySelector('[data-testid="new-badge"]')).not.toBeNull();
   });
 
   it('新着角标：lastViewed 晚于抓取时间则隐藏', () => {
@@ -96,9 +90,24 @@ describe('MyOshiView', () => {
     });
     const { container } = renderWithI18n(<MyOshiView {...(props as unknown as ComponentProps<typeof MyOshiView>)} />);
 
-    const card = container.querySelector('#btn-unfollow-artist-art-fz')!.closest('[class*="rounded-2xl"]')!;
-    const hasBadge = [...card.querySelectorAll('span')].some(s => s.style.backgroundColor === 'rgb(18, 52, 86)');
-    expect(hasBadge).toBe(false);
+    expect(container.querySelector('[data-testid="new-badge"]')).toBeNull();
+  });
+
+  it('「更新全部关注」顺序检索每位推し并清新着（QA #13-lite）', async () => {
+    const props = makeProps({
+      events: [
+        makeEvent({ id: 'e1', artistId: 'art-a', artistName: 'ARTIST A' }),
+        makeEvent({ id: 'e2', artistId: 'art-b', artistName: 'ARTIST B', venueId: 'v2' }),
+      ],
+      followedArtists: ['art-a', 'art-b'],
+    });
+    const { container } = renderWithI18n(<MyOshiView {...(props as unknown as ComponentProps<typeof MyOshiView>)} />);
+
+    fireEvent.click(container.querySelector('#btn-refresh-all-follows') as HTMLButtonElement);
+    await waitFor(() => expect(props.onSearchEntity).toHaveBeenCalledTimes(2));
+    expect(props.onSearchEntity).toHaveBeenNthCalledWith(1, 'ARTIST A');
+    expect(props.onSearchEntity).toHaveBeenNthCalledWith(2, 'ARTIST B');
+    await waitFor(() => expect(props.onViewEntity).toHaveBeenCalledWith('art-b'));
   });
 
   it('切换到会场子标签后显示关注的会场', () => {
