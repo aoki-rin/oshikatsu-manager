@@ -103,3 +103,29 @@ describe('upcomingTicketDeadlines 截止雷达（QA ISSUE-005）', () => {
     assert.deepEqual(radar14.map((d) => d.event.id), ['b', 'a']);
   });
 });
+
+describe('upcomingTicketDeadlines 去重（Lawson 多票种同一締切）', () => {
+  const now = new Date('2026-07-04T00:00:00+09:00');
+
+  it('同一事件同一时刻同类截止只列一行（保留首个轮次名）', () => {
+    const e = ev({ id: 'lawson-giga', ticketWindows: [
+      win({ id: 'w1', roundType: 'S席', applyEnd: '2026-07-16T22:00:00+09:00' }),
+      win({ id: 'w2', roundType: 'A席', applyEnd: '2026-07-16T22:00:00+09:00' }),
+      win({ id: 'w3', roundType: 'B席', applyEnd: '2026-07-16T22:00:00+09:00' }),
+    ] });
+    const radar = upcomingTicketDeadlines([e], 14, now);
+    assert.equal(radar.length, 1);
+    assert.equal(radar[0].label, 'S席');
+  });
+
+  it('不同事件或不同时刻不受去重影响', () => {
+    const a = ev({ id: 'a', ticketWindows: [win({ id: 'wa', applyEnd: '2026-07-10T22:00:00+09:00' })] });
+    const b = ev({ id: 'b', ticketWindows: [win({ id: 'wb', applyEnd: '2026-07-10T22:00:00+09:00' })] });
+    const c = ev({ id: 'a2', ticketWindows: [
+      win({ id: 'w1', applyEnd: '2026-07-08T10:00:00+09:00' }),
+      win({ id: 'w2', applyEnd: '2026-07-09T10:00:00+09:00' }),
+    ] });
+    assert.equal(upcomingTicketDeadlines([a, b], 14, now).length, 2);
+    assert.equal(upcomingTicketDeadlines([c], 14, now).length, 2);
+  });
+});

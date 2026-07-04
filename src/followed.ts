@@ -78,11 +78,17 @@ export function upcomingTicketDeadlines(
   const nowMs = now.getTime();
   const horizonMs = nowMs + horizonDays * 24 * 60 * 60 * 1000;
   const out: UpcomingDeadline[] = [];
+  // 同一事件同一时刻的同类截止只列一行：Lawson 等平台按票种给多个窗口（S席/A席…），
+  // applyEnd 全相同，真机实测雷达重复 5 行 → 按 事件+类型+时刻 去重（保留先出现的轮次名）。
+  const seen = new Set<string>();
 
   const push = (event: ActivityEvent, kind: TicketDeadlineKind, label: string, at: string | null | undefined) => {
     if (!at) return;
     const ms = new Date(at).getTime();
     if (Number.isNaN(ms) || ms <= nowMs || ms > horizonMs) return;
+    const key = `${event.id}|${kind}|${at}`;
+    if (seen.has(key)) return;
+    seen.add(key);
     out.push({ event, kind, label, at, date: at.slice(0, 10) });
   };
 
