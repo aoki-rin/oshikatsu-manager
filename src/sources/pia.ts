@@ -12,6 +12,12 @@ const PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=400&q=80';
 
 const stripTags = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+// Pia 页面里的轮次链接现在指向 ticket.pia.jp，而该域名对详情页 301 回 t.pia.jp——
+// 解析时就归一到 t.pia.jp：存储 URL 干净、enrich/购票少一跳（也不赌 HTTP 客户端的重定向行为）。
+export function toTPiaUrl(url: string): string {
+  return url.replace('//ticket.pia.jp/', '//t.pia.jp/');
+}
 const dec = (s: string) =>
   s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'");
 const m1 = (s: string, re: RegExp): string | null => { const m = s.match(re); return m ? m[1] : null; };
@@ -55,7 +61,8 @@ export function parsePiaRlsInfo(html: string, artist: string, artistSource: 'pla
     let region = '';
 
     roundSegs.forEach((seg, i) => {
-      const url = m1(seg, /<a href="([^"]+)"\s+itemprop="url"/);
+      const rawUrl = m1(seg, /<a href="([^"]+)"\s+itemprop="url"/);
+      const url = rawUrl ? toTPiaUrl(rawUrl) : rawUrl;
       const rt = m1(seg, /class="is_title">([\s\S]*?)<\/li>/);
       const roundType = (rt ? dec(stripTags(rt)).replace(/^「[^」]*」/, '') : '') || '受付';
       const status = m1(seg, /class="is_status"[^>]*>([\s\S]*?)<\/(?:li|span|td)>/);
@@ -140,7 +147,8 @@ export function parsePiaDetailDates(html: string): PiaDetail {
 
 export async function getPiaDetail(url: string): Promise<PiaDetail | null> {
   try {
-    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
+    // 兜底：存量事件可能还存着 ticket.pia.jp 旧链接（该域名 301 回 t.pia.jp）
+    const res = await CapacitorHttp.get({ url: toTPiaUrl(url), headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
     const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
     return parsePiaDetailDates(html);
   } catch {

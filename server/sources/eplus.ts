@@ -19,8 +19,11 @@ export const eplusSource: ServerTicketSource = {
       return normalizeLiveEvent({
         id: event.eventId,
         title: event.title,
+        // 与客户端对齐（QA #1）：eplus 无出演者字段，艺人名=搜索词回显 → 标 'query'，
+        // 否则代理路径的结果会在 UI 里冒充 ⭐ 真实艺人。
         artistId: canonicalArtistId(query) || `eplus-artist-${query}`,
         artistName: query,
+        artistSource: 'query',
         venueId: canonicalVenueId(event.venue) || `eplus-venue-${event.eventId}`,
         venueName: event.venue,
         date: event.date || fallbackDate,

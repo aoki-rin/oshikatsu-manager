@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { parseEplusSearch } from '../src/sources/eplus';
-import { parsePiaArtistCd, parsePiaArtistInfo, parsePiaRlsInfo } from '../src/sources/pia';
+import { parsePiaArtistCd, parsePiaArtistInfo, parsePiaRlsInfo, toTPiaUrl } from '../src/sources/pia';
 import { parseTicketDiveSearch, parseTicketDiveDetailWindow } from '../src/sources/ticketdive';
 import { parseLawsonSearch } from '../src/sources/lawson';
 import { parseLivePocketSearch, parseLivePocketDetailWindow, parseLivePocketDetailRounds, toNewLivePocketUrl } from '../src/sources/livepocket';
@@ -115,6 +115,21 @@ describe('Ticket Pia search parser', () => {
     // purchaseUrl 必须是 Pia app 能深链的 /pia/event/event.do（而非浏览器-only 的 ticketInformation/search 页）
     assert.equal(e.purchaseUrl, 'https://t.pia.jp/pia/event/event.do?eventBundleCd=BUNDLE1');
   });
+
+  it('轮次链接的 ticket.pia.jp 域名归一到 t.pia.jp（该域名 301，存储即规范化）', () => {
+    const rls = `
+      <section class="sales_data">
+        <h3 class="sales_data_title">X 公演</h3>
+        <div class="event_link">
+          <ul><li class="is_title">先行</li><li class="is_status">受付中</li></ul>
+          <a href="https://ticket.pia.jp/pia/ticketInformation.do?eventCd=999&lotRlsCd=1" itemprop="url">申込</a>
+          <span itemprop="startDate" datetime="2026-08-01T18:00:00">公演</span>
+        </div>
+      </section>`;
+    const [e] = parsePiaRlsInfo(rls, 'X');
+    assert.equal(e.ticketWindows?.[0].applyUrl, 'https://t.pia.jp/pia/ticketInformation.do?eventCd=999&lotRlsCd=1');
+    assert.equal(toTPiaUrl('https://t.pia.jp/pia/x'), 'https://t.pia.jp/pia/x');
+  });
 });
 
 describe('TicketDive search parser', () => {
@@ -144,6 +159,37 @@ describe('TicketDive search parser', () => {
     assert.equal(e.platform, 'TicketDive');
     assert.equal(e.ticketWindows?.[0].statusText, '受付中');
     assert.equal(e.originalUrl, 'https://ticketdive.com/event/event-slug');
+    // 无 artists 匹配信息 → 搜索词回显，诚实标 'query'
+    assert.equal(e.artistName, '地下アイドル');
+    assert.equal(e.artistSource, 'query');
+  });
+
+  it('artists 唯一命中 → 平台真实艺人名（artistSource platform）', () => {
+    // 真实响应形态（藍井エイル 实测）：json.artists=[{name:...}] + eventList
+    const nextData = {
+      props: { pageProps: { __superjsonProps: { json: {
+        artists: [{ id: 'A1', name: '藍井エイル' }],
+        eventList: [{ id: 'E9', url: 'popcul', title: 'ぽっかるシンフォニー', venueName: '三越劇場', salesStatus: 'applied', startEventDate: '2026-07-12T03:30:00.000Z' }],
+      } } } },
+    };
+    const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`;
+    const [e] = parseTicketDiveSearch(html, 'あおいえいる');
+    assert.equal(e.artistName, '藍井エイル');
+    assert.equal(e.artistSource, 'platform');
+    assert.equal(e.artistId, 'artist-藍井エイル');
+  });
+
+  it('artists 多命中 → 不敢断言归属，回退搜索词', () => {
+    const nextData = {
+      props: { pageProps: { __superjsonProps: { json: {
+        artists: [{ name: 'A' }, { name: 'B' }],
+        eventList: [{ id: 'E2', url: 'x', title: 'T', salesStatus: 'coming' }],
+      } } } },
+    };
+    const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`;
+    const [e] = parseTicketDiveSearch(html, 'クエリ');
+    assert.equal(e.artistName, 'クエリ');
+    assert.equal(e.artistSource, 'query');
   });
 });
 
