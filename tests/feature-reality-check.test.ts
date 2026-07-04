@@ -5,7 +5,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import type { ActivityEvent } from '../src/types';
-import { buildEventIcs, formatDisplayDate, primaryDeadline } from '../src/utils';
+import { buildEventIcs, formatDisplayDate, primaryDeadline, sortByActionability } from '../src/utils';
 import { buildReminderTargets, isPastReminder } from '../src/notifications';
 import { aggregateConcerts } from '../src/sources/aggregate';
 import { favoriteAliases, favoriteKey, isFavorited } from '../src/favorites';
@@ -210,5 +210,19 @@ describe('收藏别名跨「换关键词重搜」稳定（QA ISSUE-001 回归）
     assert.notEqual(second.id, first.id, '前提：聚合 id 确实随关键词漂移');
     assert.notEqual(favoriteKey(second), favoriteKey(first), '前提：稳定键确实漂移');
     assert.equal(isFavorited(second, favorites), true, '成员平台 id 别名兜住收藏');
+  });
+});
+
+describe('列表可行动性排序（QA ISSUE-007 回归）', () => {
+  const win = (id: string, applyEnd: string | null): import('../src/types').TicketWindow => ({
+    id, platform: 'eplus', roundType: '受付', applyStart: null, applyEnd,
+  });
+  it('还能报名的靠前（截止近者优先）→ 无截止 → 已截止垫底', () => {
+    const closed = makeEvent({ id: 'closed', date: '2026-07-25', ticketWindows: [win('w1', '2026-03-08T23:59:00+09:00')] });
+    const soon = makeEvent({ id: 'soon', date: '2026-08-10', ticketWindows: [win('w2', '2026-07-10T23:59:00+09:00')] });
+    const later = makeEvent({ id: 'later', date: '2026-08-01', ticketWindows: [win('w3', '2026-07-20T23:59:00+09:00')] });
+    const noInfo = makeEvent({ id: 'noinfo', date: '2026-07-30', ticketWindows: [] });
+    const sorted = sortByActionability([closed, noInfo, later, soon], '2026-07-04');
+    assert.deepEqual(sorted.map((e) => e.id), ['soon', 'later', 'noinfo', 'closed']);
   });
 });

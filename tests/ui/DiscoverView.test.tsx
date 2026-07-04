@@ -27,6 +27,9 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     searchReports: [],
     recentSearches: [],
     searching: false,
+    searchDegraded: false,
+    searchFetchedAt: null,
+    searchIsLive: false,
     extensions: [eplusExt],
     artists: [],
     venues: [],
@@ -60,7 +63,7 @@ describe('DiscoverView', () => {
 
     const card = container.querySelector('#event-card-eplus-1') as HTMLElement;
     expect(card).not.toBeNull();
-    fireEvent.click(card.querySelector('.cursor-pointer') as HTMLElement);
+    fireEvent.click(container.querySelector('#btn-open-detail-eplus-1') as HTMLElement);
     expect(props.onSelectEvent).toHaveBeenCalledWith(ev);
   });
 
@@ -83,9 +86,35 @@ describe('DiscoverView', () => {
 
   it('有实时结果时优先展示结果卡', () => {
     const result = makeEvent({ id: 'pia-9', title: 'SEARCH HIT' });
-    const props = makeProps({ searchResults: [result] });
+    const props = makeProps({ searchResults: [result], searchIsLive: true });
     const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
 
     expect(container.querySelector('#event-card-pia-9')).not.toBeNull();
+    expect(container.querySelector('#results-heading')?.textContent).toContain('实时搜索结果');
+  });
+
+  it('装载的持久化结果标「上次搜索结果 + 时间」（QA #6）', () => {
+    const result = makeEvent({ id: 'pia-9' });
+    const props = makeProps({ searchResults: [result], searchIsLive: false, searchFetchedAt: '2026-07-03T12:00:00.000Z' });
+    const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
+
+    expect(container.querySelector('#results-heading')?.textContent).toContain('上次搜索结果');
+  });
+
+  it('搜索进行中显示搜索占位而非「未找到」（QA #4）', () => {
+    const props = makeProps({ searching: true });
+    const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
+
+    expect(container.querySelector('#searching-placeholder')).not.toBeNull();
+  });
+
+  it('已截止的排在还能报名的后面（QA #7）', () => {
+    const open = makeEvent({ id: 'eplus-open', ticketWindows: [{ id: 'w1', platform: 'eplus', roundType: '一般', applyStart: null, applyEnd: '2030-08-01T18:00:00+09:00' }] });
+    const closed = makeEvent({ id: 'eplus-closed', ticketWindows: [{ id: 'w2', platform: 'eplus', roundType: '先行', applyStart: null, applyEnd: '2020-01-01T18:00:00+09:00' }] });
+    const props = makeProps({ searchResults: [closed, open], searchIsLive: true });
+    const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
+
+    const ids = [...container.querySelectorAll('[id^=event-card-]')].map((c) => c.id);
+    expect(ids).toEqual(['event-card-eplus-open', 'event-card-eplus-closed']);
   });
 });

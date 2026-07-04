@@ -92,7 +92,16 @@ export function buildReminderTargets(event: ActivityEvent, t: TFunction = defaul
     target(event, 'event', 'payment_deadline', t('notification.fallback.paymentDeadline'), event.timeline.paymentDeadlineDate ? `${event.timeline.paymentDeadlineDate}T20:00:00+09:00` : null, t),
   ].filter(Boolean) as ReminderTarget[];
   const concert = target(event, 'event', 'concert', t('notification.fallback.concert'), fromEventDate(event), t);
-  return [...(windowTargets.length > 0 ? windowTargets : fallbackTargets), ...(concert ? [concert] : [])];
+  const merged = [...(windowTargets.length > 0 ? windowTargets : fallbackTargets), ...(concert ? [concert] : [])];
+  // 同一时刻同一类型只留一条（QA #9）：Lawson 等按票种给多窗口、eplus 多轮共享同一入金截止，
+  // 会生成 N 条一模一样的「付款截止 08/03 23:59」开关，用户无从选择。保留先出现的（带轮次名）。
+  const seen = new Set<string>();
+  return merged.filter((targetInfo) => {
+    const key = `${targetInfo.type}|${targetInfo.scheduleAt}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // 已过去的受付/开演时间没有提醒意义：原生端 schedule 一个过去时刻会「立刻弹」或被系统丢弃，

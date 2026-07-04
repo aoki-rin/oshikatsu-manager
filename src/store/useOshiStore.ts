@@ -50,6 +50,10 @@ export function useOshiStore(t: TFunction) {
   const [isSearching, setIsSearching] = useState(false);
   // 配置了代理但本次搜索连不上（走了手机直连兜底）→ UI 显示降级提示（QA #2）。
   const [searchDegraded, setSearchDegraded] = useState(false);
+  // 结果的抓取时间 + 是否本次会话抓的（QA #6）：重开 app 装载的持久化结果不能再冒充「实时」，
+  // 列表头会改示「上次搜索结果（N场 · MM/DD HH:mm）」。
+  const [searchFetchedAt, setSearchFetchedAt] = useState<string | null>(null);
+  const [searchIsLive, setSearchIsLive] = useState(false);
   // Cancels the previous in-flight search when a new one starts (stale results ignored).
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -132,6 +136,9 @@ export function useOshiStore(t: TFunction) {
 
     const storedRecentSearches = localStorage.getItem('oshikatsu_recent_searches');
     if (storedRecentSearches) setRecentSearches(JSON.parse(storedRecentSearches));
+
+    const storedSearchFetchedAt = localStorage.getItem('oshikatsu_search_fetched_at');
+    if (storedSearchFetchedAt) setSearchFetchedAt(JSON.parse(storedSearchFetchedAt));
   }, []);
 
   // Save states helper whenever changes trigger
@@ -176,6 +183,8 @@ export function useOshiStore(t: TFunction) {
     setSearchResultIds([]);
     setSearchReports([]);
     setRecentSearches([]);
+    setSearchFetchedAt(null);
+    setSearchIsLive(false);
   };
 
   // Follow/Favorite toggles
@@ -287,9 +296,12 @@ export function useOshiStore(t: TFunction) {
 
     setIsSearching(true);
     setSearchDegraded(false);
-    const recent = [q, ...recentSearches.filter(item => item !== q)].slice(0, 8);
-    setRecentSearches(recent);
-    saveToStorage('oshikatsu_recent_searches', recent);
+    // 函数式更新：连续快速搜索时不吃闭包里的旧列表
+    setRecentSearches(prev => {
+      const recent = [q, ...prev.filter(item => item !== q)].slice(0, 8);
+      saveToStorage('oshikatsu_recent_searches', recent);
+      return recent;
+    });
 
     // 先给每个启用平台一个「搜索中」占位报告，让用户立刻看到进度
     const reportsByPlatform = new Map<TicketPlatform, TicketSearchReport>();
@@ -333,6 +345,9 @@ export function useOshiStore(t: TFunction) {
       saveToStorage('oshikatsu_search_reports', reports);
       // 记录每个源这次抓取的时间/命中数/状态（插件页本地源管理展示）。
       const statsAt = new Date().toISOString();
+      setSearchFetchedAt(statsAt);
+      setSearchIsLive(true);
+      saveToStorage('oshikatsu_search_fetched_at', statsAt);
       setSourceStats(prev => {
         const next = { ...prev };
         for (const report of reports) {
@@ -360,8 +375,11 @@ export function useOshiStore(t: TFunction) {
     searchAbortRef.current?.abort();
     setSearchResultIds([]);
     setSearchReports([]);
+    setSearchFetchedAt(null);
+    setSearchIsLive(false);
     saveToStorage('oshikatsu_search_result_ids', []);
     saveToStorage('oshikatsu_search_reports', []);
+    localStorage.removeItem('oshikatsu_search_fetched_at');
   };
 
   // 详情页懒加载（如 Pia 精确受付日期）补全后回写：替换同 id 事件并持久化，
@@ -446,6 +464,8 @@ export function useOshiStore(t: TFunction) {
     recentSearches,
     isSearching,
     searchDegraded,
+    searchFetchedAt,
+    searchIsLive,
     favorites,
     followedArtists,
     followedVenues,
