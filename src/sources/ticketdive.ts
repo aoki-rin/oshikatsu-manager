@@ -35,8 +35,11 @@ interface TicketDiveEvent {
   displayStageDate?: string | null;
   imageSource?: string;
 }
+interface TicketDiveArtist {
+  name?: string;
+}
 interface TicketDiveNextData {
-  props?: { pageProps?: { __superjsonProps?: { json?: { eventList?: TicketDiveEvent[] } } } };
+  props?: { pageProps?: { __superjsonProps?: { json?: { eventList?: TicketDiveEvent[]; artists?: TicketDiveArtist[] } } } };
 }
 
 export function parseTicketDiveSearch(html: string, artist: string): ActivityEvent[] {
@@ -44,7 +47,13 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
   if (!m) return [];
   let parsed: TicketDiveNextData;
   try { parsed = JSON.parse(m[1]) as TicketDiveNextData; } catch { return []; }
-  const list = parsed.props?.pageProps?.__superjsonProps?.json?.eventList ?? [];
+  const json = parsed.props?.pageProps?.__superjsonProps?.json ?? {};
+  const list = json.eventList ?? [];
+  // 响应自带 artists 匹配列表：唯一命中时，事件归属即平台确认 → 用真实艺人名
+  //（TicketDive 按艺人检索；多命中/无命中时不敢断言，回退搜索词回显）。
+  const soleArtist = (json.artists ?? []).length === 1 ? json.artists![0]?.name : undefined;
+  const artistName = soleArtist || artist;
+  const artistSource: ActivityEvent['artistSource'] = soleArtist ? 'platform' : 'query';
 
   return list.map((e): ActivityEvent => {
     const url = `https://ticketdive.com/event/${e.url ?? ''}`;
@@ -61,10 +70,10 @@ export function parseTicketDiveSearch(html: string, artist: string): ActivityEve
     };
     return normalizeLiveEvent({
       id: `td-${e.id}`,
-      title: e.title || artist,
-      artistId: canonicalArtistId(artist) || `td-artist-${artist}`,
-      artistName: artist,
-      artistSource: 'query',
+      title: e.title || artistName,
+      artistId: canonicalArtistId(artistName) || `td-artist-${artistName}`,
+      artistName,
+      artistSource,
       venueId: canonicalVenueId(e.venueName) || `td-venue-${e.id}`,
       venueName: e.venueName || '—',
       date: jstDate(e.startEventDate),

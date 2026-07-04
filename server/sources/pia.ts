@@ -1,5 +1,5 @@
 import { buildPlatformSearchUrl, deriveTimelineFromWindows, normalizeLiveEvent } from '../../src/sources/shared';
-import { parsePiaArtistCd, parsePiaRlsInfo } from '../../src/sources/pia';
+import { parsePiaArtistInfo, parsePiaRlsInfo } from '../../src/sources/pia';
 import type { ServerTicketSource } from '../types';
 
 function piaRlsInfoUrl(artistCd: string): string {
@@ -12,17 +12,18 @@ function piaRlsInfoUrl(artistCd: string): string {
 export const piaSource: ServerTicketSource = {
   id: 'pia',
   platform: 'Ticket Pia',
-  parserVersion: 'pia-html-v1',
+  parserVersion: 'pia-html-v2', // v2：字母 artistCd + artistnm 真实艺人名（与客户端对齐）
   buildSearchUrl: (query) => buildPlatformSearchUrl('Ticket Pia', query),
   async search(query, ctx) {
     const searchHtml = await ctx.fetchText(this.buildSearchUrl(query));
-    const artistCd = parsePiaArtistCd(searchHtml);
-    if (!artistCd) return [];
+    const artistInfo = parsePiaArtistInfo(searchHtml);
+    if (!artistInfo) return [];
 
     // 搜索阶段只取 rlsInfo（轻量、快）。精确受付日期改为点开事件详情时再懒加载，
     // 避免在搜索时为每个「受付中」轮次额外抓详情页拖慢整体（参考 Mihon：搜索拿列表，详情按需）。
-    const rlsHtml = await ctx.fetchText(piaRlsInfoUrl(artistCd));
-    const events = parsePiaRlsInfo(rlsHtml, query);
+    const rlsHtml = await ctx.fetchText(piaRlsInfoUrl(artistInfo.cd));
+    // 与客户端对齐（QA #1）：Pia 自带真实艺人名（artistnm）→ 优先用它标 'platform'
+    const events = parsePiaRlsInfo(rlsHtml, artistInfo.name || query, artistInfo.name ? 'platform' : 'query');
     return events.map((event) => normalizeLiveEvent({
       ...event,
       timeline: deriveTimelineFromWindows(event.ticketWindows || []),
