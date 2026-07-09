@@ -156,6 +156,42 @@ export async function getPiaDetail(url: string): Promise<PiaDetail | null> {
   }
 }
 
+// artistCd 模式：艺人页的发售一览（注意：apiRequest 格式须与 Pia 一致——functions 不带引号）。
+export function buildPiaArtistRlsInfoUrl(artistCd: string): string {
+  const apiRequest = `{functions:[{"functionId":"SA403001","parameters":{"page":1,"artistCd":"${artistCd}","includeSaleEnd":"fuzzy","mode":"2","dispMode":"1","responsive":"true"}}]}`;
+  const url = new URL('https://t.pia.jp/pia/artist/rlsInfo.do');
+  url.searchParams.set('apiRequest', apiRequest);
+  return url.toString();
+}
+
+// kw（公演名关键词）模式：官网搜索结果页实测的 XHR（searchMode=1）。
+// 「PERSONA LIVE TOUR 2026」这类游戏/系列演唱会在 Pia 不是注册艺人（artistArray 空），
+// 官网靠这条路展示公演命中——响应与 artistCd 模式同构，parsePiaRlsInfo 通吃。
+export function buildPiaKeywordRlsInfoUrl(kw: string): string {
+  const url = new URL('https://t.pia.jp/pia/rlsInfo.do');
+  url.searchParams.set('kw', kw);
+  url.searchParams.set('cAsgnFlg', 'false');
+  url.searchParams.set('bAsgnFlg', 'false');
+  url.searchParams.set('includeSaleEnd', 'false');
+  url.searchParams.set('page', '1');
+  url.searchParams.set('responsive', 'true');
+  url.searchParams.set('noConvert', 'true');
+  url.searchParams.set('searchMode', '1');
+  url.searchParams.set('mode', '2');
+  url.searchParams.set('dispMode', '1');
+  return url.toString();
+}
+
+async function fetchPiaText(url: string): Promise<string> {
+  const res = await CapacitorHttp.get({
+    url,
+    headers: { 'User-Agent': UA },
+    connectTimeout: 10000,
+    readTimeout: 20000,
+  });
+  return typeof res.data === 'string' ? res.data : String(res.data ?? '');
+}
+
 export async function searchPia(artist: string): Promise<ActivityEvent[]> {
   // 1) 搜艺人拿 artistCd
   const s = await CapacitorHttp.get({
@@ -167,22 +203,20 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
   });
   const searchHtml = typeof s.data === 'string' ? s.data : String(s.data ?? '');
   const artistInfo = parsePiaArtistInfo(searchHtml);
-  if (!artistInfo) return [];
-  const artistCd = artistInfo.cd;
 
-  // 2) 取该艺人发售/抽選信息（注意：apiRequest 格式须与 Pia 一致——functions 不带引号）
-  const apiRequest = `{functions:[{"functionId":"SA403001","parameters":{"page":1,"artistCd":"${artistCd}","includeSaleEnd":"fuzzy","mode":"2","dispMode":"1","responsive":"true"}}]}`;
-  const r = await CapacitorHttp.get({
-    url: 'https://t.pia.jp/pia/artist/rlsInfo.do',
-    params: { apiRequest },
-    headers: { 'User-Agent': UA },
-    connectTimeout: 10000,
-    readTimeout: 20000,
-  });
-  const html = typeof r.data === 'string' ? r.data : String(r.data ?? '');
-  // 搜索只返回 rlsInfo（状态 + 链接，快）。精确受付日期由 enrichPiaWindows 在点开详情时懒加载。
-  // Pia 自带真实艺人名（artistnm）→ 优先用它做出演者展示（artistSource:'platform'）。
-  return parsePiaRlsInfo(html, artistInfo.name || artist, artistInfo.name ? 'platform' : 'query');
+  // 2) 艺人命中 → 该艺人的发售/抽選一览。搜索只返回 rlsInfo（状态 + 链接，快），
+  //    精确受付日期由 enrichPiaWindows 在点开详情时懒加载。
+  //    Pia 自带真实艺人名（artistnm）→ 优先用它做出演者展示（artistSource:'platform'）。
+  if (artistInfo) {
+    const html = await fetchPiaText(buildPiaArtistRlsInfoUrl(artistInfo.cd));
+    const events = parsePiaRlsInfo(html, artistInfo.name || artist, artistInfo.name ? 'platform' : 'query');
+    if (events.length > 0) return events;
+    // 艺人存在但名下 0 件（如「ペルソナ」艺人码无票、票挂在公演名下）→ 继续走关键词兜底
+  }
+
+  // 3) 兜底：公演名关键词直搜（官网同款路径）。命中的是「公演」不是艺人 → 检索词回显。
+  const kwHtml = await fetchPiaText(buildPiaKeywordRlsInfoUrl(artist));
+  return parsePiaRlsInfo(kwHtml, artist, 'query');
 }
 
 // 点开事件详情时懒加载：对【受付中】且还没精确日期的 Pia 轮次抓详情页补 applyStart/End/resultStart。
