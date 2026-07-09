@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { parseEplusSearch } from '../src/sources/eplus';
-import { parsePiaArtistCd, parsePiaArtistInfo, parsePiaRlsInfo, toTPiaUrl } from '../src/sources/pia';
+import { buildPiaArtistRlsInfoUrl, buildPiaKeywordRlsInfoUrl, parsePiaArtistCd, parsePiaArtistInfo, parsePiaRlsInfo, toTPiaUrl } from '../src/sources/pia';
 import { parseTicketDiveSearch, parseTicketDiveDetailWindow } from '../src/sources/ticketdive';
 import { parseLawsonSearch } from '../src/sources/lawson';
 import { parseLivePocketSearch, parseLivePocketDetailWindow, parseLivePocketDetailRounds, toNewLivePocketUrl } from '../src/sources/livepocket';
@@ -114,6 +114,17 @@ describe('Ticket Pia search parser', () => {
     assert.equal(e.ticketWindows?.[0].statusText, '受付中');
     // purchaseUrl 必须是 Pia app 能深链的 /pia/event/event.do（而非浏览器-only 的 ticketInformation/search 页）
     assert.equal(e.purchaseUrl, 'https://t.pia.jp/pia/event/event.do?eventBundleCd=BUNDLE1');
+  });
+
+  it('rlsInfo 两种模式的 URL builder 形状', () => {
+    const artistUrl = buildPiaArtistRlsInfoUrl('M4140001');
+    assert.ok(artistUrl.includes('/pia/artist/rlsInfo.do'));
+    assert.ok(artistUrl.includes('M4140001'));
+    const kwUrl = buildPiaKeywordRlsInfoUrl('PERSONA LIVE TOUR 2026');
+    assert.ok(kwUrl.includes('/pia/rlsInfo.do'));
+    assert.ok(!kwUrl.includes('/artist/'));
+    assert.ok(kwUrl.includes('searchMode=1'), '公演名直搜模式的关键参数');
+    assert.ok(kwUrl.includes('kw=PERSONA'));
   });
 
   it('轮次链接的 ticket.pia.jp 域名归一到 t.pia.jp（该域名 301，存储即规范化）', () => {

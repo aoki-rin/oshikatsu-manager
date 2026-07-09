@@ -54,3 +54,50 @@ describe('server adapters 与客户端语义对齐', () => {
     assert.equal(events[0].ticketWindows?.[0].applyUrl?.includes('t.pia.jp'), true);
   });
 });
+
+// 「用ぴあ官网能搜到、app 搜不到」回归（PERSONA LIVE TOUR 2026 实测）：
+// 游戏/系列演唱会在 Pia 不是注册艺人（artistArray 空），官网靠 rlsInfo.do 的
+// kw（公演名关键词）模式展示命中——适配器必须在艺人路径落空时走同一条兜底。
+const PERSONA_KW_RLS_HTML = `
+  <section class="sales_data">
+    <h3 class="sales_data_title">PERSONA LIVE TOUR 2026 - Resonance -</h3>
+    <div class="event_link">
+      <ul><li class="is_title">「PERSONA LIVE TOUR 2026 - Resonance -」プレリザーブ2次</li><li class="is_status">抽選受付中</li></ul>
+      <a href="https://t.pia.jp/pia/ticketInformation.do?eventCd=2623398&lotRlsCd=99" itemprop="url">申込</a>
+      <span itemprop="startDate" datetime="2026-09-11T18:00:00">公演</span>
+      <div class="is_place"><span itemprop="name">Ｚｅｐｐ　ＤｉｖｅｒＣｉｔｙ（ＴＯＫＹＯ）</span></div>
+    </div>
+  </section>`;
+
+describe('pia 公演名关键词兜底（PERSONA 回归）', () => {
+  it('artistArray 未命中 → 走 kw 模式 rlsInfo，命中公演（检索词回显）', async () => {
+    const events = await piaSource.search('PERSONA LIVE TOUR 2026', ctxWith({
+      'search_all.do': '<html>var artistArray = "[]";</html>',
+      'pia/rlsInfo.do?kw=': PERSONA_KW_RLS_HTML,
+    }));
+    assert.equal(events.length, 1);
+    assert.equal(events[0].title, 'PERSONA LIVE TOUR 2026 - Resonance -');
+    assert.equal(events[0].date, '2026-09-11');
+    assert.equal(events[0].artistSource, 'query'); // 命中的是公演不是艺人，不冒充出演者
+    assert.equal(events[0].ticketWindows?.[0].statusText, '抽選受付中');
+  });
+
+  it('艺人命中但名下 0 件（ペルソナ形态）→ 仍退回 kw 兜底', async () => {
+    const events = await piaSource.search('ペルソナ', ctxWith({
+      'search_all.do': 'var artistArray = "[score: 2, artistcd: NC190011, artistnm: ペルソナ, artistkn: ペルソナ]";',
+      'artist/rlsInfo.do': '<html>ただいまチケット情報はありません。</html>',
+      'pia/rlsInfo.do?kw=': PERSONA_KW_RLS_HTML,
+    }));
+    assert.equal(events.length, 1);
+    assert.equal(events[0].title, 'PERSONA LIVE TOUR 2026 - Resonance -');
+    assert.equal(events[0].artistSource, 'query');
+  });
+
+  it('kw 兜底也空 → 诚实返回 0 件', async () => {
+    const events = await piaSource.search('存在しない公演', ctxWith({
+      'search_all.do': '<html>var artistArray = "[]";</html>',
+      'pia/rlsInfo.do?kw=': '<html>ただいまチケット情報はありません。</html>',
+    }));
+    assert.equal(events.length, 0);
+  });
+});
