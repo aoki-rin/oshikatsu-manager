@@ -65,6 +65,12 @@ npm run dev                 # http://localhost:3000
 # 轻量代理（开发）。⚠️ 给真机走 Tailscale 用时必须绑全接口，否则只听 127.0.0.1 手机够不着：
 HOST=0.0.0.0 npm run server:dev   # http://<tailscale-ip>:8787
 
+# 常驻代理（Mac，launchd）：~/Library/LaunchAgents/com.aoki.oshikatsu-proxy.plist
+# 用 `tsx watch` 跑——server/src 代码一变自动重载（无需再手动重启，避免旧进程跑旧代码）。
+# 开机自启 + 崩溃自愈（KeepAlive）。日志：~/Library/Logs/oshikatsu-proxy.log
+launchctl kickstart -k gui/$UID/com.aoki.oshikatsu-proxy   # 手动强制重启
+launchctl bootout   gui/$UID/com.aoki.oshikatsu-proxy      # 停用
+
 # 安卓真机：构建 + 同步，再用 Android Studio 跑到手机
 npm run cap:build           # = vite build && cap sync（android + ios）
 npm run android             # cap open android（在 Android Studio 里 Run）
