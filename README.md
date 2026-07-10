@@ -74,6 +74,16 @@ launchctl bootout   gui/$UID/com.aoki.oshikatsu-proxy      # 停用
 # 安卓真机：构建 + 同步，再用 Android Studio 跑到手机
 npm run cap:build           # = vite build && cap sync（android + ios）
 npm run android             # cap open android（在 Android Studio 里 Run）
+
+# 分发 release 包（发给他人 / 无代理环境）。⚠️ 构建前移开 .env——
+# 否则你的 Tailscale 代理地址会编进包，对方每次搜索都撞 3s 超时墙 + 弹降级条：
+mv .env .env.bak \
+  && npm run build && npx cap sync android \
+  && (cd android && ./gradlew assembleRelease) \
+  && mv .env.bak .env
+# 产物：android/app/build/outputs/apk/release/app-release.apk
+# 签名：android/release.keystore + keystore.properties（gitignored、只存本机）。
+# ⚠️ keystore 务必备份——丢了以后更新包签名会变，对方必须卸载重装（数据全丢）。
 ```
 **安卓真机调试**（不用模拟器）：
 1. 手机：设置 → 开发者选项 → 打开 **USB 调试**，USB 连电脑（首次弹窗点「允许」）。`adb devices` 能看到设备即可。
