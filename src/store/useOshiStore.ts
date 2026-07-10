@@ -6,6 +6,7 @@ import {
 import { INITIAL_EXTENSIONS, OSHI_COLORS } from '../data/mockData';
 import { searchPlatformsStreaming, searchableTargets } from '../sources';
 import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
+import { isProxyConfigured } from '../sources/proxy';
 import { aggregateConcerts } from '../sources/aggregate';
 import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
 import { favoriteAliases } from '../favorites';
@@ -95,13 +96,19 @@ export function useOshiStore(t: TFunction) {
     const storedExtensions = localStorage.getItem('oshikatsu_extensions');
     if (storedExtensions) {
       const stored = JSON.parse(storedExtensions) as ExtensionSource[];
+      // 保证 Lawson 已「安装」（P0 解锁的遗留迁移），但开关尊重用户的持久化选择——
+      // 旧逻辑每次启动强制 isEnabled:true，用户手动关掉也会被弹回（分发复审时发现的存量 bug）。
       const merged = INITIAL_EXTENSIONS.map(defaultExt => ({
         ...defaultExt,
         ...stored.find(ext => ext.id === defaultExt.id),
-      })).map(ext => ext.id === 'ext-lawson' ? { ...ext, isInstalled: true, isEnabled: true } : ext);
+      })).map(ext => ext.id === 'ext-lawson' ? { ...ext, isInstalled: true } : ext);
       setExtensions(merged);
     } else {
-      setExtensions(INITIAL_EXTENSIONS);
+      // 首启默认：Lawson 只在配置了代理时才开——未配代理的设备（如分发给朋友的包）
+      // 直连恒被反爬拒绝，开着只会让每次搜索多拖 8s + 一行「搜索失败」。插件页可手动开。
+      setExtensions(INITIAL_EXTENSIONS.map(ext =>
+        ext.id === 'ext-lawson' ? { ...ext, isEnabled: isProxyConfigured() } : ext,
+      ));
     }
 
     // 3. User relationships

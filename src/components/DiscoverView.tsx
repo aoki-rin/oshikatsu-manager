@@ -46,6 +46,9 @@ const reportDotClass = (status: TicketSearchReport['status']) => {
 // 真实抓取的 region 是日文（如「東京都」「（東京都）」），跟旧的简体「东京」码点不同永不匹配。
 // 用日文都道府县关键词做归一(NFKC)子串匹配，且只展示当前结果里实际出现的地区。
 const JP_REGION_PRESETS = ['東京', '大阪', '愛知', '神奈川', '埼玉', '千葉', '北海道', '福岡', '兵庫', '京都', '宮城', '広島', '沖縄'];
+
+// 冷启动示例搜索词：还没有搜索历史时给「搜什么好」一个起点（点击即填入搜索框）。
+const STARTER_SEARCH_TERMS = ['FRUITS ZIPPER', 'YOASOBI', 'Ado', '藍井エイル'];
 const normalizeRegion = (value: string) => (value || '').normalize('NFKC');
 
 interface DiscoverViewProps {
@@ -389,9 +392,9 @@ export function DiscoverView({
               <p className="text-[10px] text-slate-400">
                 {t('discover.emptyBody')}
               </p>
-              {recentSearches.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-1.5 pt-2">
-                  {recentSearches.map((term) => (
+              {(
+                <div id="search-term-chips" className="flex flex-wrap justify-center gap-1.5 pt-2">
+                  {(recentSearches.length > 0 ? recentSearches : STARTER_SEARCH_TERMS).map((term) => (
                     <button
                       key={term}
                       onClick={() => setSearchQuery(term)}
