@@ -75,6 +75,22 @@ describe('CalendarView', () => {
     expect(props.onSelectEvent).toHaveBeenCalledWith(ev);
   });
 
+  it('无日期事件进追踪看板不崩溃，显示「未定」占位（真机崩溃回归）', () => {
+    // 真机实测:关注艺人后,该艺人名下 date='' 的事件(LivePocket/TicketDive 偶发)进入
+    // upcomingTrackedLives → Intl.format(Invalid Date) 抛 RangeError → 整个日历页崩给 ErrorBoundary。
+    const dated = makeEvent({ id: 'eplus-1', artistId: 'art-fz', date: '2030-08-10' });
+    const undated = makeEvent({ id: 'lp-nodate', artistId: 'art-fz', date: '', venueId: 'v2', title: '日程未定公演' });
+    const props = makeProps({ events: [dated, undated], followedArtists: ['art-fz'] });
+
+    const { container, getByText } = renderWithI18n(<CalendarView {...(props as unknown as ComponentProps<typeof CalendarView>)} />);
+
+    expect(getByText('日程未定公演')).toBeInTheDocument(); // 不藏事件
+    expect(getByText('未定')).toBeInTheDocument(); // 日期格占位
+    // 无日期排最后:有日期的先出现
+    const titles = [...container.querySelectorAll('h4')].map((h) => h.textContent);
+    expect(titles.indexOf('FRUITS ZIPPER LIVE')).toBeLessThan(titles.indexOf('日程未定公演'));
+  });
+
   it('截止雷达：没有窗口内截止时整卡不渲染', () => {
     const ev = makeEvent({ id: 'eplus-1', ticketWindows: [], timeline: {} });
     const props = makeProps({ events: [ev], favorites: [favoriteKey(ev)] });

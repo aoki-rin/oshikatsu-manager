@@ -89,7 +89,10 @@ export function CalendarView({
   const tomorrowLotteryDeadlines = trackedEvents.filter(e => e.timeline.lotteryEndDate === tomorrowKey);
   const tomorrowPaymentDeadlines = trackedEvents.filter(e => e.timeline.paymentDeadlineDate === tomorrowKey);
 
-  const upcomingTrackedLives = [...trackedEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  // 无日期事件（LivePocket/TicketDive 偶尔抓不到 date='')排最后——new Date('') 是 Invalid Date,
+  // NaN 参与减法会让 sort 乱序;YYYY-MM-DD 直接字符串比较即可。
+  const upcomingTrackedLives = [...trackedEvents].sort((a, b) =>
+    (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
 
   const handleExportAll = () => {
     if (trackedEvents.length === 0) {
@@ -384,10 +387,18 @@ export function CalendarView({
                       className="flex items-center gap-2.5 py-2 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition"
                     >
                       <div className="text-center bg-slate-100 p-1 rounded-lg w-10 shrink-0">
-                        <p className="text-[9px] text-slate-400 font-mono tracking-tighter uppercase">
-                          {monthFormatter.format(new Date(`${e.date}T00:00:00+09:00`))}
-                        </p>
-                        <p className="text-xs font-bold font-display text-slate-800">{e.date.split('-')[2]}</p>
+                        {/* date='' 的无日期事件:Intl.format(Invalid Date) 会抛 RangeError 整页崩(真机实测),
+                            与 DiscoverView.getMonthLabel 同款防护 → 显示「未定」 */}
+                        {e.date ? (
+                          <>
+                            <p className="text-[9px] text-slate-400 font-mono tracking-tighter uppercase">
+                              {monthFormatter.format(new Date(`${e.date}T00:00:00+09:00`))}
+                            </p>
+                            <p className="text-xs font-bold font-display text-slate-800">{e.date.split('-')[2]}</p>
+                          </>
+                        ) : (
+                          <p className="text-[9px] font-bold text-slate-400 py-1.5">{t('common.unspecified')}</p>
+                        )}
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -404,7 +415,8 @@ export function CalendarView({
 
                       <div className="text-right shrink-0">
                         <span className="text-[10px] font-bold font-mono text-emerald-600 block">
-                          {getDaysRemaining(e.date) > 0 ? `T-${getDaysRemaining(e.date)}` : t('calendar.eventDay')}
+                          {/* 无日期:getDaysRemaining('') 是 NaN,NaN>0 为 false 会误显「公演日」→ 显示 — */}
+                          {!e.date ? '—' : getDaysRemaining(e.date) > 0 ? `T-${getDaysRemaining(e.date)}` : t('calendar.eventDay')}
                         </span>
                       </div>
                     </div>
