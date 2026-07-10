@@ -17,8 +17,12 @@ vi.mock('../../src/notifications', () => ({
   scheduleReminderTarget: vi.fn(async () => {}),
   cancelReminderTarget: vi.fn(async () => {}),
 }));
+vi.mock('../../src/sources/proxy', () => ({
+  isProxyConfigured: vi.fn(() => false),
+}));
 
 import * as sources from '../../src/sources';
+import * as proxy from '../../src/sources/proxy';
 import * as notifications from '../../src/notifications';
 import { useOshiStore } from '../../src/store/useOshiStore';
 
@@ -118,6 +122,31 @@ describe('useOshiStore — 持久化加载', () => {
     const { result } = render();
 
     expect(result.current.searchResultIds).toEqual(['eplus-1']);
+  });
+});
+
+describe('useOshiStore — Lawson 插件默认开关（分发化）', () => {
+  it('首启未配置代理 → Lawson 默认关闭（其余插件不受影响）', () => {
+    vi.mocked(proxy.isProxyConfigured).mockReturnValue(false);
+    const { result } = render();
+    const lawson = result.current.extensions.find(e => e.id === 'ext-lawson');
+    expect(lawson?.isEnabled).toBe(false);
+    expect(result.current.extensions.filter(e => e.id !== 'ext-lawson').every(e => e.isEnabled)).toBe(true);
+  });
+
+  it('首启已配置代理 → Lawson 默认开启', () => {
+    vi.mocked(proxy.isProxyConfigured).mockReturnValue(true);
+    const { result } = render();
+    expect(result.current.extensions.find(e => e.id === 'ext-lawson')?.isEnabled).toBe(true);
+  });
+
+  it('用户手动关掉 Lawson 后重载不再被强制打开（存量 bug 回归）', () => {
+    vi.mocked(proxy.isProxyConfigured).mockReturnValue(true);
+    localStorage.setItem('oshikatsu_extensions', JSON.stringify(
+      INITIAL_EXTENSIONS.map(e => e.id === 'ext-lawson' ? { ...e, isEnabled: false } : e),
+    ));
+    const { result } = render();
+    expect(result.current.extensions.find(e => e.id === 'ext-lawson')?.isEnabled).toBe(false);
   });
 });
 
@@ -398,7 +427,7 @@ describe('useOshiStore — 主题 / 重置 / 查看 / 清空 / 扩展合并', ()
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('ja');
   });
 
-  it('重载扩展：存储覆盖默认 + 强制安装/启用 Lawson', () => {
+  it('重载扩展：存储覆盖默认 + 强制安装 Lawson（但开关尊重用户选择）', () => {
     localStorage.setItem('oshikatsu_extensions', JSON.stringify([
       { id: 'ext-eplus', isEnabled: false },
       { id: 'ext-lawson', isEnabled: false, isInstalled: false },
@@ -408,6 +437,7 @@ describe('useOshiStore — 主题 / 重置 / 查看 / 清空 / 扩展合并', ()
     expect(result.current.extensions.find(e => e.id === 'ext-eplus')?.isEnabled).toBe(false);
     const lawson = result.current.extensions.find(e => e.id === 'ext-lawson')!;
     expect(lawson.isInstalled).toBe(true);
-    expect(lawson.isEnabled).toBe(true);
+    // 旧行为强制 isEnabled:true（用户关不掉 Lawson 的存量 bug）——现尊重持久化选择
+    expect(lawson.isEnabled).toBe(false);
   });
 });

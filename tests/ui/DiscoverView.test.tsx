@@ -118,6 +118,24 @@ describe('DiscoverView', () => {
     expect(container.querySelector('#searching-placeholder')).not.toBeNull();
   });
 
+  it('无搜索历史时显示冷启动示例词，点击填入搜索框（分发化）', () => {
+    const props = makeProps({ recentSearches: [] });
+    const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
+
+    const chips = container.querySelector('#search-term-chips');
+    expect(chips?.textContent).toContain('FRUITS ZIPPER');
+    fireEvent.click([...chips!.querySelectorAll('button')].find(b => b.textContent === 'YOASOBI')!);
+    expect((container.querySelector('#search-input-field') as HTMLInputElement).value).toBe('YOASOBI');
+  });
+
+  it('有搜索历史时示例词让位于历史', () => {
+    const props = makeProps({ recentSearches: ['乃木坂46'] });
+    const { container } = renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
+    const chips = container.querySelector('#search-term-chips');
+    expect(chips?.textContent).toContain('乃木坂46');
+    expect(chips?.textContent).not.toContain('YOASOBI');
+  });
+
   it('已截止的排在还能报名的后面（QA #7）', () => {
     const open = makeEvent({ id: 'eplus-open', ticketWindows: [{ id: 'w1', platform: 'eplus', roundType: '一般', applyStart: null, applyEnd: '2030-08-01T18:00:00+09:00' }] });
     const closed = makeEvent({ id: 'eplus-closed', ticketWindows: [{ id: 'w2', platform: 'eplus', roundType: '先行', applyStart: null, applyEnd: '2020-01-01T18:00:00+09:00' }] });
