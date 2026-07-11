@@ -16,7 +16,10 @@ import type { Locale, TFunction } from '../i18n/core';
 // Display an ISO (+09:00) instant in JST regardless of the viewer's timezone (R2 principle).
 function fmtJst(iso: string | null | undefined, t: TFunction, locale: Locale): string {
   if (!iso) return t('common.unspecified');
-  return new Date(iso).toLocaleString(locale, {
+  const parsed = new Date(iso);
+  // 抓取层垃圾日期串（如 'not-a-date'）→ toLocaleString 不抛但会显示英文 "Invalid Date"
+  if (Number.isNaN(parsed.getTime())) return t('common.unspecified');
+  return parsed.toLocaleString(locale, {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo',
   });
 }

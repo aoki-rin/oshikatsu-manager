@@ -21,11 +21,62 @@ export function platformLabel(platform: string): string {
   return PLATFORM_LABELS[platform] ?? platform;
 }
 
+// 抓取来的 time 形态不可信：''(空串不触发默认参!)/'0:00'(一位小时)/垃圾字符串都出现过，
+// 直接拼会产出 T00 之类的非法 DTSTART——单条坏 VEVENT 就能让日历导入器拒收整份文件（真机实测）。
+export function normalizeIcsTime(timeStr: string | null | undefined): string {
+  const m = (timeStr || '').match(/(\d{1,2}):(\d{2})/);
+  if (!m) return '00:00';
+  const hour = Math.min(23, Number(m[1]));
+  const minute = Math.min(59, Number(m[2]));
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
 // Convert simple YYYY-MM-DD and HH:MM to ICS-compatible local time string
 export function formatToIcsDate(dateStr: string, timeStr: string = '00:00'): string {
   const cleanDate = dateStr.replace(/-/g, '');
-  const cleanTime = timeStr.replace(/:/g, '');
+  const cleanTime = normalizeIcsTime(timeStr).replace(/:/g, '');
   return `${cleanDate}T${cleanTime}00`;
+}
+
+// RFC 5545 3.1：内容行超 75 字节须折行（CRLF + 单个空格续行）。日文 SUMMARY/DESCRIPTION
+// 一超就是几十字节，部分导入器会截断或报错。按 UTF-8 字节数折，且不切开多字节字符。
+export function foldIcsLine(line: string): string {
+  const LIMIT = 75;
+  if (Buffer_byteLength(line) <= LIMIT) return line;
+  const out: string[] = [];
+  let current = '';
+  let currentBytes = 0;
+  const budget = () => (out.length === 0 ? LIMIT : LIMIT - 1); // 续行行首有空格占 1 字节
+  for (const ch of line) {
+    const chBytes = Buffer_byteLength(ch);
+    if (currentBytes + chBytes > budget()) {
+      out.push(current);
+      current = ch;
+      currentBytes = chBytes;
+    } else {
+      current += ch;
+      currentBytes += chBytes;
+    }
+  }
+  if (current) out.push(current);
+  return out.map((part, i) => (i === 0 ? part : ` ${part}`)).join('\r\n');
+}
+
+// 浏览器/WebView 无 Buffer：TextEncoder 计字节。
+function Buffer_byteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+// 每个 VEVENT 的提前 1 天本地提醒（DISPLAY）。「导出到手机日历」的意义就是到点别错过——
+// 没有 VALARM 的日程只是记录，不是提醒。
+export function icsAlarmLines(summary: string): string[] {
+  return [
+    'BEGIN:VALARM',
+    'TRIGGER:-P1D',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${escapeIcs(summary)}`,
+    'END:VALARM',
+  ];
 }
 
 function escapeIcs(value: string): string {
@@ -69,7 +120,7 @@ function jstParts(date: Date): Record<string, string> {
 }
 
 function addMinutesAsJstIcs(dateStr: string, timeStr: string, minutes: number): string {
-  const source = new Date(`${dateStr}T${timeStr || '00:00'}:00+09:00`);
+  const source = new Date(`${dateStr}T${normalizeIcsTime(timeStr)}:00+09:00`);
   const shifted = new Date(source.getTime() + minutes * 60000);
   const parts = jstParts(shifted);
   return `${parts.year}${parts.month}${parts.day}T${parts.hour}${parts.minute}00`;
@@ -148,9 +199,10 @@ export function buildEventIcs(
     `LOCATION:${escapeIcs(event.venueName)}`,
     `URL:${event.purchaseUrl || event.originalUrl}`,
     'STATUS:CONFIRMED',
+    ...icsAlarmLines(target.summary),
     'END:VEVENT',
     'END:VCALENDAR',
-  ].join('\r\n');
+  ].map(foldIcsLine).join('\r\n');
 }
 
 // Generate an ICS string and trigger a download for a clean Japanese Live Event
@@ -164,8 +216,9 @@ export async function downloadEventIcs(
   await deliverIcs(`${event.artistName}_${targetDateType}_reminder.ics`, icsString);
 }
 
-// Generate dynamic ICS Calendar comprising all followed items
-export async function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFunction = defaultT): Promise<void> {
+// 纯构建函数（与 deliverIcs 解耦——此前 build/deliver 耦在一起，导出内容从未被完整单测，
+// 非法 DTSTART 混进真机导出文件才被发现）。空日程返回 ''（调用方跳过投递）。
+export function buildAllFollowedEventsIcs(events: ActivityEvent[], t: TFunction = defaultT): string {
   const icsLines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -197,6 +250,7 @@ export async function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: T
         `DESCRIPTION:${escapeIcs(event.description.slice(0, 100))}`,
         `LOCATION:${escapeIcs(event.venueName)}`,
         `URL:${event.purchaseUrl || event.originalUrl}`,
+        ...icsAlarmLines(t('ics.summary.allConcert', { title: event.title })),
         'END:VEVENT'
       );
     }
@@ -214,14 +268,21 @@ export async function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: T
         `SUMMARY:${escapeIcs(t('ics.summary.allLottery', { artist: event.artistName }))}`,
         `DESCRIPTION:${escapeIcs(t('ics.description.allLottery', { platform: event.platform, url: event.purchaseUrl || event.originalUrl }))}`,
         `LOCATION:${escapeIcs(event.venueName)}`,
+        ...icsAlarmLines(t('ics.summary.allLottery', { artist: event.artistName })),
         'END:VEVENT'
       );
     }
   });
 
+  if (!icsLines.some((line) => line === 'BEGIN:VEVENT')) return ''; // 没有任何可导出的日程
   icsLines.push('END:VCALENDAR');
+  return icsLines.map(foldIcsLine).join('\r\n');
+}
 
-  const icsString = icsLines.join('\r\n');
+// Generate dynamic ICS Calendar comprising all followed items
+export async function downloadAllFollowedEventsIcs(events: ActivityEvent[], t: TFunction = defaultT): Promise<void> {
+  const icsString = buildAllFollowedEventsIcs(events, t);
+  if (!icsString) return;
   await deliverIcs('oshikatsu_all_schedule.ics', icsString);
 }
 
