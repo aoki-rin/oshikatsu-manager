@@ -21,6 +21,7 @@
     "android": "cap open android"
   },
   "dependencies": {
+    "@capacitor-community/file-opener": "^8.0.1",
     "@capacitor/android": "^8.3.4",
     "@capacitor/app": "^8.1.0",
     "@capacitor/app-launcher": "^8.0.1",

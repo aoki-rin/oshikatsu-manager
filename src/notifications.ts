@@ -33,8 +33,12 @@ function formatJstIso(date: Date): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00+09:00`;
 }
 
-function minusHours(iso: string, hours: number): string {
-  return formatJstIso(new Date(new Date(iso).getTime() - hours * 3600000));
+function minusHours(iso: string, hours: number): string | null {
+  const base = new Date(iso);
+  // 抓取层垃圾日期串（如未解析干净的窗口时间）：formatToParts(Invalid Date) 会抛
+  // RangeError，且调用链直通详情页渲染 → 一条脏窗口就整页崩（毒性套件抓获）。
+  if (Number.isNaN(base.getTime())) return null;
+  return formatJstIso(new Date(base.getTime() - hours * 3600000));
 }
 
 function fromEventDate(event: ActivityEvent): string | null {
@@ -50,7 +54,8 @@ function target(
   scheduleAt: string | null | undefined,
   t: TFunction,
 ): ReminderTarget | null {
-  if (!scheduleAt) return null;
+  // 空值或垃圾日期串都不产出提醒目标——scheduleAt 会被 isPastReminder/原生排程直接消费
+  if (!scheduleAt || Number.isNaN(new Date(scheduleAt).getTime())) return null;
   const titleMap: Record<AlertType, string> = {
     lottery_start: t('notification.title.lottery_start'),
     lottery_end: t('notification.title.lottery_end'),
