@@ -408,7 +408,7 @@ export function CalendarView({
                             {e.platform}
                           </span>
                           <span className="text-[10px] text-slate-500">
-                            {e.venueName.slice(0, 15)}...
+                            {e.venueName.length > 15 ? `${e.venueName.slice(0, 15)}…` : (e.venueName || '—')}
                           </span>
                         </div>
                       </div>

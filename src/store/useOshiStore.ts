@@ -14,6 +14,21 @@ import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
 const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
 
+// 带自愈的持久化读取：单个 key 被写坏（存储满写半截/系统清理）时返回兜底值并清掉坏数据，
+// 而不是让整条加载链在第一个坏 key 处抛异常 → 之后所有状态静默丢失（深度 review 发现：
+// 此前 14 处裸 JSON.parse，任何一处坏数据都会打断 useEffect 加载）。
+function loadJson<T>(key: string, fallback: T): T {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    console.warn(`[store] 持久化数据损坏,已重置: ${key}`);
+    localStorage.removeItem(key);
+    return fallback;
+  }
+}
+
 function loadPersistedEvents(raw: string | null): ActivityEvent[] {
   if (!raw) return [];
   try {
@@ -87,20 +102,16 @@ export function useOshiStore(t: TFunction) {
     setEvents(loadedEvents);
     const validEventIds = new Set(loadedEvents.map(event => event.id));
 
-    const storedArtists = localStorage.getItem('oshikatsu_artists');
-    setArtists(storedArtists ? JSON.parse(storedArtists) : []);
+    setArtists(loadJson<Artist[]>('oshikatsu_artists', []));
+    setVenues(loadJson<Venue[]>('oshikatsu_venues', []));
 
-    const storedVenues = localStorage.getItem('oshikatsu_venues');
-    setVenues(storedVenues ? JSON.parse(storedVenues) : []);
-
-    const storedExtensions = localStorage.getItem('oshikatsu_extensions');
+    const storedExtensions = loadJson<ExtensionSource[] | null>('oshikatsu_extensions', null);
     if (storedExtensions) {
-      const stored = JSON.parse(storedExtensions) as ExtensionSource[];
       // 保证 Lawson 已「安装」（P0 解锁的遗留迁移），但开关尊重用户的持久化选择——
       // 旧逻辑每次启动强制 isEnabled:true，用户手动关掉也会被弹回（分发复审时发现的存量 bug）。
       const merged = INITIAL_EXTENSIONS.map(defaultExt => ({
         ...defaultExt,
-        ...stored.find(ext => ext.id === defaultExt.id),
+        ...storedExtensions.find(ext => ext.id === defaultExt.id),
       })).map(ext => ext.id === 'ext-lawson' ? { ...ext, isInstalled: true } : ext);
       setExtensions(merged);
     } else {
@@ -112,40 +123,20 @@ export function useOshiStore(t: TFunction) {
     }
 
     // 3. User relationships
-    const storedFavs = localStorage.getItem('oshikatsu_favorites');
-    if (storedFavs) {
-      // 收藏项可能是稳定键(新)、event.id(旧)或成员平台 id(别名)：任一仍指向现存事件即有效。
-      const validFavKeys = new Set(loadedEvents.flatMap(event => favoriteAliases(event)));
-      setFavorites((JSON.parse(storedFavs) as string[]).filter(id => validFavKeys.has(id)));
-    }
-
-    const storedFollowedArt = localStorage.getItem('oshikatsu_followed_artists');
-    if (storedFollowedArt) setFollowedArtists(JSON.parse(storedFollowedArt));
-
-    const storedFollowedVen = localStorage.getItem('oshikatsu_followed_venues');
-    if (storedFollowedVen) setFollowedVenues(JSON.parse(storedFollowedVen));
-
-    const storedLastViewed = localStorage.getItem('oshikatsu_last_viewed');
-    if (storedLastViewed) setLastViewed(JSON.parse(storedLastViewed));
-
-    const storedSourceStats = localStorage.getItem('oshikatsu_source_stats');
-    if (storedSourceStats) setSourceStats(JSON.parse(storedSourceStats));
+    // 收藏项可能是稳定键(新)、event.id(旧)或成员平台 id(别名)：任一仍指向现存事件即有效。
+    const validFavKeys = new Set(loadedEvents.flatMap(event => favoriteAliases(event)));
+    setFavorites(loadJson<string[]>('oshikatsu_favorites', []).filter(id => validFavKeys.has(id)));
+    setFollowedArtists(loadJson<string[]>('oshikatsu_followed_artists', []));
+    setFollowedVenues(loadJson<string[]>('oshikatsu_followed_venues', []));
+    setLastViewed(loadJson<Record<string, string>>('oshikatsu_last_viewed', {}));
+    setSourceStats(loadJson<Record<string, SourceStat>>('oshikatsu_source_stats', {}));
 
     // 4. Alerts and configurations
-    const storedAlerts = localStorage.getItem('oshikatsu_alerts');
-    if (storedAlerts) setActiveAlerts(JSON.parse(storedAlerts));
-
-    const storedResultIds = localStorage.getItem('oshikatsu_search_result_ids');
-    if (storedResultIds) setSearchResultIds((JSON.parse(storedResultIds) as string[]).filter(id => validEventIds.has(id)));
-
-    const storedReports = localStorage.getItem('oshikatsu_search_reports');
-    if (storedReports) setSearchReports(JSON.parse(storedReports));
-
-    const storedRecentSearches = localStorage.getItem('oshikatsu_recent_searches');
-    if (storedRecentSearches) setRecentSearches(JSON.parse(storedRecentSearches));
-
-    const storedSearchFetchedAt = localStorage.getItem('oshikatsu_search_fetched_at');
-    if (storedSearchFetchedAt) setSearchFetchedAt(JSON.parse(storedSearchFetchedAt));
+    setActiveAlerts(loadJson<NotificationAlert[]>('oshikatsu_alerts', []));
+    setSearchResultIds(loadJson<string[]>('oshikatsu_search_result_ids', []).filter(id => validEventIds.has(id)));
+    setSearchReports(loadJson<TicketSearchReport[]>('oshikatsu_search_reports', []));
+    setRecentSearches(loadJson<string[]>('oshikatsu_recent_searches', []));
+    setSearchFetchedAt(loadJson<string | null>('oshikatsu_search_fetched_at', null));
   }, []);
 
   // Save states helper whenever changes trigger

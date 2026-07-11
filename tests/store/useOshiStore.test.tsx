@@ -125,6 +125,20 @@ describe('useOshiStore — 持久化加载', () => {
   });
 });
 
+describe('useOshiStore — 持久化坏数据自愈（深度 review）', () => {
+  it('单个 key 损坏 → 该项回兜底且被清除,其余 key 照常加载', () => {
+    localStorage.setItem('oshikatsu_followed_artists', '{broken json!!');
+    localStorage.setItem('oshikatsu_recent_searches', JSON.stringify(['FRUITS ZIPPER']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { result } = render();
+
+    expect(result.current.followedArtists).toEqual([]); // 坏 key 兜底
+    expect(localStorage.getItem('oshikatsu_followed_artists')).toBeNull(); // 坏数据被清
+    expect(result.current.recentSearches).toEqual(['FRUITS ZIPPER']); // 后续 key 不受影响
+  });
+});
+
 describe('useOshiStore — Lawson 插件默认开关（分发化）', () => {
   it('首启未配置代理 → Lawson 默认关闭（其余插件不受影响）', () => {
     vi.mocked(proxy.isProxyConfigured).mockReturnValue(false);
