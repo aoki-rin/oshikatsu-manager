@@ -3,7 +3,7 @@
 // eplus 搜索页内嵌 application/json，data.record_list 直接含多轮受付。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { absoluteUrl, canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { absoluteUrl, canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, looksLikeAntiBot, normalizeLiveEvent } from './shared';
 
 const EPLUS_BASE = 'https://eplus.jp';
 const SEARCH_URL = 'https://eplus.jp/sf/search';
@@ -142,5 +142,9 @@ export async function searchEplus(artist: string): Promise<ActivityEvent[]> {
     readTimeout: 20000,
   });
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+  // 直连遇 403/503/挑战页 → 抛错(归 source error),别把拦截页解析成空数组被上层误标 empty(#72)。
+  if (looksLikeAntiBot(html, res.status).blocked) {
+    throw new Error('eplus 直连返回反爬/异常内容（配置代理或用平台跳转继续搜索）');
+  }
   return parseEplusSearch(html, artist).map((e) => toActivityEvent(e, artist));
 }
