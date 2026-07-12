@@ -12,6 +12,22 @@ html {
   color-scheme: light;
 }
 
+/* App 壳是 h-screen + 内部容器滚动，主文档永不滚动：锁死以杜绝
+   iOS 键盘/缩放残留的整页平移（真机实测：右侧冒出主文档滚动条）。 */
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 手机 App UI：所有滚动容器一律隐藏指示条（iOS overlay 滚动条在未标记
+   no-scrollbar 的容器上仍会闪现，逐个补类不如全局兜底）。 */
+*::-webkit-scrollbar {
+  display: none;
+}
+* {
+  scrollbar-width: none; /* Firefox */
+}
+
 /* Custom Mobile-app style utilities */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
