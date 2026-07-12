@@ -8,7 +8,7 @@ import { searchPlatformsStreaming, searchableTargets } from '../sources';
 import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
 import { isProxyConfigured } from '../sources/proxy';
 import { aggregateConcerts } from '../sources/aggregate';
-import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
+import { cancelAllReminders, cancelReminderTarget, scheduleReminderTarget } from '../notifications';
 import { favoriteAliases } from '../favorites';
 import { supportsLawsonSource } from '../platform';
 import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
@@ -165,7 +165,14 @@ export function useOshiStore(t: TFunction) {
   };
 
   // Reset database values
-  const handleResetDatabase = () => {
+  const handleResetDatabase = async () => {
+    // 先撤销系统已排程的全部通知,再清库(#71)。否则通知照弹、且记录已清 → 用户无从关闭。
+    // best-effort:取消失败(如权限/平台)不该挡住重置本身。
+    try {
+      await cancelAllReminders();
+    } catch (error: unknown) {
+      console.warn('[store] 重置时取消通知失败', error);
+    }
     const storedLocaleMode = localStorage.getItem(LOCALE_STORAGE_KEY);
     localStorage.clear();
     if (storedLocaleMode) localStorage.setItem(LOCALE_STORAGE_KEY, storedLocaleMode);

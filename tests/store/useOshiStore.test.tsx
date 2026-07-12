@@ -16,6 +16,7 @@ vi.mock('../../src/sources', () => ({
 vi.mock('../../src/notifications', () => ({
   scheduleReminderTarget: vi.fn(async () => {}),
   cancelReminderTarget: vi.fn(async () => {}),
+  cancelAllReminders: vi.fn(async () => {}),
 }));
 vi.mock('../../src/sources/proxy', () => ({
   isProxyConfigured: vi.fn(() => false),
@@ -426,19 +427,28 @@ describe('useOshiStore — 主题 / 重置 / 查看 / 清空 / 扩展合并', ()
     expect(JSON.parse(localStorage.getItem('oshikatsu_search_result_ids')!)).toEqual([]);
   });
 
-  it('handleResetDatabase 清库但保留语言设置', () => {
+  it('handleResetDatabase 清库但保留语言设置', async () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'ja');
     localStorage.setItem('oshikatsu_events', JSON.stringify([makeEvent()]));
     const { result } = render();
     expect(result.current.events).toHaveLength(1);
 
-    act(() => result.current.handleResetDatabase());
+    await act(async () => { await result.current.handleResetDatabase(); });
 
     expect(result.current.events).toEqual([]);
     expect(result.current.favorites).toEqual([]);
     expect(result.current.oshiColorId).toBe('pink');
     expect(localStorage.getItem('oshikatsu_events')).toBeNull();
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('ja');
+  });
+
+  it('handleResetDatabase 清库前先取消所有已排程系统通知（#71）', async () => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify([makeEvent()]));
+    const { result } = render();
+
+    await act(async () => { await result.current.handleResetDatabase(); });
+
+    expect(notifications.cancelAllReminders).toHaveBeenCalledOnce();
   });
 
   it('重载扩展：存储覆盖默认 + 强制安装 Lawson（但开关尊重用户选择）', () => {

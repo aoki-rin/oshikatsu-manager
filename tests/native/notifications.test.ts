@@ -7,14 +7,17 @@ const h = vi.hoisted(() => ({
   requestPermissions: vi.fn(async () => ({ display: 'granted' })),
   schedule: vi.fn(async (_opts: unknown) => {}),
   cancel: vi.fn(async (_opts: unknown) => {}),
+  getPending: vi.fn(async () => ({ notifications: [] as Array<{ id: number }> })),
 }));
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: h.isNativePlatform } }));
 vi.mock('@capacitor/local-notifications', () => ({
-  LocalNotifications: { requestPermissions: h.requestPermissions, schedule: h.schedule, cancel: h.cancel },
+  LocalNotifications: {
+    requestPermissions: h.requestPermissions, schedule: h.schedule, cancel: h.cancel, getPending: h.getPending,
+  },
 }));
 
-import { scheduleReminderTarget, cancelReminderTarget } from '../../src/notifications';
+import { scheduleReminderTarget, cancelReminderTarget, cancelAllReminders } from '../../src/notifications';
 
 const t = ((key: string) => key) as unknown as TFunction;
 const target: ReminderTarget = {
@@ -26,6 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.isNativePlatform.mockReturnValue(true);
   h.requestPermissions.mockResolvedValue({ display: 'granted' });
+  h.getPending.mockResolvedValue({ notifications: [] });
 });
 
 describe('notifications.scheduleReminderTarget', () => {
@@ -60,5 +64,26 @@ describe('notifications.cancelReminderTarget', () => {
   it('原生 → 调 cancel(id)', async () => {
     await cancelReminderTarget(1001);
     expect(h.cancel).toHaveBeenCalledWith({ notifications: [{ id: 1001 }] });
+  });
+});
+
+describe('notifications.cancelAllReminders (#71)', () => {
+  it('非原生 → 不查询也不取消', async () => {
+    h.isNativePlatform.mockReturnValue(false);
+    await cancelAllReminders();
+    expect(h.getPending).not.toHaveBeenCalled();
+    expect(h.cancel).not.toHaveBeenCalled();
+  });
+
+  it('原生且有 pending → 按系统实际 pending id 全量取消（含 UI 已失联的孤儿）', async () => {
+    h.getPending.mockResolvedValue({ notifications: [{ id: 11 }, { id: 22 }, { id: 33 }] });
+    await cancelAllReminders();
+    expect(h.cancel).toHaveBeenCalledWith({ notifications: [{ id: 11 }, { id: 22 }, { id: 33 }] });
+  });
+
+  it('原生但无 pending → 不调 cancel（避免空数组调用）', async () => {
+    h.getPending.mockResolvedValue({ notifications: [] });
+    await cancelAllReminders();
+    expect(h.cancel).not.toHaveBeenCalled();
   });
 });

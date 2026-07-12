@@ -143,3 +143,14 @@ export async function cancelReminderTarget(notificationId: number): Promise<void
   if (!Capacitor.isNativePlatform()) return;
   await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
 }
+
+// 取消本 App 排程的全部 pending 通知。以系统 getPending 为准（而非 activeAlerts）——
+// 这样连「UI 已失联的孤儿通知」（聚合 id 漂移/竞态产生，见 #73/#74）也能被清掉。
+// 「重置全部数据」必须先调它再清库，否则系统通知照弹且用户已无从关闭（#71）。
+export async function cancelAllReminders(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const pending = await LocalNotifications.getPending();
+  const ids = pending.notifications.map((n) => ({ id: n.id }));
+  if (ids.length === 0) return;
+  await LocalNotifications.cancel({ notifications: ids });
+}
