@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ExtensionSource, SourceStat } from '../types';
 import { Puzzle, Search } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
+import { supportsLawsonSource } from '../platform';
 
 interface ExtensionViewProps {
   extensions: ExtensionSource[];
@@ -21,8 +22,11 @@ export function ExtensionView({
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' });
 
+  // iOS 裁剪：Lawson 插件行整个不展示（搜索层已权威过滤，这里只是别让用户看到开了也没用的开关）
   const installedExtensions = extensions.filter(
-    e => e.isInstalled && e.name.toLowerCase().includes(extSearchText.toLowerCase())
+    e => e.isInstalled
+      && (e.platform !== 'Lawson Ticket' || supportsLawsonSource())
+      && e.name.toLowerCase().includes(extSearchText.toLowerCase())
   );
 
   return (

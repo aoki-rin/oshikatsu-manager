@@ -10,6 +10,7 @@ import { isProxyConfigured } from '../sources/proxy';
 import { aggregateConcerts } from '../sources/aggregate';
 import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
 import { favoriteAliases } from '../favorites';
+import { supportsLawsonSource } from '../platform';
 import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
 const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
@@ -117,8 +118,9 @@ export function useOshiStore(t: TFunction) {
     } else {
       // 首启默认：Lawson 只在配置了代理时才开——未配代理的设备（如分发给朋友的包）
       // 直连恒被反爬拒绝，开着只会让每次搜索多拖 8s + 一行「搜索失败」。插件页可手动开。
+      // iOS 恒关（src/platform.ts）：搜索层已权威过滤，这里保持存储状态一致。
       setExtensions(INITIAL_EXTENSIONS.map(ext =>
-        ext.id === 'ext-lawson' ? { ...ext, isEnabled: isProxyConfigured() } : ext,
+        ext.id === 'ext-lawson' ? { ...ext, isEnabled: isProxyConfigured() && supportsLawsonSource() } : ext,
       ));
     }
 

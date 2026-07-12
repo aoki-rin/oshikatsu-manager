@@ -7,6 +7,7 @@ import {
 import { downloadEventIcs, formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
 import { buildReminderTargets, isPastReminder } from '../notifications';
 import { openPurchaseUrl } from '../native';
+import { supportsCalendarExport } from '../platform';
 import { eventPlatforms } from '../sources/aggregate';
 import { primaryPurchaseUrl, isHttpUrl } from '../sources/shared';
 import { enrichEventWindows } from '../sources';
@@ -76,6 +77,8 @@ export function EventDetailModal({
 }: EventDetailModalProps) {
   const { locale, t } = useI18n();
   const numberFormatter = new Intl.NumberFormat(locale);
+  // iOS 无日历导出（src/platform.ts）：时间线上的 .ics 按钮整体不渲染
+  const canExportIcs = supportsCalendarExport();
   // Lazy detail enrichment (e.g. Pia precise 受付 dates) on open — search stays fast,
   // details load when you actually open the event (Mihon-style). Best-effort.
   const [event, setEvent] = useState<ActivityEvent>(eventProp);
@@ -406,12 +409,14 @@ export function EventDetailModal({
                     <div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-900">{t('detail.lotteryOpenTitle')}</span>
-                        <button 
-                          onClick={() => downloadEventIcs(event, 'lottery_end', t)}
-                          className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition"
-                        >
-                          {t('common.exportIcs')}
-                        </button>
+                        {canExportIcs && (
+                          <button
+                            onClick={() => downloadEventIcs(event, 'lottery_end', t)}
+                            className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition"
+                          >
+                            {t('common.exportIcs')}
+                          </button>
+                        )}
                       </div>
                       <p className="text-xs font-mono text-slate-605 mt-0.5">{t('detail.lotteryOpenDate', { date: event.timeline.lotteryStartDate })}</p>
                       <p className="text-[11px] text-slate-400">{t('detail.lotteryOpenBody')}</p>
@@ -426,12 +431,14 @@ export function EventDetailModal({
                     <div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-900">{t('detail.lotteryDeadlineTitle')}</span>
-                        <button 
-                          onClick={() => downloadEventIcs(event, 'lottery_end', t)}
-                          className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded hover:bg-amber-100 transition"
-                        >
-                          {t('common.exportIcs')}
-                        </button>
+                        {canExportIcs && (
+                          <button
+                            onClick={() => downloadEventIcs(event, 'lottery_end', t)}
+                            className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded hover:bg-amber-100 transition"
+                          >
+                            {t('common.exportIcs')}
+                          </button>
+                        )}
                       </div>
                       <p className="text-xs font-mono text-slate-605 mt-0.5">{t('detail.lotteryDeadlineDate', { date: event.timeline.lotteryEndDate })}</p>
                       <div className="flex items-center gap-1.5 mt-1">
@@ -455,12 +462,14 @@ export function EventDetailModal({
                         <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
                           {t('detail.paymentDeadlineTitle')}
                         </span>
-                        <button 
-                          onClick={() => downloadEventIcs(event, 'payment', t)}
-                          className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded hover:bg-rose-100 transition"
-                        >
-                          {t('common.exportIcs')}
-                        </button>
+                        {canExportIcs && (
+                          <button
+                            onClick={() => downloadEventIcs(event, 'payment', t)}
+                            className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded hover:bg-rose-100 transition"
+                          >
+                            {t('common.exportIcs')}
+                          </button>
+                        )}
                       </div>
                       <p className="text-xs font-mono text-slate-605 mt-0.5">{t('detail.paymentDeadlineDate', { date: event.timeline.paymentDeadlineDate })}</p>
                       <p className="text-[11px] text-slate-400">{t('detail.paymentDeadlineBody')}</p>
@@ -475,12 +484,14 @@ export function EventDetailModal({
                     <div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-900">{t('detail.generalSaleTitle')}</span>
-                        <button 
-                          onClick={() => downloadEventIcs(event, 'concert', t)}
-                          className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded hover:bg-emerald-110 transition"
-                        >
-                          {t('common.exportIcs')}
-                        </button>
+                        {canExportIcs && (
+                          <button
+                            onClick={() => downloadEventIcs(event, 'concert', t)}
+                            className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded hover:bg-emerald-110 transition"
+                          >
+                            {t('common.exportIcs')}
+                          </button>
+                        )}
                       </div>
                       <p className="text-xs font-mono text-slate-650 mt-0.5">{t('detail.generalSaleDate', { date: event.timeline.generalStartDate })}</p>
                       <p className="text-[11px] text-slate-400">{t('detail.generalSaleBody')}</p>

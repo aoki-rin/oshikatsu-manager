@@ -5,6 +5,7 @@ import { formatDisplayDate, getDaysRemaining, platformLabel, primaryDeadline, so
 import { openPurchaseUrl } from '../native';
 import { eventPlatforms } from '../sources/aggregate';
 import { isFavorited } from '../favorites';
+import { supportsLawsonSource } from '../platform';
 import { AppSelect } from './AppSelect';
 import { useI18n } from '../i18n/I18nProvider';
 import type { Locale, TFunction } from '../i18n/core';
@@ -259,7 +260,9 @@ export function DiscoverView({
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
-            {['Ticket Pia', 'eplus', 'TicketDive', 'LivePocket', 'Lawson Ticket'].map((platName) => {
+            {['Ticket Pia', 'eplus', 'TicketDive', 'LivePocket', 'Lawson Ticket']
+              .filter((platName) => platName !== 'Lawson Ticket' || supportsLawsonSource())
+              .map((platName) => {
               const config = extensions.find(ext => ext.platform === platName);
               const isActive = config?.isEnabled && config?.isInstalled;
               return (

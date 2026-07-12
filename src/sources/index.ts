@@ -9,6 +9,7 @@ import { searchLawson } from './lawson';
 import { buildPlatformSearchUrl, dedupeEvents, platformSearchTimeoutMs, withPlatformTimeout, type TicketSource } from './shared';
 import { aggregateConcerts, eventPlatforms } from './aggregate';
 import { isProxyConfigured, searchViaProxy, searchWithProxyFallback } from './proxy';
+import { supportsLawsonSource, type AppPlatform } from '../platform';
 
 // platform 名（与 ExtensionSource.platform / TicketPlatform 对齐）→ 插件 search
 const REGISTRY: Record<TicketPlatform, TicketSource> = {
@@ -24,9 +25,14 @@ export function hasPlugin(platform: string): boolean {
 }
 
 // 解析出本次要搜索的平台（'All' → 全部已注册插件；否则只取有插件的）。
-export function searchableTargets(activePlatforms: string[]): TicketPlatform[] {
+// iOS 裁剪：Lawson 在此权威过滤（src/platform.ts）——代理/直连两条路径都从这里取目标，
+// 所以下游把 targets（显式列表）而非 activePlatforms（可能含 'All'）传给代理，
+// 防止服务端替 iOS 端搜 Lawson。
+export function searchableTargets(activePlatforms: string[], platform?: AppPlatform): TicketPlatform[] {
   const configured = activePlatforms.includes('All') ? Object.keys(REGISTRY) : activePlatforms;
-  return configured.filter((p): p is TicketPlatform => p in REGISTRY);
+  return configured
+    .filter((p): p is TicketPlatform => p in REGISTRY)
+    .filter((p) => p !== 'Lawson Ticket' || supportsLawsonSource(platform));
 }
 
 export interface StreamMeta {
@@ -52,10 +58,11 @@ export async function searchPlatformsStreaming(
   if (!q || targets.length === 0) return;
 
   // 代理优先（未配置代理时 searchViaProxy 返回 null → 走客户端流式）
+  // 传 targets 而非 activePlatforms：平台裁剪（iOS 无 Lawson）对代理路径同样生效。
   let proxyResult: TicketSearchResult | null = null;
   let proxyDegraded = false;
   try {
-    proxyResult = await searchViaProxy(q, activePlatforms);
+    proxyResult = await searchViaProxy(q, targets);
   } catch {
     proxyResult = null;
     // 配置了代理但请求失败 = 降级（Tailscale/代理进程没开等）。通知 UI 明示，别静默退化（QA #2）。
@@ -111,10 +118,7 @@ export interface AggregateResult {
 // App 内直连兜底：对所有【已启用且有插件】的平台并发搜索，聚合去重
 export async function searchClientPlatforms(query: string, activePlatforms: string[]): Promise<TicketSearchResult & AggregateResult> {
   const q = query.trim();
-  const configured = activePlatforms.includes('All')
-    ? Object.keys(REGISTRY)
-    : activePlatforms;
-  const targets = configured.filter((p): p is TicketPlatform => p in REGISTRY);
+  const targets = searchableTargets(activePlatforms);
   if (!q || targets.length === 0) return { events: [], reports: [], perPlatform: [] };
 
   const settled = await Promise.allSettled(targets.map((p) => withPlatformTimeout(REGISTRY[p].search(q), platformSearchTimeoutMs(p), p)));
@@ -164,7 +168,8 @@ export async function searchClientPlatforms(query: string, activePlatforms: stri
 // 各平台原始结果合并后，做跨平台「同一场演出」聚合（同艺人+日期+会场 → 一张卡，多平台窗口）。
 // 注意：reports 仍是各平台「原始」命中数（聚合只影响展示用的 events 列表）。
 export async function searchAllPlatforms(query: string, activePlatforms: string[]): Promise<TicketSearchResult & AggregateResult> {
-  const result = await searchWithProxyFallback(query, activePlatforms, searchClientPlatforms);
+  // 先解析成显式目标列表（含 iOS 的 Lawson 裁剪），代理和客户端兜底吃到同一份。
+  const result = await searchWithProxyFallback(query, searchableTargets(activePlatforms), searchClientPlatforms);
   return {
     ...result,
     events: aggregateConcerts(result.events),
