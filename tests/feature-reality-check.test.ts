@@ -70,6 +70,19 @@ describe('提醒目标现实性', () => {
     const targets = buildReminderTargets(makeEvent({ ticketWindows: [], timeline: {} }));
     assert.ok(targets.some((target) => target.type === 'concert'), '仅有日期却建不出开演提醒');
   });
+
+  // #75：文案是「抽选截止前24小时」，但 fallback 路径此前排在截止当天 23:59（0 提前量），
+  // 名不副实。fallback 的 lottery_end 必须与窗口路径一样提前 24h。
+  it('fallback 抽選締切提醒排在截止前 24h（与文案自洽，#75）', () => {
+    const targets = buildReminderTargets(makeEvent({
+      ticketWindows: [],
+      timeline: { lotteryEndDate: '2026-08-10' },
+    }));
+    const lotteryEnd = targets.find((target) => target.type === 'lottery_end');
+    assert.ok(lotteryEnd, 'fallback 应产出 lottery_end 提醒');
+    // 截止 2026-08-10T23:59+09:00 → 提前 24h = 2026-08-09T23:59+09:00
+    assert.equal(lotteryEnd!.scheduleAt, '2026-08-09T23:59:00+09:00');
+  });
 });
 
 describe('无日期事件的传播链（为何上面的坑可达）', () => {

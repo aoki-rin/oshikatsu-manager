@@ -92,7 +92,8 @@ export function buildReminderTargets(event: ActivityEvent, t: TFunction = defaul
   const windowTargets = (event.ticketWindows || []).flatMap((window) => targetsFromWindow(event, window, t));
   const fallbackTargets = [
     target(event, 'event', 'lottery_start', t('notification.fallback.lotteryStart'), event.timeline.lotteryStartDate ? `${event.timeline.lotteryStartDate}T10:00:00+09:00` : null, t),
-    target(event, 'event', 'lottery_end', t('notification.fallback.lotteryEnd'), event.timeline.lotteryEndDate ? `${event.timeline.lotteryEndDate}T23:59:00+09:00` : null, t),
+    // 文案是「抽选截止前24小时」→ 必须减 24h,与窗口路径 minusHours(applyEnd,24) 对齐(#75)。
+    target(event, 'event', 'lottery_end', t('notification.fallback.lotteryEnd'), event.timeline.lotteryEndDate ? minusHours(`${event.timeline.lotteryEndDate}T23:59:00+09:00`, 24) : null, t),
     target(event, 'event', 'general_start', t('notification.fallback.generalStart'), event.timeline.generalStartDate ? `${event.timeline.generalStartDate}T08:00:00+09:00` : null, t),
     target(event, 'event', 'payment_deadline', t('notification.fallback.paymentDeadline'), event.timeline.paymentDeadlineDate ? `${event.timeline.paymentDeadlineDate}T20:00:00+09:00` : null, t),
   ].filter(Boolean) as ReminderTarget[];
