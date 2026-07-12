@@ -387,6 +387,22 @@ describe('useOshiStore — 提醒开关', () => {
     expect(notifications.cancelReminderTarget).toHaveBeenCalledWith(2002);
     expect(result.current.activeAlerts).toEqual([]);
   });
+
+  it('并发开启两个不同提醒 → 两者都进入 activeAlerts 且都持久化（#73 竞态）', async () => {
+    vi.mocked(notifications.scheduleReminderTarget).mockResolvedValue(undefined);
+    const { result } = render();
+    // 从同一初始快照并发触发：闭包版会用同一份旧 activeAlerts=[]，后写覆盖先写 → 只剩 1 条。
+    const toggle = result.current.handleToggleAlert;
+    await act(async () => {
+      await Promise.all([
+        toggle(makeTarget({ notificationId: 3001 })),
+        toggle(makeTarget({ notificationId: 3002 })),
+      ]);
+    });
+
+    expect(result.current.activeAlerts.map(a => a.notificationId).sort()).toEqual([3001, 3002]);
+    expect(JSON.parse(localStorage.getItem('oshikatsu_alerts')!)).toHaveLength(2);
+  });
 });
 
 describe('useOshiStore — 扩展开关', () => {

@@ -400,40 +400,50 @@ export function useOshiStore(t: TFunction) {
   };
 
   // Alert Management Add/Remove alarm indicators
+  // 副作用(排程/取消)先 await 完成,状态写入一律走函数式更新 setActiveAlerts(prev=>...):
+  // 快速连开多个提醒时,闭包捕获的旧 activeAlerts 会让后写覆盖先写 → 丢失的那条成为
+  // UI 管不到的孤儿系统通知(#73)。函数式更新 + 按 notificationId 幂等去重根除该竞态。
   const handleToggleAlert = async (target: ReminderTarget) => {
-    const existingIndex = activeAlerts.findIndex(a => a.notificationId === target.notificationId);
-    let updated;
-    if (existingIndex > -1) {
+    const isRemoving = activeAlerts.some(a => a.notificationId === target.notificationId);
+    if (isRemoving) {
       await cancelReminderTarget(target.notificationId);
-      updated = activeAlerts.filter((_, idx) => idx !== existingIndex);
+      setActiveAlerts(prev => {
+        const next = prev.filter(a => a.notificationId !== target.notificationId);
+        saveToStorage('oshikatsu_alerts', next);
+        return next;
+      });
       triggerToast(t('toast.reminderRemovedTitle'), t('toast.reminderRemovedBody'));
-    } else {
-      try {
-        await scheduleReminderTarget(target, t);
-      } catch (error: unknown) {
-        triggerToast(t('toast.reminderDisabledTitle'), error instanceof Error ? error.message : t('toast.reminderDisabledBody'));
-        return;
-      }
-
-      const newAlert: NotificationAlert = {
-        id: `alert-${target.notificationId}`,
-        eventId: target.eventId,
-        eventTitle: target.eventTitle,
-        platform: target.platform,
-        type: target.type,
-        alertDate: target.scheduleAt.slice(0, 10),
-        isTriggered: false,
-        windowId: target.windowId,
-        scheduleAt: target.scheduleAt,
-        notificationId: target.notificationId,
-      };
-
-      updated = [...activeAlerts, newAlert];
-      triggerToast(t('toast.reminderAddedTitle'), t('toast.reminderAddedBody', { label: target.label }));
+      return;
     }
 
-    setActiveAlerts(updated);
-    saveToStorage('oshikatsu_alerts', updated);
+    try {
+      await scheduleReminderTarget(target, t);
+    } catch (error: unknown) {
+      triggerToast(t('toast.reminderDisabledTitle'), error instanceof Error ? error.message : t('toast.reminderDisabledBody'));
+      return;
+    }
+
+    const newAlert: NotificationAlert = {
+      id: `alert-${target.notificationId}`,
+      eventId: target.eventId,
+      eventTitle: target.eventTitle,
+      platform: target.platform,
+      type: target.type,
+      alertDate: target.scheduleAt.slice(0, 10),
+      isTriggered: false,
+      windowId: target.windowId,
+      scheduleAt: target.scheduleAt,
+      notificationId: target.notificationId,
+    };
+
+    setActiveAlerts(prev => {
+      // 幂等:并发/重复触发已插入同 id 时不再追加(系统侧 schedule 同 id 覆盖,不产孤儿)
+      if (prev.some(a => a.notificationId === newAlert.notificationId)) return prev;
+      const next = [...prev, newAlert];
+      saveToStorage('oshikatsu_alerts', next);
+      return next;
+    });
+    triggerToast(t('toast.reminderAddedTitle'), t('toast.reminderAddedBody', { label: target.label }));
   };
 
   // Source plugin enable/disable switches (controls which platforms search)
