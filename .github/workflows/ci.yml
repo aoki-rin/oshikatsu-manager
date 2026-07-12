@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# 最小权限:所有 job 只读代码。需要写权限的 job(目前没有)自行按 job 提升。
+permissions:
+  contents: read
+
+# PR 上连续推送时取消旧 run(省排队、快反馈);main 的 post-merge 保险不取消、跑全。
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   unit:
     name: tsc + vitest (coverage gate)
@@ -14,7 +23,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Install deps
         run: npm ci
@@ -31,7 +40,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Install deps
         run: npm ci
@@ -40,6 +49,9 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          # lock 变更时先回退旧浏览器缓存(版本没变就直接命中),避免全量重下 ~1 分钟
+          restore-keys: |
+            playwright-${{ runner.os }}-
       - name: Install Playwright Chromium + system deps
         run: npx playwright install --with-deps chromium
       - name: E2E tests
@@ -52,3 +64,51 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  # android 原生工程可构建性冒烟(path-filtered):
+  # 此前 android/ 是 CI 盲区——#67(file-opener gradle 接线漏提交)这类问题只能真机装机才发现。
+  # 只在 android/capacitor 配置/依赖变更时才真正构建(web 全量走 build+sync,正是 #67 的坑面);
+  # 未命中时所有重步骤跳过,几秒结束,平时 PR 零成本。
+  android:
+    name: android assembleDebug (path-filtered)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Detect android-relevant changes
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "hit=true" >> "$GITHUB_OUTPUT" # 拿不到基准(强推/首推)宁可多跑一次
+          elif git diff --name-only "$BASE" HEAD | grep -qE '^android/|^capacitor\.config\.ts$|^package(-lock)?\.json$'; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v5
+        if: steps.changed.outputs.hit == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        if: steps.changed.outputs.hit == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Build web + cap sync
+        if: steps.changed.outputs.hit == 'true'
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+      - name: assembleDebug
+        if: steps.changed.outputs.hit == 'true'
+        run: cd android && ./gradlew assembleDebug --no-daemon
