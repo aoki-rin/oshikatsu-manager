@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { ActivityEvent, AlertType, ReminderTarget, TicketWindow } from './types';
+import { stableConcertKey } from './sources/aggregate';
 import { createTranslator, type TFunction } from './i18n/core';
 
 const defaultT = createTranslator('zh-CN');
@@ -13,8 +14,9 @@ function hashPositive(value: string): number {
   return Math.abs(hash) % 2147483647 || 1;
 }
 
-export function makeReminderNotificationId(eventId: string, windowId: string, type: AlertType): number {
-  return hashPositive(`${eventId}:${windowId}:${type}`);
+// keyBase 应传「跨聚合稳定的并发键」(stableConcertKey),而非易变的 event.id(#74)。
+export function makeReminderNotificationId(keyBase: string, windowId: string, type: AlertType): number {
+  return hashPositive(`${keyBase}:${windowId}:${type}`);
 }
 
 function formatJstIso(date: Date): string {
@@ -72,7 +74,7 @@ function target(
     type,
     label,
     scheduleAt,
-    notificationId: makeReminderNotificationId(event.id, windowId, type),
+    notificationId: makeReminderNotificationId(stableConcertKey(event), windowId, type),
     title: `【${titleMap[type]}】${event.artistName}`,
     body: t('notification.body', { title: event.title, platform: event.platform }),
   };
