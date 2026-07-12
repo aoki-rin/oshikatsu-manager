@@ -22,7 +22,7 @@
 聚合显示 → 点开事件 → 多轮 ticket_window（JST）→ 申込/官方页跳转 → .ics / 本地通知
 ```
 - **不配官网 URL**：按艺人名搜各平台（像 Mihon 搜漫画源），不是为每次巡演配置网址。
-- **代理优先，App 内兜底**：配置 `VITE_TICKET_PROXY_BASE_URL` 时走代理；未配置或代理不可达时，Android 包继续用 CapacitorHttp 直连搜索。
+- **代理优先，App 内兜底**：配置 `VITE_TICKET_PROXY_BASE_URL` 时走代理；未配置或代理不可达时，Android/iOS 包继续用 CapacitorHttp 直连搜索。
 - **ExtensionView** = 启用/停用哪些平台规则，并查看代理/解析状态。
 - 时间统一 JST（`+09:00`），`.ics` 用 `TZID=Asia/Tokyo`，海外时区不偏。
 
@@ -36,7 +36,7 @@
 
 ## 当前状态
 - ✅ **eplus 平台搜索插件**（`src/sources/eplus.ts`）：search(艺人) → 事件 + 多轮受付窗口（プレオーダー/抽選/先着, JST）。通用、非写死。
-- ✅ **Capacitor Android** 已搭好（`capacitor.config.ts`，CapacitorHttp 已启用）；Android 用 Android Studio JBR 21 构建，真机调试（自用，仅 Android）。
+- ✅ **Capacitor Android + iOS** 已搭好（`capacitor.config.ts`，CapacitorHttp 已启用）；Android 用 Android Studio JBR 21、iOS 用 Xcode 构建，真机调试（自用）。iOS 版按能力裁剪：无日历导出、无 Lawson 搜票，见 [ADR-0004](docs/adr/0004-ios-scope-trim.md)。
 - ✅ R3 多轮 `ticket_window` 类型 + EventDetailModal 多轮渲染，搜索结果会写入本地缓存。
 - ✅ 搜索框已接入平台实时搜索，代理优先、CapacitorHttp 直连兜底。
 - ✅ Pia / eplus / LivePocket / TicketDive / Lawson 已接入统一 source/report；Lawson 失败会明确给出ローチケ跳转。
@@ -90,7 +90,11 @@ mv .env .env.bak \
 2. `npm run android` 打开 Android Studio → 顶部设备下拉选你的手机 → ▶ Run。
 - **Gradle JDK 自动用 Android Studio 自带的 JBR 21**（满足 Capacitor 8），命令行的 Java 11 不影响。
 - 改完前端：`npm run cap:build` 再在 Studio Run（或配 Live Reload，见 Capacitor 文档）。
-- 仅 Android（iOS 工程已移除，纯自用安卓）。
+
+**iOS 真机调试**（Xcode，自用）：
+1. `npm run cap:build` 后 `npm run ios` 打开 Xcode 工程。
+2. 顶部设备下拉选你的 iPhone → ▶ Run。首次装机需在 iPhone 设置 → 通用 → VPN与设备管理 里信任开发者证书。
+- iOS 能力裁剪（无日历导出 / 无 Lawson）见 [ADR-0004](docs/adr/0004-ios-scope-trim.md)；代理为明文 http，Info.plist 已放开 ATS（自用）。
 
 ## 测试
 分层自动化测试（Vitest + Testing Library + Playwright）。每个 PR 经 GitHub Actions 跑 `tsc` + 覆盖率门禁 + E2E。
