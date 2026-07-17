@@ -138,6 +138,17 @@ describe('useOshiStore — 持久化坏数据自愈（深度 review）', () => {
     expect(localStorage.getItem('oshikatsu_followed_artists')).toBeNull(); // 坏数据被清
     expect(result.current.recentSearches).toEqual(['FRUITS ZIPPER']); // 后续 key 不受影响
   });
+
+  it('持久化事件缺 timeline 字段 → 加载时补全为 {}(渲染面十余处裸访问 e.timeline.x)', () => {
+    const legacy = makeEvent({ id: 'eplus-legacy' }) as Partial<ActivityEvent>;
+    delete legacy.timeline;
+    localStorage.setItem('oshikatsu_events', JSON.stringify([legacy]));
+
+    const { result } = render();
+
+    expect(result.current.events).toHaveLength(1);
+    expect(result.current.events[0].timeline).toEqual({});
+  });
 });
 
 describe('useOshiStore — Lawson 插件默认开关（分发化）', () => {

@@ -3,6 +3,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 締切提醒必须走精确闹钟：不声明时 Android 12+ canScheduleExactAlarms() 恒 false，
+         local-notifications 插件静默降级为 setAndAllowWhileIdle（非精确），Doze 下可延迟很久。
+         SCHEDULE_EXACT_ALARM：Android 12/13 声明即授（用户可撤）；
+         USE_EXACT_ALARM：Android 14+ 自动授予（闹钟/日历类 app 专用，本 app 自分发不受 Play 政策限制）。 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"

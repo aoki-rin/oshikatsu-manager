@@ -35,12 +35,23 @@ function formatJstIso(date: Date): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00+09:00`;
 }
 
-function minusHours(iso: string, hours: number): string | null {
-  const base = new Date(iso);
-  // 抓取层垃圾日期串（如未解析干净的窗口时间）：formatToParts(Invalid Date) 会抛
-  // RangeError，且调用链直通详情页渲染 → 一条脏窗口就整页崩（毒性套件抓获）。
-  if (Number.isNaN(base.getTime())) return null;
-  return formatJstIso(new Date(base.getTime() - hours * 3600000));
+// 申込締切提醒的时刻选择：常规提前 24h;已不足 24h 时退化为提前 1h（临近締切恰是最需要
+// 提醒的时段,旧逻辑固定 −24h → 一旦已过就被 isPastReminder 过滤,开关整个消失）;
+// 不足 1h / 締切已过 / 垃圾日期串（formatToParts(Invalid Date) 会抛 RangeError,
+// 调用链直通详情页渲染,毒性套件抓获过）→ null,不产出提醒目标。
+interface DeadlineReminder {
+  scheduleAt: string;
+  hoursBefore: 24 | 1; // 消费方据此选 label 文案（「前24小时」vs「前1小时」）
+}
+
+function deadlineReminder(applyEndIso: string, now: Date): DeadlineReminder | null {
+  const end = new Date(applyEndIso).getTime();
+  if (Number.isNaN(end) || end <= now.getTime()) return null;
+  for (const hoursBefore of [24, 1] as const) {
+    const at = end - hoursBefore * 3600000;
+    if (at > now.getTime()) return { scheduleAt: formatJstIso(new Date(at)), hoursBefore };
+  }
+  return null;
 }
 
 function fromEventDate(event: ActivityEvent): string | null {
@@ -80,22 +91,24 @@ function target(
   };
 }
 
-function targetsFromWindow(event: ActivityEvent, window: TicketWindow, t: TFunction): ReminderTarget[] {
+function targetsFromWindow(event: ActivityEvent, window: TicketWindow, t: TFunction, now: Date): ReminderTarget[] {
+  const endReminder = window.applyEnd ? deadlineReminder(window.applyEnd, now) : null;
   const result = [
     target(event, window.id, 'lottery_start', t('notification.window.lotteryStart', { round: window.roundType }), window.applyStart, t),
-    target(event, window.id, 'lottery_end', t('notification.window.lotteryEnd', { round: window.roundType }), window.applyEnd ? minusHours(window.applyEnd, 24) : null, t),
+    target(event, window.id, 'lottery_end', t(endReminder?.hoursBefore === 1 ? 'notification.window.lotteryEndSoon' : 'notification.window.lotteryEnd', { round: window.roundType }), endReminder?.scheduleAt ?? null, t),
     target(event, window.id, 'result_start', t('notification.window.resultStart', { round: window.roundType }), window.resultStart, t),
     target(event, window.id, 'payment_deadline', t('notification.window.paymentDeadline', { round: window.roundType }), window.resultEnd, t),
   ].filter(Boolean) as ReminderTarget[];
   return result;
 }
 
-export function buildReminderTargets(event: ActivityEvent, t: TFunction = defaultT): ReminderTarget[] {
-  const windowTargets = (event.ticketWindows || []).flatMap((window) => targetsFromWindow(event, window, t));
+export function buildReminderTargets(event: ActivityEvent, t: TFunction = defaultT, now: Date = new Date()): ReminderTarget[] {
+  const windowTargets = (event.ticketWindows || []).flatMap((window) => targetsFromWindow(event, window, t, now));
+  const fallbackEnd = event.timeline.lotteryEndDate ? deadlineReminder(`${event.timeline.lotteryEndDate}T23:59:00+09:00`, now) : null;
   const fallbackTargets = [
     target(event, 'event', 'lottery_start', t('notification.fallback.lotteryStart'), event.timeline.lotteryStartDate ? `${event.timeline.lotteryStartDate}T10:00:00+09:00` : null, t),
-    // 文案是「抽选截止前24小时」→ 必须减 24h,与窗口路径 minusHours(applyEnd,24) 对齐(#75)。
-    target(event, 'event', 'lottery_end', t('notification.fallback.lotteryEnd'), event.timeline.lotteryEndDate ? minusHours(`${event.timeline.lotteryEndDate}T23:59:00+09:00`, 24) : null, t),
+    // 提前 24h 的语义(#75)由 deadlineReminder 承接,并叠加临近締切的 −1h 兜底。
+    target(event, 'event', 'lottery_end', t(fallbackEnd?.hoursBefore === 1 ? 'notification.fallback.lotteryEndSoon' : 'notification.fallback.lotteryEnd'), fallbackEnd?.scheduleAt ?? null, t),
     target(event, 'event', 'general_start', t('notification.fallback.generalStart'), event.timeline.generalStartDate ? `${event.timeline.generalStartDate}T08:00:00+09:00` : null, t),
     target(event, 'event', 'payment_deadline', t('notification.fallback.paymentDeadline'), event.timeline.paymentDeadlineDate ? `${event.timeline.paymentDeadlineDate}T20:00:00+09:00` : null, t),
   ].filter(Boolean) as ReminderTarget[];

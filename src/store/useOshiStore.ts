@@ -39,6 +39,9 @@ function loadPersistedEvents(raw: string | null): ActivityEvent[] {
       .map(event => ({
         ...event,
         sourceKind: event.sourceKind || 'live',
+        // 旧 schema/半截写入可能缺 timeline：渲染面与提醒构建有十余处 e.timeline.x 裸访问，
+        // 一条缺字段的持久化事件就整页崩。加载边界统一补全（搜索链路由 normalizeLiveEvent 保证）。
+        timeline: event.timeline || {},
       }));
   } catch {
     return [];
