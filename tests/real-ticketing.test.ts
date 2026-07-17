@@ -231,7 +231,8 @@ describe('local notification reminders', () => {
   });
 
   it('builds reminder targets from real ticket windows', () => {
-    const targets = buildReminderTargets(sampleEvent);
+    // 显式 now（締切前）：lottery_end 目标只在締切未过时产出，隐式真实时钟会让本测试随日期漂移。
+    const targets = buildReminderTargets(sampleEvent, undefined, new Date('2026-05-20T00:00:00+09:00'));
 
     assert.deepEqual(
       targets.map((target) => target.type),
