@@ -8,8 +8,9 @@ import { searchPlatformsStreaming, searchableTargets } from '../sources';
 import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
 import { isProxyConfigured } from '../sources/proxy';
 import { aggregateConcerts } from '../sources/aggregate';
-import { cancelReminderTarget, scheduleReminderTarget } from '../notifications';
+import { cancelAllReminders, cancelReminderTarget, scheduleReminderTarget } from '../notifications';
 import { favoriteAliases } from '../favorites';
+import { supportsLawsonSource } from '../platform';
 import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
 const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
@@ -120,8 +121,9 @@ export function useOshiStore(t: TFunction) {
     } else {
       // 首启默认：Lawson 只在配置了代理时才开——未配代理的设备（如分发给朋友的包）
       // 直连恒被反爬拒绝，开着只会让每次搜索多拖 8s + 一行「搜索失败」。插件页可手动开。
+      // iOS 恒关（src/platform.ts）：搜索层已权威过滤，这里保持存储状态一致。
       setExtensions(INITIAL_EXTENSIONS.map(ext =>
-        ext.id === 'ext-lawson' ? { ...ext, isEnabled: isProxyConfigured() } : ext,
+        ext.id === 'ext-lawson' ? { ...ext, isEnabled: isProxyConfigured() && supportsLawsonSource() } : ext,
       ));
     }
 
@@ -166,7 +168,14 @@ export function useOshiStore(t: TFunction) {
   };
 
   // Reset database values
-  const handleResetDatabase = () => {
+  const handleResetDatabase = async () => {
+    // 先撤销系统已排程的全部通知,再清库(#71)。否则通知照弹、且记录已清 → 用户无从关闭。
+    // best-effort:取消失败(如权限/平台)不该挡住重置本身。
+    try {
+      await cancelAllReminders();
+    } catch (error: unknown) {
+      console.warn('[store] 重置时取消通知失败', error);
+    }
     const storedLocaleMode = localStorage.getItem(LOCALE_STORAGE_KEY);
     localStorage.clear();
     if (storedLocaleMode) localStorage.setItem(LOCALE_STORAGE_KEY, storedLocaleMode);
@@ -394,40 +403,50 @@ export function useOshiStore(t: TFunction) {
   };
 
   // Alert Management Add/Remove alarm indicators
+  // 副作用(排程/取消)先 await 完成,状态写入一律走函数式更新 setActiveAlerts(prev=>...):
+  // 快速连开多个提醒时,闭包捕获的旧 activeAlerts 会让后写覆盖先写 → 丢失的那条成为
+  // UI 管不到的孤儿系统通知(#73)。函数式更新 + 按 notificationId 幂等去重根除该竞态。
   const handleToggleAlert = async (target: ReminderTarget) => {
-    const existingIndex = activeAlerts.findIndex(a => a.notificationId === target.notificationId);
-    let updated;
-    if (existingIndex > -1) {
+    const isRemoving = activeAlerts.some(a => a.notificationId === target.notificationId);
+    if (isRemoving) {
       await cancelReminderTarget(target.notificationId);
-      updated = activeAlerts.filter((_, idx) => idx !== existingIndex);
+      setActiveAlerts(prev => {
+        const next = prev.filter(a => a.notificationId !== target.notificationId);
+        saveToStorage('oshikatsu_alerts', next);
+        return next;
+      });
       triggerToast(t('toast.reminderRemovedTitle'), t('toast.reminderRemovedBody'));
-    } else {
-      try {
-        await scheduleReminderTarget(target, t);
-      } catch (error: unknown) {
-        triggerToast(t('toast.reminderDisabledTitle'), error instanceof Error ? error.message : t('toast.reminderDisabledBody'));
-        return;
-      }
-
-      const newAlert: NotificationAlert = {
-        id: `alert-${target.notificationId}`,
-        eventId: target.eventId,
-        eventTitle: target.eventTitle,
-        platform: target.platform,
-        type: target.type,
-        alertDate: target.scheduleAt.slice(0, 10),
-        isTriggered: false,
-        windowId: target.windowId,
-        scheduleAt: target.scheduleAt,
-        notificationId: target.notificationId,
-      };
-
-      updated = [...activeAlerts, newAlert];
-      triggerToast(t('toast.reminderAddedTitle'), t('toast.reminderAddedBody', { label: target.label }));
+      return;
     }
 
-    setActiveAlerts(updated);
-    saveToStorage('oshikatsu_alerts', updated);
+    try {
+      await scheduleReminderTarget(target, t);
+    } catch (error: unknown) {
+      triggerToast(t('toast.reminderDisabledTitle'), error instanceof Error ? error.message : t('toast.reminderDisabledBody'));
+      return;
+    }
+
+    const newAlert: NotificationAlert = {
+      id: `alert-${target.notificationId}`,
+      eventId: target.eventId,
+      eventTitle: target.eventTitle,
+      platform: target.platform,
+      type: target.type,
+      alertDate: target.scheduleAt.slice(0, 10),
+      isTriggered: false,
+      windowId: target.windowId,
+      scheduleAt: target.scheduleAt,
+      notificationId: target.notificationId,
+    };
+
+    setActiveAlerts(prev => {
+      // 幂等:并发/重复触发已插入同 id 时不再追加(系统侧 schedule 同 id 覆盖,不产孤儿)
+      if (prev.some(a => a.notificationId === newAlert.notificationId)) return prev;
+      const next = [...prev, newAlert];
+      saveToStorage('oshikatsu_alerts', next);
+      return next;
+    });
+    triggerToast(t('toast.reminderAddedTitle'), t('toast.reminderAddedBody', { label: target.label }));
   };
 
   // Source plugin enable/disable switches (controls which platforms search)

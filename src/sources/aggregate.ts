@@ -54,6 +54,19 @@ function canAggregate(event: ActivityEvent): boolean {
   return Boolean(event.date) && Boolean(event.artistName);
 }
 
+// 提醒 ID 的稳定并发键。用「分组键」= normalizeArtist(artistName)|date:
+// 聚合分组正是按此键(见 aggregateConcerts step 1),组内成员该键必然相同 →
+// 单平台事件合并成 agg- 后此键不变。只要提醒挂在被保留的窗口上(window.id 跨聚合去重保留),
+// notificationId 就不再随 event.id 漂移(#74)。
+// - 不含会场:聚合会把 venueName 改写成最长串,含进来反而不稳。
+// - 无艺人/日期(不参与聚合)回退 event.id——这类事件 id 本就稳定。
+// 已知局限:若单平台事件本走 fallback 提醒(无窗口),聚合后从别的平台获得窗口 → 提醒结构
+// 由 'event' 变为真实 window.id,此键无法覆盖(那已是「更精确的另一条提醒」,需 alert 迁移方案)。
+export function stableConcertKey(event: Pick<ActivityEvent, 'id' | 'artistName' | 'date'>): string {
+  if (!event.date || !event.artistName) return event.id;
+  return `${normalizeArtist(event.artistName)}|${event.date}`;
+}
+
 function pickLongest(values: string[]): string {
   return values.filter(Boolean).sort((a, b) => b.length - a.length)[0] || '';
 }

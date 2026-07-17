@@ -42,6 +42,14 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const locale = useMemo(() => resolveLocale(localeMode, systemLanguages), [localeMode, systemLanguages]);
   const t = useMemo(() => createTranslator(locale), [locale]);
 
+  // 随界面语言同步 <html lang>:index.html 写死 lang="ja",中文界面下不更新会让
+  // iOS VoiceOver 按日语规则朗读中文(#76)。locale 值('zh-CN'/'ja-JP')本身即合法 BCP-47 标签。
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale;
+    }
+  }, [locale]);
+
   const value = useMemo<I18nContextValue>(
     () => ({ locale, localeMode, setLocaleMode, t }),
     [locale, localeMode, setLocaleMode, t],

@@ -10,6 +10,7 @@ import {
 } from '../utils';
 import { isFavorited } from '../favorites';
 import { upcomingTicketDeadlines } from '../followed';
+import { supportsCalendarExport } from '../platform';
 import { useI18n } from '../i18n/I18nProvider';
 
 // 截止雷达的展望窗口（天）：覆盖 7 天纵轴之外、又不至于列出太远的噪音。
@@ -94,6 +95,9 @@ export function CalendarView({
   const upcomingTrackedLives = [...trackedEvents].sort((a, b) =>
     (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
 
+  // iOS 无日历导出（src/platform.ts）：所有 .ics 按钮整体不渲染
+  const canExportIcs = supportsCalendarExport();
+
   const handleExportAll = () => {
     if (trackedEvents.length === 0) {
       alert(t('calendar.exportEmpty'));
@@ -121,14 +125,16 @@ export function CalendarView({
             </div>
           </div>
 
-          <button
-            id="btn-export-combined-ics"
-            onClick={handleExportAll}
-            className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center gap-1 transition"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>{t('calendar.exportAll')}</span>
-          </button>
+          {canExportIcs && (
+            <button
+              id="btn-export-combined-ics"
+              onClick={handleExportAll}
+              className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center gap-1 transition"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>{t('calendar.exportAll')}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -331,17 +337,21 @@ export function CalendarView({
                   {todayLotteryDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-slate-800 truncate max-w-[190px]">{t('calendar.lotteryPrefix', { title: e.title })}</span>
-                      <button onClick={() => downloadEventIcs(e, 'lottery_end', t)} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
-                        {t('calendar.paymentIcs')}
-                      </button>
+                      {canExportIcs && (
+                        <button onClick={() => downloadEventIcs(e, 'lottery_end', t)} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
+                          {t('calendar.paymentIcs')}
+                        </button>
+                      )}
                     </div>
                   ))}
                   {todayPaymentDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-slate-800 truncate max-w-[190px]">{t('calendar.paymentPrefix', { title: e.title })}</span>
-                      <button onClick={() => downloadEventIcs(e, 'payment', t)} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
-                        {t('calendar.convenienceIcs')}
-                      </button>
+                      {canExportIcs && (
+                        <button onClick={() => downloadEventIcs(e, 'payment', t)} className="text-[10px] text-white bg-red-500 px-2.5 py-1 rounded-lg">
+                          {t('calendar.convenienceIcs')}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -357,17 +367,21 @@ export function CalendarView({
                   {tomorrowLotteryDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-slate-800 truncate max-w-[195px]">{e.title}</span>
-                      <button onClick={() => downloadEventIcs(e, 'lottery_end', t)} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
-                        {t('calendar.checkIn')}
-                      </button>
+                      {canExportIcs && (
+                        <button onClick={() => downloadEventIcs(e, 'lottery_end', t)} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
+                          {t('calendar.checkIn')}
+                        </button>
+                      )}
                     </div>
                   ))}
                   {tomorrowPaymentDeadlines.map(e => (
                     <div key={e.id} className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-slate-800 truncate max-w-[195px]">{e.title}</span>
-                      <button onClick={() => downloadEventIcs(e, 'payment', t)} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
-                        {t('calendar.checkIn')}
-                      </button>
+                      {canExportIcs && (
+                        <button onClick={() => downloadEventIcs(e, 'payment', t)} className="text-[10px] text-white bg-amber-500 px-2 py-1 rounded-lg">
+                          {t('calendar.checkIn')}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

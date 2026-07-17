@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { ActivityEvent, AlertType, ReminderTarget, TicketWindow } from './types';
+import { stableConcertKey } from './sources/aggregate';
 import { createTranslator, type TFunction } from './i18n/core';
 
 const defaultT = createTranslator('zh-CN');
@@ -13,8 +14,9 @@ function hashPositive(value: string): number {
   return Math.abs(hash) % 2147483647 || 1;
 }
 
-export function makeReminderNotificationId(eventId: string, windowId: string, type: AlertType): number {
-  return hashPositive(`${eventId}:${windowId}:${type}`);
+// keyBase 应传「跨聚合稳定的并发键」(stableConcertKey),而非易变的 event.id(#74)。
+export function makeReminderNotificationId(keyBase: string, windowId: string, type: AlertType): number {
+  return hashPositive(`${keyBase}:${windowId}:${type}`);
 }
 
 function formatJstIso(date: Date): string {
@@ -83,7 +85,7 @@ function target(
     type,
     label,
     scheduleAt,
-    notificationId: makeReminderNotificationId(event.id, windowId, type),
+    notificationId: makeReminderNotificationId(stableConcertKey(event), windowId, type),
     title: `【${titleMap[type]}】${event.artistName}`,
     body: t('notification.body', { title: event.title, platform: event.platform }),
   };
@@ -105,6 +107,7 @@ export function buildReminderTargets(event: ActivityEvent, t: TFunction = defaul
   const fallbackEnd = event.timeline.lotteryEndDate ? deadlineReminder(`${event.timeline.lotteryEndDate}T23:59:00+09:00`, now) : null;
   const fallbackTargets = [
     target(event, 'event', 'lottery_start', t('notification.fallback.lotteryStart'), event.timeline.lotteryStartDate ? `${event.timeline.lotteryStartDate}T10:00:00+09:00` : null, t),
+    // 提前 24h 的语义(#75)由 deadlineReminder 承接,并叠加临近締切的 −1h 兜底。
     target(event, 'event', 'lottery_end', t(fallbackEnd?.hoursBefore === 1 ? 'notification.fallback.lotteryEndSoon' : 'notification.fallback.lotteryEnd'), fallbackEnd?.scheduleAt ?? null, t),
     target(event, 'event', 'general_start', t('notification.fallback.generalStart'), event.timeline.generalStartDate ? `${event.timeline.generalStartDate}T08:00:00+09:00` : null, t),
     target(event, 'event', 'payment_deadline', t('notification.fallback.paymentDeadline'), event.timeline.paymentDeadlineDate ? `${event.timeline.paymentDeadlineDate}T20:00:00+09:00` : null, t),
@@ -155,4 +158,15 @@ export async function scheduleReminderTarget(targetInfo: ReminderTarget, t: TFun
 export async function cancelReminderTarget(notificationId: number): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
+}
+
+// 取消本 App 排程的全部 pending 通知。以系统 getPending 为准（而非 activeAlerts）——
+// 这样连「UI 已失联的孤儿通知」（聚合 id 漂移/竞态产生，见 #73/#74）也能被清掉。
+// 「重置全部数据」必须先调它再清库，否则系统通知照弹且用户已无从关闭（#71）。
+export async function cancelAllReminders(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const pending = await LocalNotifications.getPending();
+  const ids = pending.notifications.map((n) => ({ id: n.id }));
+  if (ids.length === 0) return;
+  await LocalNotifications.cancel({ notifications: ids });
 }

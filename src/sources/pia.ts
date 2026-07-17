@@ -4,7 +4,7 @@
 // Pia 的 rlsInfo 给的是【状态】(抽選受付中/予定枚数終了)，精确受付締切日期需点详情页(getDetails，后续)。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, normalizeLiveEvent } from './shared';
+import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, looksLikeAntiBot, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -202,6 +202,10 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
     readTimeout: 20000,
   });
   const searchHtml = typeof s.data === 'string' ? s.data : String(s.data ?? '');
+  // 直连遇 403/503/挑战页 → 抛错(归 source error),别把拦截页当「艺人未命中」误标 empty(#72)。
+  if (looksLikeAntiBot(searchHtml, s.status).blocked) {
+    throw new Error('Ticket Pia 直连返回反爬/异常内容（配置代理或用平台跳转继续搜索）');
+  }
   const artistInfo = parsePiaArtistInfo(searchHtml);
 
   // 2) 艺人命中 → 该艺人的发售/抽選一览。搜索只返回 rlsInfo（状态 + 链接，快），
