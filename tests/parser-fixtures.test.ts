@@ -192,6 +192,19 @@ describe('Ticket Pia search parser', () => {
     assert.equal(e.purchaseUrl, 'https://t.pia.jp/pia/somewhere.do?x=1');
   });
 
+  it('无 cd 且无可用申込链接：回退官方搜索页，不产出死链', () => {
+    const bare = `
+      <section class="sales_data">
+        <h3 class="sales_data_title">リンク無し公演</h3>
+        <div class="event_link">
+          <ul><li class="is_title">先行</li><li class="is_status">受付中</li></ul>
+          <span itemprop="startDate" datetime="2026-09-01T18:00:00">公演</span>
+        </div>
+      </section>`;
+    const [e] = parsePiaRlsInfo(bare, 'あいみょん');
+    assert.equal(e.purchaseUrl, 'https://t.pia.jp/pia/search_all.do?kw=%E3%81%82%E3%81%84%E3%81%BF%E3%82%87%E3%82%93');
+  });
+
   it('eventCd 回退 id 与节的排序位置无关，两次解析一致（收藏/提醒不失联）', () => {
     // 此前回退 b${bi} 是位置序号：同一事件排前排后 id 不同 → localStorage 收藏/提醒错绑。
     const withOther = `
@@ -527,6 +540,15 @@ describe('Lawson search parser (ResultBox 结构, 2026-07 真实页面裁剪)', 
     for (const w of last.ticketWindows!) {
       assert.equal(w.applyUrl, undefined, `${w.id} 的 applyUrl 泄漏: ${w.applyUrl}`);
     }
+  });
+
+  it('超大页面按上限截断，不把回溯拖成秒级', () => {
+    // 第三方 HTML 不保证善意：构造的无 > 长串曾让新正则在 200KB 上跑到秒级。
+    const bloat = `<div ${'x'.repeat(600_000)}`;
+    const started = Date.now();
+    const parsed = parseLawsonSearch(bloat + groupA, 'テスト', '2026-07-26T09:00:00.000Z');
+    assert.ok(Date.now() - started < 1000, '解析超时——输入上限/回溯上限失效');
+    assert.equal(parsed.length, 0, '截断后无完整组');
   });
 
   it('仅状态无期间的轮次保留窗口；状态期间全无则不产窗口', () => {
