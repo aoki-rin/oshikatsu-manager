@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { TFunction } from '../../src/i18n/core';
-import type { ReminderTarget } from '../../src/types';
+import type { ActivityEvent, ReminderTarget } from '../../src/types';
 
 const h = vi.hoisted(() => ({
   isNativePlatform: vi.fn(() => true),
@@ -17,7 +17,11 @@ vi.mock('@capacitor/local-notifications', () => ({
   },
 }));
 
-import { scheduleReminderTarget, cancelReminderTarget, cancelAllReminders, buildReminderTargets, isPastReminder } from '../../src/notifications';
+import {
+  scheduleReminderTarget, cancelReminderTarget, cancelAllReminders, cancelOrphanReminders,
+  buildReminderTargets, isPastReminder, makeReminderNotificationId, reminderIdsForEvents,
+} from '../../src/notifications';
+import { stableConcertKey } from '../../src/sources/aggregate';
 import { makeEvent, makeWindow } from '../_fixtures';
 
 const t = ((key: string) => key) as unknown as TFunction;
@@ -127,5 +131,66 @@ describe('notifications.cancelAllReminders (#71)', () => {
     h.getPending.mockResolvedValue({ notifications: [] });
     await cancelAllReminders();
     expect(h.cancel).not.toHaveBeenCalled();
+  });
+});
+
+// Lawson id 方案迁移（lawson-html-v2）遗留的孤儿清理：窗口 id 从硬编码 -0 变为 -<schduleNo>，
+// notificationId 内嵌旧 windowId → 已排定的系统通知再也对不上任何开关（幽灵通知）。
+describe('notifications.reminderIdsForEvents', () => {
+  it('收齐当前事件能产出的全部提醒 id（窗口 + fallback）', () => {
+    const event = makeEvent({ ticketWindows: [makeWindow({ id: 'w-1' })] });
+    const ids = reminderIdsForEvents([event], t, new Date('2030-01-01T00:00:00+09:00'));
+
+    for (const built of buildReminderTargets(event, t, new Date('2030-01-01T00:00:00+09:00'))) {
+      expect(ids.has(built.notificationId)).toBe(true);
+    }
+    // 旧方案窗口 id 派生的提醒不在集合里 → 判定为孤儿
+    expect(ids.has(makeReminderNotificationId(stableConcertKey(event), 'w-1-0', 'lottery_start'))).toBe(false);
+  });
+
+  it('无事件 → 空集合', () => {
+    expect(reminderIdsForEvents([], t).size).toBe(0);
+  });
+
+  // 调用方是启动加载链（useOshiStore），持久化事件的结构无法预设：一条坏数据不能让整轮对账
+  // 连同后续状态加载一起崩（d24ec3f 立下的不变量）。
+  it('单条事件结构损坏 → 跳过它,其余事件的提醒 id 照收', () => {
+    const broken = { ...makeEvent({ id: 'broken' }), ticketWindows: 'oops' } as unknown as ActivityEvent;
+    const healthy = makeEvent({ id: 'ok-1', ticketWindows: [makeWindow({ id: 'w-ok' })] });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const ids = reminderIdsForEvents([broken, healthy], t, new Date('2030-01-01T00:00:00+09:00'));
+
+    expect(ids.has(makeReminderNotificationId(stableConcertKey(healthy), 'w-ok', 'lottery_start'))).toBe(true);
+  });
+});
+
+describe('notifications.cancelOrphanReminders（id 方案迁移清理）', () => {
+  it('非原生 → 不查询也不取消', async () => {
+    h.isNativePlatform.mockReturnValue(false);
+    await cancelOrphanReminders(new Set([11]));
+    expect(h.getPending).not.toHaveBeenCalled();
+    expect(h.cancel).not.toHaveBeenCalled();
+  });
+
+  it('只取消不在有效集里的 pending（有效提醒不误伤）', async () => {
+    h.getPending.mockResolvedValue({ notifications: [{ id: 11 }, { id: 22 }, { id: 33 }] });
+
+    const cancelled = await cancelOrphanReminders(new Set([22]));
+
+    expect(h.cancel).toHaveBeenCalledWith({ notifications: [{ id: 11 }, { id: 33 }] });
+    expect(cancelled).toEqual([11, 33]);
+  });
+
+  it('pending 全部有效 → 不调 cancel', async () => {
+    h.getPending.mockResolvedValue({ notifications: [{ id: 11 }, { id: 22 }] });
+    expect(await cancelOrphanReminders(new Set([11, 22]))).toEqual([]);
+    expect(h.cancel).not.toHaveBeenCalled();
+  });
+
+  it('getPending 失败 → 吞掉异常（自愈是 best-effort，不该挡住启动）', async () => {
+    h.getPending.mockRejectedValue(new Error('plugin unavailable'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(cancelOrphanReminders(new Set([11]))).resolves.toEqual([]);
   });
 });
