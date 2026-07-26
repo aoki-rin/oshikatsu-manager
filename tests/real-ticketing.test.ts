@@ -256,7 +256,8 @@ describe('提醒项去重（QA ISSUE-009 回归）', () => {
       timeline: {}, ticketWindows: [mk('w1', '先行'), mk('w2', '2次'), mk('w3', '3次'), mk('w4', '一般')],
       originalUrl: 'https://e.example', description: '', category: 'J-Pop', tags: [], sourceKind: 'live',
     };
-    const targets = buildReminderTargets(event);
+    // 固定时钟：不传 now 会用真实时间，applyEnd(2026-07-26 18:00)一过此测试就自爆
+    const targets = buildReminderTargets(event, undefined, new Date('2026-05-20T00:00:00+09:00'));
     const paymentTargets = targets.filter((x) => x.type === 'payment_deadline');
     assert.equal(paymentTargets.length, 1, '4 个窗口同一入金截止只留 1 条');
     const ends = targets.filter((x) => x.type === 'lottery_end');

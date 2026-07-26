@@ -60,6 +60,6 @@
 |---|---|---|
 | eplus | ✅ 内嵌 JSON,search 直接带多轮窗口 | ✅(随 search) |
 | Ticket Pia | ✅ | ✅ 详情页 `ticketInformation.do` |
-| Lawson(ローチケ) | ✅ 经 Tailscale 代理绕 Akamai | ◑ 解析搜索页;反爬时给官方跳转 |
+| Lawson(ローチケ) | ✅ 经 Tailscale 代理绕 Akamai | ✅ 搜索页 ResultBox 每公演×每轮全窗口(2026-07);反爬时给官方跳转 |
 | LivePocket | ✅ `event/search?word=` | ⬜ 待补(方向②) |
 | TicketDive | ✅ Next.js superjson | ⬜ 待补(方向②) |

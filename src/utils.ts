@@ -79,8 +79,10 @@ export function icsAlarmLines(summary: string): string[] {
   ];
 }
 
+// \r 必须剥掉：decodeHtml 会把 &#13; 还原成裸 CR，混进 SUMMARY:/LOCATION: 行就是 .ics 属性注入面
 function escapeIcs(value: string): string {
   return value
+    .replace(/\r/g, '')
     .replace(/\\/g, '\\\\')
     .replace(/\n/g, '\\n')
     .replace(/,/g, '\\,')
