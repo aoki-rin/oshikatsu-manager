@@ -2,9 +2,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
 
-import type { ActivityEvent, ReminderTarget } from '../../src/types';
+import type { ActivityEvent, NotificationAlert, ReminderTarget } from '../../src/types';
 import { LOCALE_STORAGE_KEY, type TFunction } from '../../src/i18n/core';
 import { favoriteKey } from '../../src/favorites';
+import { stableConcertKey } from '../../src/sources/aggregate';
 import { INITIAL_EXTENSIONS } from '../../src/data/mockData';
 
 // 只 mock 外部副作用边界：搜索（网络）与提醒（Capacitor）。
@@ -13,10 +14,14 @@ vi.mock('../../src/sources', () => ({
   searchableTargets: vi.fn(() => [] as string[]),
   searchPlatformsStreaming: vi.fn(async () => {}),
 }));
-vi.mock('../../src/notifications', () => ({
+// 提醒模块只换掉带原生副作用的四个函数；id 派生（makeReminderNotificationId /
+// reminderIdsForEvents）是纯逻辑，跑真实现——否则 reconcile 测试只是在测 mock。
+vi.mock('../../src/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/notifications')>()),
   scheduleReminderTarget: vi.fn(async () => {}),
   cancelReminderTarget: vi.fn(async () => {}),
   cancelAllReminders: vi.fn(async () => {}),
+  cancelOrphanReminders: vi.fn(async () => [] as number[]),
 }));
 vi.mock('../../src/sources/proxy', () => ({
   isProxyConfigured: vi.fn(() => false),
@@ -25,6 +30,7 @@ vi.mock('../../src/sources/proxy', () => ({
 import * as sources from '../../src/sources';
 import * as proxy from '../../src/sources/proxy';
 import * as notifications from '../../src/notifications';
+import { makeReminderNotificationId } from '../../src/notifications';
 import { useOshiStore } from '../../src/store/useOshiStore';
 
 const t = ((key: string) => key) as unknown as TFunction;
@@ -151,6 +157,225 @@ describe('useOshiStore — 持久化坏数据自愈（深度 review）', () => {
   });
 });
 
+// lawson-html-v2（64abc9a）把 Lawson 事件 id 从「整组一个」lawson-<mid> 改成逐场
+// lawson-<Lコード>-<prfDate>。旧记录没人清：加载只按 'lawson-' 前缀过滤（新旧通吃）、搜索按 id
+// 增量合并（旧 id ≠ 新 id，两者并存）→ ①列表多出一张「整组坍缩」的重复卡，详情链常指向被误抓的
+// 页脚新闻页；②旧事件把旧 windowId 一直续命成合法 id，启动提醒对账因此认为对应提醒仍有效。
+//
+// 判据只认 id 形状 /^lawson-\d+$/（单段纯数字）：新方案的 id 恒为
+// `lawson-${base}-${prfDate || `p${i}`}`，两段起步，形状上不可能命中（见下方回退用例）。
+// 但**必须一次性**：parseLawsonSearch 的旧结构回退路径至今仍在产 lawson-<纯数字>
+// （lawsonParser.ts:276，parser-fixtures.test.ts 有断言）。无标记地每次启动都剪，
+// 会把新版刚搜到的合法结果在下次启动时删掉 → 搜到又消失的死循环。
+describe('useOshiStore — Lawson 旧格式事件一次性剪枝（lawson-html-v2 迁移）', () => {
+  it('旧格式 lawson-<纯数字> 事件被剪掉,并从持久化中抹除', () => {
+    const stale = makeEvent({ id: 'lawson-444647', platform: 'Lawson Ticket', artistName: 'A', date: '2026-08-01' });
+    localStorage.setItem('oshikatsu_events', JSON.stringify([stale]));
+
+    const { result } = render();
+
+    expect(result.current.events.map(e => e.id)).not.toContain('lawson-444647');
+    const persisted = JSON.parse(localStorage.getItem('oshikatsu_events')!) as ActivityEvent[];
+    expect(persisted.map(e => e.id)).not.toContain('lawson-444647');
+  });
+
+  it('新格式逐场 id 与其他平台事件不受影响', () => {
+    const fresh = makeEvent({ id: 'lawson-444647-20260815', platform: 'Lawson Ticket', artistName: 'B', date: '2026-08-15' });
+    const eplus = makeEvent({ id: 'eplus-1', artistName: 'C', date: '2026-08-20' });
+    localStorage.setItem('oshikatsu_events', JSON.stringify([fresh, eplus]));
+
+    const { result } = render();
+
+    expect(result.current.events.map(e => e.id).sort()).toEqual(['eplus-1', 'lawson-444647-20260815']);
+  });
+
+  it('无 Lコード 时的回退派生 id 不被误伤（标题 slug / g0 / p0 三种回退）', () => {
+    // parseResultBoxGroup: base = lcode || groupLcode || titleSlug || `g${groupIdx}`，
+    // 日期段 = prfDate || `p${prfIdx}` —— 三种回退都保持「两段」，均不该命中纯数字单段规则。
+    const slugBase = makeEvent({ id: 'lawson-fruitszipper-20260815', platform: 'Lawson Ticket', artistName: 'D', date: '2026-08-16' });
+    const idxBase = makeEvent({ id: 'lawson-g0-20260815', platform: 'Lawson Ticket', artistName: 'E', date: '2026-08-17' });
+    const noDate = makeEvent({ id: 'lawson-444647-p0', platform: 'Lawson Ticket', artistName: 'F', date: '2026-08-18' });
+    localStorage.setItem('oshikatsu_events', JSON.stringify([slugBase, idxBase, noDate]));
+
+    const { result } = render();
+
+    expect(result.current.events).toHaveLength(3);
+  });
+
+  it('「重置全部数据」不该让剪枝复活（clear 会连标记一起抹掉）', async () => {
+    const { result } = render();
+    await act(async () => { await result.current.handleResetDatabase(); });
+    cleanup();
+
+    // 重置后重新搜索，旧结构回退路径产出 lawson-<纯数字>；下次启动必须还在。
+    localStorage.setItem('oshikatsu_events', JSON.stringify([
+      makeEvent({ id: 'lawson-12345', platform: 'Lawson Ticket', artistName: 'G', date: '2026-09-01' }),
+    ]));
+
+    const reopened = render();
+
+    expect(reopened.result.current.events.map(e => e.id)).toEqual(['lawson-12345']);
+  });
+
+  it('只剪一次：标记落地后,新版旧结构回退路径产出的 lawson-<纯数字> 不再被删', () => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify([
+      makeEvent({ id: 'lawson-444647', platform: 'Lawson Ticket', artistName: 'A', date: '2026-08-01' }),
+    ]));
+    const first = render();
+    expect(first.result.current.events).toHaveLength(0);
+    cleanup();
+
+    // 新版仍可能走 parseLawsonSearch 的旧结构回退路径产出 lawson-<纯数字>（lawsonParser.ts:276）。
+    // 这类是「刚搜到的真结果」，重启后必须还在。
+    localStorage.setItem('oshikatsu_events', JSON.stringify([
+      makeEvent({ id: 'lawson-12345', platform: 'Lawson Ticket', artistName: 'G', date: '2026-09-01' }),
+    ]));
+
+    const { result } = render();
+
+    expect(result.current.events.map(e => e.id)).toEqual(['lawson-12345']);
+  });
+});
+
+// Lawson id 方案迁移（lawson-html-v2）：事件 id 从「整组一个」变为逐场（lawson-<Lコード>-<prfDate>）、
+// 窗口 id 从硬编码 -0 变为 -<schduleNo>。notificationId 内嵌 windowId（见 notifications.ts），
+// 于是持久化 alert 与已排定的系统通知一起变成孤儿：详情页开关对不上（显示未开启），
+// 系统通知却照弹且用户无从关闭。启动时按「当前事件数据能产出的提醒 id」对账。
+describe('useOshiStore — id 方案迁移遗留的孤儿提醒 reconcile', () => {
+  const migratedEvent = () => makeEvent({
+    id: 'lawson-L12345-20300810',
+    platform: 'Lawson Ticket',
+    date: '2030-08-10',
+    ticketWindows: [{
+      id: 'lawson-L12345-20300810-1',
+      platform: 'Lawson Ticket',
+      roundType: '先行',
+      applyStart: '2030-07-01T10:00:00+09:00',
+      applyEnd: '2030-07-20T23:59:00+09:00',
+    }],
+  });
+
+  const alertOn = (event: ActivityEvent, windowId: string, overrides: Partial<NotificationAlert> = {}): NotificationAlert => ({
+    id: `alert-${windowId}`,
+    eventId: event.id,
+    eventTitle: event.title,
+    platform: 'Lawson Ticket',
+    type: 'lottery_start',
+    alertDate: '2030-07-01',
+    isTriggered: false,
+    windowId,
+    scheduleAt: '2030-07-01T10:00:00+09:00',
+    notificationId: makeReminderNotificationId(stableConcertKey(event), windowId, 'lottery_start'),
+    ...overrides,
+  });
+
+  const seed = (events: ActivityEvent[], alerts: NotificationAlert[]) => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify(events));
+    localStorage.setItem('oshikatsu_alerts', JSON.stringify(alerts));
+  };
+
+  it('旧窗口 id 的 alert 被清理并回写,当前窗口的提醒不受影响', () => {
+    const event = migratedEvent();
+    const stale = alertOn(event, 'lawson-444647-0'); // 旧方案：整组一个 id + 硬编码 -0
+    const live = alertOn(event, 'lawson-L12345-20300810-1');
+    seed([event], [stale, live]);
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts.map(a => a.notificationId)).toEqual([live.notificationId]);
+    const persisted = JSON.parse(localStorage.getItem('oshikatsu_alerts')!) as NotificationAlert[];
+    expect(persisted.map(a => a.notificationId)).toEqual([live.notificationId]);
+  });
+
+  it('把当前有效 id 集交给原生清扫（幽灵通知按系统 pending 取消）', () => {
+    const event = migratedEvent();
+    const stale = alertOn(event, 'lawson-444647-0');
+    const live = alertOn(event, 'lawson-L12345-20300810-1');
+    seed([event], [stale, live]);
+
+    render();
+
+    expect(notifications.cancelOrphanReminders).toHaveBeenCalledOnce();
+    const validIds = vi.mocked(notifications.cancelOrphanReminders).mock.calls[0][0];
+    expect(validIds.has(live.notificationId!)).toBe(true);
+    expect(validIds.has(stale.notificationId!)).toBe(false);
+  });
+
+  it('旧 schema 缺 notificationId 的 alert 一并清掉（永远点不亮开关的死记录）', () => {
+    const event = migratedEvent();
+    seed([event], [alertOn(event, 'lawson-L12345-20300810-1', { notificationId: undefined })]);
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts).toEqual([]);
+  });
+
+  it('无孤儿 → 不回写 alerts（每次启动都重写是无谓写入）', () => {
+    const event = migratedEvent();
+    seed([event], [alertOn(event, 'lawson-L12345-20300810-1')]);
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts).toHaveLength(1);
+    expect(setItem.mock.calls.filter(([key]) => key === 'oshikatsu_alerts')).toEqual([]);
+    setItem.mockRestore();
+  });
+
+  // 对账把 buildReminderTargets 拉进了启动加载链：一条结构损坏的持久化事件（localStorage
+  // 可以是任何东西）不能像 d24ec3f 前的裸 JSON.parse 那样打断整条链、让后续状态静默全丢。
+  it('结构损坏的持久化事件不打断加载链,有效提醒不被误删', () => {
+    const event = migratedEvent();
+    const broken = { ...makeEvent({ id: 'lawson-broken' }), ticketWindows: 'oops' } as unknown as ActivityEvent;
+    seed([broken, event], [alertOn(event, 'lawson-L12345-20300810-1')]);
+    localStorage.setItem('oshikatsu_recent_searches', JSON.stringify(['FRUITS ZIPPER']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts).toHaveLength(1);
+    expect(result.current.recentSearches).toEqual(['FRUITS ZIPPER']); // 加载链未中断
+  });
+
+  it('事件数据为空（未搜索 / events 坏数据）→ 全部保留且不清扫：无基准可比,宁留孤儿不误删', () => {
+    const event = migratedEvent();
+    localStorage.setItem('oshikatsu_alerts', JSON.stringify([alertOn(event, 'lawson-L12345-20300810-1')]));
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts).toHaveLength(1);
+    expect(notifications.cancelOrphanReminders).not.toHaveBeenCalled();
+  });
+
+  // 两半合流才暴露的缺口：剪枝把存量清空后,「无基准」守卫会连带跳过对账。
+  // 但剪枝本身就是正基准——被剪掉的事件,其提醒必然已死。只搜过 Lawson 的用户
+  //（正是本次 bug 的报告场景）会全量命中此路径,幽灵通知将永远排在系统里。
+  it('存量全是旧 id 事件 → 剪枝后仍要对账,不能被「无基准」守卫吞掉', () => {
+    const legacy = makeEvent({
+      id: 'lawson-444647',
+      platform: 'Lawson Ticket',
+      date: '2030-08-10',
+      ticketWindows: [{
+        id: 'lawson-444647-0',
+        platform: 'Lawson Ticket',
+        roundType: '先行',
+        applyStart: '2030-07-01T10:00:00+09:00',
+        applyEnd: '2030-07-20T23:59:00+09:00',
+      }],
+    });
+    seed([legacy], [alertOn(legacy, 'lawson-444647-0')]);
+
+    const { result } = render();
+
+    expect(result.current.events).toHaveLength(0);
+    expect(result.current.activeAlerts).toHaveLength(0);
+    expect(notifications.cancelOrphanReminders).toHaveBeenCalledOnce();
+    // 无幸存事件 → 有效 id 集为空 → 系统里所有 pending 都是孤儿
+    expect(vi.mocked(notifications.cancelOrphanReminders).mock.calls[0][0].size).toBe(0);
+    expect(JSON.parse(localStorage.getItem('oshikatsu_alerts') ?? '[]')).toEqual([]);
+  });
+});
+
 describe('useOshiStore — Lawson 插件默认开关（分发化）', () => {
   it('首启未配置代理 → Lawson 默认关闭（其余插件不受影响）', () => {
     vi.mocked(proxy.isProxyConfigured).mockReturnValue(false);
@@ -201,7 +426,9 @@ describe('useOshiStore — 收藏稳定键（#36 回归）', () => {
   });
 
   it('单平台收藏在重载（被聚合迁移）后仍命中', () => {
-    const ev = makeEvent({ id: 'lawson-1', platform: 'Lawson Ticket' });
+    // id 用新格式（两段）：本用例验证的是「收藏稳定键跨重载命中」，与 Lawson id 迁移无关，
+    // 而单段纯数字的 lawson-1 现在会被旧格式剪枝吃掉（事件没了，收藏自然一并失效）。
+    const ev = makeEvent({ id: 'lawson-1-20260810', platform: 'Lawson Ticket' });
     localStorage.setItem('oshikatsu_events', JSON.stringify([ev]));
     localStorage.setItem('oshikatsu_favorites', JSON.stringify([favoriteKey(ev)]));
 
