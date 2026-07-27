@@ -11,8 +11,11 @@ import type { ServerTicketSource } from '../types';
 export const piaSource: ServerTicketSource = {
   id: 'pia',
   platform: 'Ticket Pia',
-  // v3：艺人未命中/名下 0 件时退回公演名关键词 rlsInfo（官网搜索页同款 XHR，searchMode=1）
-  parserVersion: 'pia-html-v3',
+  // v4：事件 id 回退链 eventBundleCd || eventCd || 位置序号——音乐节类节（无 eventBundleCd）
+  //     此前落到位置序号 pia-b0（随排序漂移、跨搜索撞 id），且拼出无效 eventBundleCd=b0 链接
+  // v5：is_status 行尾的「開始～締切」→ 搜索阶段直落 applyStart/applyEnd（此前只留短状态词）；
+  //     cd 改为标题锚点作用域优先（防横幅劫持/首轮下架漂移）；无 cd 时不再伪造 eventBundleCd=b0 死链
+  parserVersion: 'pia-html-v5',
   buildSearchUrl: (query) => buildPlatformSearchUrl('Ticket Pia', query),
   async search(query, ctx) {
     const searchHtml = await ctx.fetchText(this.buildSearchUrl(query));

@@ -219,6 +219,18 @@ describe('JST dates and ICS generation', () => {
     assert.match(ics, /DTSTART;TZID=Asia\/Tokyo:20260704T220000/);
     assert.match(ics, /DTEND;TZID=Asia\/Tokyo:20260705T010000/);
   });
+
+  it('抓来的会场名里的裸 CR 不得注入 .ics 属性行', () => {
+    // decodeHtml 会把平台页面里的 &#13; 还原成裸 CR；不剥掉的话 LOCATION: 行会被折断，
+    // 宽松的日历解析器会把后半段当成新属性（.ics 注入面）。
+    // .ics 按 RFC 5545 用 CRLF 分行，所以要断的是「属性值内部不夹带换行」，不是全文无 CR：
+    // 注入成功的表现是多出一行独立的 URL: 属性。
+    const hostile = { ...sampleEvent, venueName: '会場X\r\nURL:http://evil.example' };
+    const ics = buildEventIcs(hostile, 'concert', new Date('2026-05-25T00:00:00.000Z'));
+    const lines = ics.split('\r\n');
+    assert.ok(!lines.some((line) => line.startsWith('URL:http://evil.example')), '会场名被折成了独立属性行');
+    assert.ok(lines.some((line) => line.startsWith('LOCATION:会場X\\nURL:http://evil.example')), 'CR 应被剥除、LF 转义留在同一行');
+  });
 });
 
 describe('local notification reminders', () => {
@@ -256,7 +268,8 @@ describe('提醒项去重（QA ISSUE-009 回归）', () => {
       timeline: {}, ticketWindows: [mk('w1', '先行'), mk('w2', '2次'), mk('w3', '3次'), mk('w4', '一般')],
       originalUrl: 'https://e.example', description: '', category: 'J-Pop', tags: [], sourceKind: 'live',
     };
-    const targets = buildReminderTargets(event);
+    // 固定时钟：不传 now 会用真实时间，applyEnd(2026-07-26 18:00)一过此测试就自爆
+    const targets = buildReminderTargets(event, undefined, new Date('2026-05-20T00:00:00+09:00'));
     const paymentTargets = targets.filter((x) => x.type === 'payment_deadline');
     assert.equal(paymentTargets.length, 1, '4 个窗口同一入金截止只留 1 条');
     const ends = targets.filter((x) => x.type === 'lottery_end');

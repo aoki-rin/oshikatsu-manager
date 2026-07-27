@@ -1,10 +1,11 @@
 // 前端 Ticket Pia 平台搜索插件（Mihon 式）。两步：
 //  1) search_all.do?kw=艺人 → 从内联 JS 解析 artistCd
 //  2) artist/rlsInfo.do?apiRequest={artistCd} → HTML 片段(sales_list)，解析事件 + 发售/抽選轮次
-// Pia 的 rlsInfo 给的是【状态】(抽選受付中/予定枚数終了)，精确受付締切日期需点详情页(getDetails，后续)。
+// Pia 的 rlsInfo 状态行常自带「開始～締切」→ 搜索阶段直落 applyStart/applyEnd（v5）；
+// 状态行没给的（applyStart/resultStart）仍由详情页懒加载（enrichPiaWindows/getDetails）补齐。
 import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent, TicketWindow } from '../types';
-import { canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, looksLikeAntiBot, normalizeLiveEvent } from './shared';
+import { absoluteUrl, canonicalArtistId, canonicalVenueId, deriveTimelineFromWindows, isHttpUrl, looksLikeAntiBot, normalizeLiveEvent } from './shared';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -21,6 +22,27 @@ export function toTPiaUrl(url: string): string {
 const dec = (s: string) =>
   s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'");
 const m1 = (s: string, re: RegExp): string | null => { const m = s.match(re); return m ? m[1] : null; };
+
+// Pia 的日期格式（状态行与详情页共用）："2026/8/1(土) 昼 10:00"——曜日括号后可带 昼/夜/午前 等标注。
+const PIA_D = '(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})\\([^)]*\\)\\s*(?:昼|夜|朝|午前|午後)?\\s*(\\d{1,2}:\\d{2})';
+
+// is_status 行尾常带受付期間（实测形态：「<span>販売期間中</span> ～2026/8/12(水) 23:59」，
+// 亦可能「開始～締切」两端俱全）——搜索阶段即可直落 applyStart/applyEnd，不必等详情页懒加载。
+// ~ 前为開始、后为締切；缺一侧留 null。日期正则复用 PIA_D，与详情页解析同等容忍，别再各写各的。
+const STATUS_SIDE_DATE = new RegExp(PIA_D);
+// 状态行捕获上限按【原始标记】计：实测正文 ~40-90 字符，600 覆盖 class/属性膨胀；</li> 终止符防跑飞。
+const STATUS_LINE_SCAN_MAX = 600;
+const STATUS_LINE_RE = new RegExp(`class="is_status"[^>]*>([\\s\\S]{0,${STATUS_LINE_SCAN_MAX}}?)</li>`);
+function parseStatusLineRange(line: string): { applyStart: string | null; applyEnd: string | null } {
+  const text = dec(line.replace(/<[^>]+>/g, ' ')).normalize('NFKC');
+  const parts = text.split(/[~～〜]/);
+  if (parts.length < 2) return { applyStart: null, applyEnd: null };
+  const side = (value: string): string | null => {
+    const m = value.match(STATUS_SIDE_DATE);
+    return m ? piaIso(m[1], m[2], m[3], m[4]) : null;
+  };
+  return { applyStart: side(parts[0]), applyEnd: side(parts.slice(1).join('~')) };
+}
 
 export interface PiaArtistInfo {
   cd: string;
@@ -53,7 +75,20 @@ export function parsePiaRlsInfo(html: string, artist: string, artistSource: 'pla
   blocks.forEach((b, bi) => {
     const rawTitle = m1(b, /sales_data_title">([\s\S]*?)<\/h3>/) || '';
     const title = dec(stripTags(rawTitle)) || artist;
-    const bundle = m1(b, /eventBundleCd=([A-Za-z0-9]+)/) || `b${bi}`;
+    // 音乐节类节（实测 あいみょん 名下的 ＳＷＥＥＴ ＬＯＶＥ ＳＨＯＷＥＲ）整节无 eventBundleCd，
+    // 链接是 event.do?eventCd=… / ticketInformation.do?eventCd=…&rlsCd=…——用 eventCd 兜底；
+    // 位置序号 b${bi} 随平台排序漂移，同一事件换 id 会让持久化的收藏/提醒失联，仅作最后手段。
+    // cd 优先取标题锚点（节级稳定）：全节首个匹配会被推荐位横幅劫持，或随首轮受付下架而漂移。
+    const titleAnchor = m1(b, /sales_data_title">\s*<a[^>]+href="([^"]+)"/i) || '';
+    const codeIn = (s: string) => ({
+      bundle: m1(s, /eventBundleCd=([A-Za-z0-9]+)/),
+      event: m1(s, /eventCd=([A-Za-z0-9]+)/),
+    });
+    const titleCds = codeIn(titleAnchor);
+    const scoped = titleCds.bundle || titleCds.event ? titleCds : codeIn(b);
+    const bundleCd = scoped.bundle;
+    const eventCd = scoped.event;
+    const bundle = bundleCd || eventCd || `b${bi}`;
 
     const roundSegs = b.split('<div class="event_link"').slice(1);
     const windows: TicketWindow[] = [];
@@ -62,11 +97,17 @@ export function parsePiaRlsInfo(html: string, artist: string, artistSource: 'pla
 
     roundSegs.forEach((seg, i) => {
       const rawUrl = m1(seg, /<a href="([^"]+)"\s+itemprop="url"/);
-      const url = rawUrl ? toTPiaUrl(rawUrl) : rawUrl;
+      // 解析期就过 scheme 门（http/https）：这个 URL 除了展示还会被 enrichPiaWindows 直接抓取
+      const url = absoluteUrl(rawUrl ? toTPiaUrl(rawUrl) : null, 'https://t.pia.jp');
       const rt = m1(seg, /class="is_title">([\s\S]*?)<\/li>/);
       const roundType = (rt ? dec(stripTags(rt)).replace(/^「[^」]*」/, '') : '') || '受付';
       const status = m1(seg, /class="is_status"[^>]*>([\s\S]*?)<\/(?:li|span|td)>/);
       const statusText = status ? dec(stripTags(status)) : undefined;
+      // 完整状态行（到 </li>，有界防跑飞）里的「開始～締切」；状态词本身仍走上面的短捕获。
+      const statusLine = m1(seg, STATUS_LINE_RE);
+      const { applyStart, applyEnd } = statusLine
+        ? parseStatusLineRange(statusLine)
+        : { applyStart: null, applyEnd: null };
       const sd = m1(seg, /itemprop="startDate"\s+datetime="([^"]+)"/);
       const place = m1(seg, /class="is_place"[\s\S]*?itemprop="name"[^>]*>([\s\S]*?)<\/span>/);
       if (sd && !eventDate) eventDate = sd.slice(0, 10);
@@ -76,8 +117,8 @@ export function parsePiaRlsInfo(html: string, artist: string, artistSource: 'pla
         platform: 'Ticket Pia',
         roundType,
         statusText,
-        applyStart: null,
-        applyEnd: null,
+        applyStart,
+        applyEnd,
         sourceUrl: url || undefined,
         applyUrl: url || undefined,
       });
@@ -87,7 +128,14 @@ export function parsePiaRlsInfo(html: string, artist: string, artistSource: 'pla
     // Pia app 对 /pia/event/event.do 做了 verified app-link（真机实测会直接开 app）；
     // 把它同时用作 purchaseUrl,「前往购票」即可深链进 Pia app。
     // 窗口 applyUrl 仍保留精确受付页(ticketInformation.do)——getDetails 富集 + 逐轮「申込」按钮用。
-    const eventUrl = `https://t.pia.jp/pia/event/event.do?eventBundleCd=${bundle}`;
+    // 详情页两种形态并存（实测）：常规节 eventBundleCd=<cd>，音乐节类只有 eventCd=<cd>——按命中来源拼参，
+    // 拼错参数名（如 eventBundleCd=<eventCd 值>）是无效链接。
+    // 无任何 cd 时不伪造 eventBundleCd=b0 死链：回退本节自己的申込链接，再不行回官方搜索页。
+    const eventParam = bundleCd ? `eventBundleCd=${bundleCd}` : eventCd ? `eventCd=${eventCd}` : '';
+    const eventUrl = eventParam
+      ? `https://t.pia.jp/pia/event/event.do?${eventParam}`
+      : windows.find((w) => isHttpUrl(w.applyUrl))?.applyUrl
+        || `https://t.pia.jp/pia/search_all.do?kw=${encodeURIComponent(artist)}`;
     const base: ActivityEvent = {
       id: `pia-${bundle}`,
       title,
@@ -120,7 +168,7 @@ export function parsePiaRlsInfo(html: string, artist: string, artistSource: 'pla
 }
 
 // ---- getDetails: 详情页(ticketInformation.do)取精确受付期間 + 結果発表 ----
-const PIA_D = '(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})\\([^)]*\\)\\s*(?:昼|夜|朝|午前|午後)?\\s*(\\d{1,2}:\\d{2})';
+// （日期正则 PIA_D 定义在文件顶部，与状态行解析共用。）
 function piaIso(y: string, mo: string, d: string, hm: string): string {
   const [H, M] = hm.split(':');
   const p = (n: string) => n.padStart(2, '0');
@@ -147,8 +195,11 @@ export function parsePiaDetailDates(html: string): PiaDetail {
 
 export async function getPiaDetail(url: string): Promise<PiaDetail | null> {
   try {
-    // 兜底：存量事件可能还存着 ticket.pia.jp 旧链接（该域名 301 回 t.pia.jp）
-    const res = await CapacitorHttp.get({ url: toTPiaUrl(url), headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
+    // 兜底：存量事件可能还存着 ticket.pia.jp 旧链接（该域名 301 回 t.pia.jp）。
+    // 域名钉死 t.pia.jp：这个 URL 抓来自页面标记，别让设备替陌生站发请求（SSRF/指纹外泄面）。
+    const target = absoluteUrl(toTPiaUrl(url), 'https://t.pia.jp');
+    if (!target || new URL(target).hostname !== 't.pia.jp') return null;
+    const res = await CapacitorHttp.get({ url: target, headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
     const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
     return parsePiaDetailDates(html);
   } catch {
@@ -208,8 +259,8 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
   }
   const artistInfo = parsePiaArtistInfo(searchHtml);
 
-  // 2) 艺人命中 → 该艺人的发售/抽選一览。搜索只返回 rlsInfo（状态 + 链接，快），
-  //    精确受付日期由 enrichPiaWindows 在点开详情时懒加载。
+  // 2) 艺人命中 → 该艺人的发售/抽選一览。搜索只抓 rlsInfo（快）：状态行自带的「開始～締切」
+  //    已在解析时直落窗口；状态行没给的精确日期仍由 enrichPiaWindows 点开详情时懒加载补齐。
   //    Pia 自带真实艺人名（artistnm）→ 优先用它做出演者展示（artistSource:'platform'）。
   if (artistInfo) {
     const html = await fetchPiaText(buildPiaArtistRlsInfoUrl(artistInfo.cd));

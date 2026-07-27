@@ -6,7 +6,7 @@ import { PlatformSearchError, type ServerTicketSource } from '../types';
 export const lawsonSource: ServerTicketSource = {
   id: 'lawson',
   platform: 'Lawson Ticket',
-  parserVersion: 'lawson-html-v1',
+  parserVersion: 'lawson-html-v2', // 2026-07 现行 ResultBox 结构（每公演一事件、每轮一窗口）
   buildSearchUrl: (query) => buildPlatformSearchUrl('Lawson Ticket', query),
   async search(query, ctx): Promise<ActivityEvent[]> {
     const url = this.buildSearchUrl(query);
