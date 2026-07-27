@@ -14,14 +14,14 @@ vi.mock('../../src/sources', () => ({
   searchableTargets: vi.fn(() => [] as string[]),
   searchPlatformsStreaming: vi.fn(async () => {}),
 }));
-// 提醒模块只换掉带原生副作用的四个函数；id 派生（makeReminderNotificationId /
-// reminderIdsForEvents）是纯逻辑，跑真实现——否则 reconcile 测试只是在测 mock。
+// 提醒模块只换掉带原生副作用的函数；id 派生（makeReminderNotificationId /
+// reminderIdsForWindow）是纯逻辑，跑真实现——否则迁移测试只是在测 mock。
 vi.mock('../../src/notifications', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/notifications')>()),
   scheduleReminderTarget: vi.fn(async () => {}),
   cancelReminderTarget: vi.fn(async () => {}),
   cancelAllReminders: vi.fn(async () => {}),
-  cancelOrphanReminders: vi.fn(async () => [] as number[]),
+  cancelReminderIds: vi.fn(async () => [] as number[]),
 }));
 vi.mock('../../src/sources/proxy', () => ({
   isProxyConfigured: vi.fn(() => false),
@@ -295,10 +295,11 @@ describe('useOshiStore — id 方案迁移遗留的孤儿提醒 reconcile', () =
 
     render();
 
-    expect(notifications.cancelOrphanReminders).toHaveBeenCalledOnce();
-    const validIds = vi.mocked(notifications.cancelOrphanReminders).mock.calls[0][0];
-    expect(validIds.has(live.notificationId!)).toBe(true);
-    expect(validIds.has(stale.notificationId!)).toBe(false);
+    expect(notifications.cancelReminderIds).toHaveBeenCalledOnce();
+    const deadIds = vi.mocked(notifications.cancelReminderIds).mock.calls[0][0];
+    // deny-list：只取消可证明属于旧方案的 id,当前窗口的提醒绝不进清扫名单
+    expect(deadIds.has(stale.notificationId!)).toBe(true);
+    expect(deadIds.has(live.notificationId!)).toBe(false);
   });
 
   it('旧 schema 缺 notificationId 的 alert 一并清掉（永远点不亮开关的死记录）', () => {
@@ -313,11 +314,16 @@ describe('useOshiStore — id 方案迁移遗留的孤儿提醒 reconcile', () =
   it('无孤儿 → 不回写 alerts（每次启动都重写是无谓写入）', () => {
     const event = migratedEvent();
     seed([event], [alertOn(event, 'lawson-L12345-20300810-1')]);
-    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    // 必须 spy 代码实际用的那个对象：tests/setup.ts 为绕开 Node 25 的残缺实验性全局，
+    // 装的是 Map 背书的普通对象而非 Storage 实例，spy 到 Storage.prototype 永远录不到调用
+    // → 断言恒真，即使代码每次启动都回写也照绿（#83 事后评审）。
+    const setItem = vi.spyOn(globalThis.localStorage, 'setItem');
 
     const { result } = render();
 
     expect(result.current.activeAlerts).toHaveLength(1);
+    // 先证明 spy 确实在录（迁移标记那次写入必然发生），否则本用例又会悄悄退化成恒真
+    expect(setItem.mock.calls.length).toBeGreaterThan(0);
     expect(setItem.mock.calls.filter(([key]) => key === 'oshikatsu_alerts')).toEqual([]);
     setItem.mockRestore();
   });
@@ -344,13 +350,12 @@ describe('useOshiStore — id 方案迁移遗留的孤儿提醒 reconcile', () =
     const { result } = render();
 
     expect(result.current.activeAlerts).toHaveLength(1);
-    expect(notifications.cancelOrphanReminders).not.toHaveBeenCalled();
+    expect(notifications.cancelReminderIds).not.toHaveBeenCalled();
   });
 
-  // 两半合流才暴露的缺口：剪枝把存量清空后,「无基准」守卫会连带跳过对账。
-  // 但剪枝本身就是正基准——被剪掉的事件,其提醒必然已死。只搜过 Lawson 的用户
-  //（正是本次 bug 的报告场景）会全量命中此路径,幽灵通知将永远排在系统里。
-  it('存量全是旧 id 事件 → 剪枝后仍要对账,不能被「无基准」守卫吞掉', () => {
+  // 只搜过 Lawson 的用户（正是本次 bug 的报告场景）升级后存量会被整体剪空,
+  // 此时仍必须清扫——否则幽灵通知永远排在系统里。
+  it('存量全是旧 id 事件 → 剪空后仍要清扫其幽灵通知', () => {
     const legacy = makeEvent({
       id: 'lawson-444647',
       platform: 'Lawson Ticket',
@@ -369,10 +374,155 @@ describe('useOshiStore — id 方案迁移遗留的孤儿提醒 reconcile', () =
 
     expect(result.current.events).toHaveLength(0);
     expect(result.current.activeAlerts).toHaveLength(0);
-    expect(notifications.cancelOrphanReminders).toHaveBeenCalledOnce();
-    // 无幸存事件 → 有效 id 集为空 → 系统里所有 pending 都是孤儿
-    expect(vi.mocked(notifications.cancelOrphanReminders).mock.calls[0][0].size).toBe(0);
+    expect(notifications.cancelReminderIds).toHaveBeenCalledOnce();
+    // deny-list 精确列出被剪事件的 id,而非「清掉一切重建不出来的」
+    const deadIds = vi.mocked(notifications.cancelReminderIds).mock.calls[0][0];
+    expect(deadIds.size).toBeGreaterThan(0);
     expect(JSON.parse(localStorage.getItem('oshikatsu_alerts') ?? '[]')).toEqual([]);
+  });
+});
+
+describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
+  const legacyEvent = (overrides: Partial<ActivityEvent> = {}) => makeEvent({
+    id: 'lawson-444647',
+    platform: 'Lawson Ticket',
+    artistName: '倉木麻衣',
+    date: '2030-08-10',
+    ticketWindows: [{
+      id: 'lawson-444647-0', platform: 'Lawson Ticket', roundType: '先行',
+      applyStart: '2030-07-01T10:00:00+09:00', applyEnd: '2030-07-20T23:59:00+09:00',
+    }],
+    ...overrides,
+  });
+
+  // ── 启动崩溃循环：加载链里的写入不得抛穿 ──
+  // ErrorBoundary 唯一的恢复手段是 reload，reload 重跑同一 effect → 永久循环，
+  // 用户在应用内够不到重置按钮。#83 之前这个 effect 里 0 处写入，之后有 3 处。
+  it('存储配额爆掉 → 加载链后段照常执行,不抛穿', () => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify([legacyEvent()]));
+    localStorage.setItem('oshikatsu_recent_searches', JSON.stringify(['ARTIST']));
+    const orig = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = ((key: string, value: string) => {
+      if (key === 'oshikatsu_events') {
+        const err = new Error('quota'); err.name = 'QuotaExceededError'; throw err;
+      }
+      return orig(key, value);
+    }) as typeof localStorage.setItem;
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const { result } = render();
+      expect(result.current.recentSearches).toEqual(['ARTIST']); // 加载链未被写入异常中断
+    } finally {
+      localStorage.setItem = orig;
+    }
+  });
+
+  it('alerts 存成 [null,42] 这类畸形载荷 → 不抛穿,加载链后段照常执行', () => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify([makeEvent({ id: 'eplus-1' })]));
+    localStorage.setItem('oshikatsu_alerts', '[null,42]');
+    localStorage.setItem('oshikatsu_recent_searches', JSON.stringify(['ARTIST']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { result } = render();
+
+    expect(result.current.recentSearches).toEqual(['ARTIST']);
+    expect(result.current.activeAlerts).toEqual([]);
+  });
+
+  // ── 迁移原子性：数据写失败时标记不得落地 ──
+  it('事件回写失败 → 迁移标记不落地,下次启动重试剪枝', () => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify([legacyEvent()]));
+    const orig = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = ((key: string, value: string) => {
+      if (key === 'oshikatsu_events') { throw new Error('quota'); }
+      return orig(key, value);
+    }) as typeof localStorage.setItem;
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      render();
+      expect(localStorage.getItem('oshikatsu_lawson_id_migrated')).toBeNull();
+    } finally {
+      localStorage.setItem = orig;
+    }
+  });
+
+  it('首启无可剪内容 → 标记仍要落地(否则日后合法的 lawson-<纯数字> 会被误剪)', () => {
+    localStorage.setItem('oshikatsu_events', JSON.stringify([makeEvent({ id: 'eplus-1' })]));
+    render();
+    expect(localStorage.getItem('oshikatsu_lawson_id_migrated')).toBe('1');
+  });
+
+  // ── 聚合缺口（方案 B）：剥离旧窗口 + 清 memberIds,保住合法半边 ──
+  it('旧 Lawson 事件被聚合进 agg- 卡：剥离旧窗口与 memberIds,eplus 那半保留', () => {
+    const agg = makeEvent({
+      id: 'agg-倉木麻衣-2030-08-10-会場x',
+      platform: 'Lawson Ticket',
+      artistName: '倉木麻衣',
+      date: '2030-08-10',
+      memberIds: ['lawson-444647', 'eplus-99'],
+      ticketWindows: [
+        { id: 'eplus-99-0', platform: 'eplus', roundType: '一般', applyStart: null, applyEnd: '2030-07-25T23:59:00+09:00' },
+        { id: 'lawson-444647-0', platform: 'Lawson Ticket', roundType: '先行', applyStart: null, applyEnd: '2030-07-20T23:59:00+09:00' },
+      ],
+    });
+    localStorage.setItem('oshikatsu_events', JSON.stringify([agg]));
+
+    const { result } = render();
+
+    const card = result.current.events[0];
+    expect(card.ticketWindows?.map(w => w.id)).toEqual(['eplus-99-0']); // 幽灵窗口已剥离
+    expect(card.memberIds).toEqual(['eplus-99']);                        // 旧 id 已清出别名
+    const persisted = JSON.parse(localStorage.getItem('oshikatsu_events')!) as ActivityEvent[];
+    expect(persisted[0].ticketWindows?.map(w => w.id)).toEqual(['eplus-99-0']);
+  });
+
+  it('独立的旧格式事件仍整条剪掉;同轮里非 Lawson 事件与其提醒不受牵连', () => {
+    const eplus = makeEvent({
+      id: 'eplus-9', platform: 'eplus', artistName: 'C', date: '2030-08-20',
+      ticketWindows: [{
+        id: 'eplus-9-w1', platform: 'eplus', roundType: '一般',
+        applyStart: '2030-07-01T10:00:00+09:00', applyEnd: '2030-07-20T23:59:00+09:00',
+      }],
+    });
+    const keepAlert = {
+      id: 'alert-eplus', eventId: 'eplus-9', eventTitle: eplus.title, platform: 'eplus' as const,
+      type: 'lottery_start' as const, alertDate: '2030-07-01', isTriggered: false,
+      windowId: 'eplus-9-w1', scheduleAt: '2030-07-01T10:00:00+09:00',
+      notificationId: makeReminderNotificationId(stableConcertKey(eplus), 'eplus-9-w1', 'lottery_start'),
+    };
+    localStorage.setItem('oshikatsu_events', JSON.stringify([legacyEvent(), eplus]));
+    localStorage.setItem('oshikatsu_alerts', JSON.stringify([keepAlert]));
+
+    const { result } = render();
+
+    expect(result.current.events.map(e => e.id)).toEqual(['eplus-9']);
+    const persisted = JSON.parse(localStorage.getItem('oshikatsu_events')!) as ActivityEvent[];
+    expect(persisted.map(e => e.id)).toEqual(['eplus-9']); // 幸存者不能被顺手抹掉
+    expect(result.current.activeAlerts.map(a => a.notificationId)).toEqual([keepAlert.notificationId]);
+  });
+
+  // ── 方案 A：只取消可证明属于旧方案的提醒 ──
+  it('无窗口事件的 fallback 提醒(windowId=event)不因聚合补入窗口而被误删', () => {
+    // buildReminderTargets 只在事件无窗口时产 fallback 目标；聚合从别家补入窗口后
+    // 这些 id 就重建不出来。旧的 allow-list 会把它们连同已排定的系统通知一起删掉。
+    const windowless = makeEvent({
+      id: 'pia-1', platform: 'Ticket Pia', artistName: 'H', date: '2030-09-10',
+      ticketWindows: [], timeline: { lotteryStartDate: '2030-08-01' },
+    });
+    const fallbackAlert = {
+      id: 'alert-fallback', eventId: 'pia-1', eventTitle: windowless.title,
+      platform: 'Ticket Pia' as const, type: 'lottery_start' as const, alertDate: '2030-08-01',
+      isTriggered: false, windowId: 'event', scheduleAt: '2030-08-01T10:00:00+09:00',
+      notificationId: 987654,
+    };
+    localStorage.setItem('oshikatsu_events', JSON.stringify([windowless]));
+    localStorage.setItem('oshikatsu_alerts', JSON.stringify([fallbackAlert]));
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts.map(a => a.notificationId)).toEqual([987654]);
   });
 });
 
