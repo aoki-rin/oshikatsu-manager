@@ -451,7 +451,8 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
   it('首启无可剪内容 → 标记仍要落地(否则日后合法的 lawson-<纯数字> 会被误剪)', () => {
     localStorage.setItem('oshikatsu_events', JSON.stringify([makeEvent({ id: 'eplus-1' })]));
     render();
-    expect(localStorage.getItem('oshikatsu_lawson_id_migrated')).toBe('1');
+    // 落当前迁移版本；写更低的值会让下次启动误以为还欠一轮补做
+    expect(localStorage.getItem('oshikatsu_lawson_id_migrated')).toBe('2');
   });
 
   // ── 聚合缺口（方案 B）：剥离旧窗口 + 清 memberIds,保住合法半边 ──
@@ -501,6 +502,36 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
     const persisted = JSON.parse(localStorage.getItem('oshikatsu_events')!) as ActivityEvent[];
     expect(persisted.map(e => e.id)).toEqual(['eplus-9']); // 幸存者不能被顺手抹掉
     expect(result.current.activeAlerts.map(a => a.notificationId)).toEqual([keepAlert.notificationId]);
+  });
+
+  // 真机实测（Pixel，装过 #83 的设备）暴露：标记已是 '1',本次的窗口剥离若挂在同一个
+  // 「有标记就跳过」判断下,装过 #83 的用户永远等不到修复——而 #83 已在 main 上,那是全部存量用户。
+  it('装过 #83 的设备(标记=1)升级后仍要剥离聚合卡里的旧窗口', () => {
+    const agg = makeEvent({
+      id: 'agg-a-2030-08-10-会場x', platform: 'eplus', artistName: 'A', date: '2030-08-10',
+      memberIds: ['lawson-3', 'eplus-9'],
+      ticketWindows: [
+        { id: 'eplus-9-0', platform: 'eplus', roundType: '一般', applyStart: null, applyEnd: '2030-07-25T23:59:00+09:00' },
+        { id: 'lawson-3-0', platform: 'Lawson Ticket', roundType: '先行', applyStart: null, applyEnd: '2030-07-20T23:59:00+09:00' },
+      ],
+    });
+    localStorage.setItem('oshikatsu_events', JSON.stringify([agg]));
+    localStorage.setItem('oshikatsu_lawson_id_migrated', '1'); // #83 留下的标记
+
+    const { result } = render();
+
+    expect(result.current.events[0].ticketWindows?.map(w => w.id)).toEqual(['eplus-9-0']);
+    expect(result.current.events[0].memberIds).toEqual(['eplus-9']);
+  });
+
+  it('已是最新迁移版本的设备 → 不再重复剪枝(合法的 lawson-<纯数字> 不被误删)', () => {
+    const fresh = makeEvent({ id: 'lawson-777', platform: 'Lawson Ticket', artistName: 'F', date: '2030-09-01' });
+    localStorage.setItem('oshikatsu_events', JSON.stringify([fresh]));
+    localStorage.setItem('oshikatsu_lawson_id_migrated', '2');
+
+    const { result } = render();
+
+    expect(result.current.events.map(e => e.id)).toEqual(['lawson-777']);
   });
 
   // ── 方案 A：只取消可证明属于旧方案的提醒 ──

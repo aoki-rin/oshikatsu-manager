@@ -29,6 +29,10 @@ const LEGACY_LAWSON_ID_RE = /^lawson-\d+$/;
 // 刚搜到的合法结果在下次启动删掉 → 搜到又消失的死循环。而「首次运行新版本」这一刻，
 // 存量里的该形状 id 必然出自旧版本（新版尚未搜过），此时剪枝才是精确的。
 const LAWSON_ID_MIGRATION_KEY = 'oshikatsu_lawson_id_migrated';
+// 标记带版本，不能只判「有没有」：#83 只按 event.id 剪枝并写下 '1'，本轮才补上「剥离聚合卡内的
+// 旧窗口 / memberIds」。若沿用「有标记就跳过」，装过 #83 的设备（#83 已在 main 上 = 全部存量用户）
+// 永远等不到修复——Pixel 真机实测正是此状态：两张 agg- 卡里躺着 9 个幽灵窗口。
+const LAWSON_MIGRATION_VERSION = 2;
 
 // 旧方案的窗口 id：`lawson-<mid>-0`（三段、后两段纯数字）。新方案窗口恒为
 // `lawson-<base>-<prfDate>-<schduleNo>`（四段起步），形状上不会命中本规则。
@@ -48,7 +52,10 @@ interface LegacyMigration {
 // 两种形态都要处理：①独立的旧事件整条丢弃；②被聚合进 agg- 卡的旧半边——剥离其窗口与
 // memberIds 别名，保住同卡里别家平台的合法数据（不能因为混进一个旧半边就废掉整张卡）。
 // 同时把这些必死的 notificationId 收集出来，作为清扫通知的 deny-list。
-function migrateLegacyLawson(events: ActivityEvent[]): LegacyMigration {
+// pruneEvents=false：v1 设备（#83 已按 event.id 剪过）只补做窗口 / memberIds 剥离。
+// 不重复剪事件是刻意的：#83 之后用户可能已搜到走 legacy 回退路径的合法 lawson-<纯数字>，
+// 再剪一次就是「搜到又消失」——一次性标记本就是为防这个而存在。
+function migrateLegacyLawson(events: ActivityEvent[], pruneEvents = true): LegacyMigration {
   const deadReminderIds = new Set<number>();
   const surviving: ActivityEvent[] = [];
   let changed = false;
@@ -65,7 +72,7 @@ function migrateLegacyLawson(events: ActivityEvent[]): LegacyMigration {
       const windows = Array.isArray(event.ticketWindows) ? event.ticketWindows : [];
       const memberIds = Array.isArray(event.memberIds) ? event.memberIds : [];
 
-      if (LEGACY_LAWSON_ID_RE.test(event.id)) {
+      if (pruneEvents && LEGACY_LAWSON_ID_RE.test(event.id)) {
         for (const window of windows) markDead(window.id);
         markDead('event'); // 无窗口时 buildReminderTargets 的 fallback 目标
         changed = true;
@@ -201,10 +208,13 @@ export function useOshiStore(t: TFunction) {
     // 旧 id 方案的存量事件一次性剪枝（见 pruneLegacyLawsonEvents）。不剪的话：①列表里多出一张
     // 「整组坍缩」的重复卡（新旧 id 不同，dedupeEvents 去重不了，搜索也顶不掉）；②旧事件把旧
     // windowId 一直续命成合法 id，启动提醒对账会认为对应的幽灵提醒仍有效。
-    const alreadyMigrated = localStorage.getItem(LAWSON_ID_MIGRATION_KEY) !== null;
+    // 无标记=0（从未迁移）；'1'=#83 只剪过事件；>=2 已是最新。Number(null)=0、Number('x')=NaN，
+    // NaN >= 2 为 false → 坏值一律当「没迁移过」，宁可多跑一次幂等迁移。
+    const migratedVersion = Number(localStorage.getItem(LAWSON_ID_MIGRATION_KEY));
+    const alreadyMigrated = migratedVersion >= LAWSON_MIGRATION_VERSION;
     const migration: LegacyMigration = alreadyMigrated
       ? { events: persistedEvents, deadReminderIds: new Set<number>(), changed: false }
-      : migrateLegacyLawson(persistedEvents);
+      : migrateLegacyLawson(persistedEvents, !(migratedVersion >= 1));
     // Aggregate on load so events persisted before cross-platform merge migrate cleanly.
     const loadedEvents = aggregateConcerts(migration.events);
     setEvents(loadedEvents);
@@ -214,7 +224,7 @@ export function useOshiStore(t: TFunction) {
       const persisted = migration.changed
         ? safeSetItem('oshikatsu_events', JSON.stringify(loadedEvents))
         : true; // 无事可剪：标记照落，否则日后合法的 lawson-<纯数字> 会被误剪
-      if (persisted) safeSetItem(LAWSON_ID_MIGRATION_KEY, '1');
+      if (persisted) safeSetItem(LAWSON_ID_MIGRATION_KEY, String(LAWSON_MIGRATION_VERSION));
     }
     const validEventIds = new Set(loadedEvents.map(event => event.id));
 
@@ -321,7 +331,8 @@ export function useOshiStore(t: TFunction) {
     if (storedLocaleMode) localStorage.setItem(LOCALE_STORAGE_KEY, storedLocaleMode);
     // 迁移标记必须挺过 clear：库已清空，旧格式存量不可能再有，剪枝已无事可做；而标记若丢了，
     // 重置后新搜到的、走旧结构回退路径的 lawson-<纯数字> 会在下次启动被误删。
-    localStorage.setItem(LAWSON_ID_MIGRATION_KEY, '1');
+    // 写当前版本而非 '1'：写 '1' 等于宣称「只做过 v1」，下次启动会再跑一轮 v2 补做。
+    localStorage.setItem(LAWSON_ID_MIGRATION_KEY, String(LAWSON_MIGRATION_VERSION));
     setOshiColorId('pink');
     setEvents([]);
     setArtists([]);
