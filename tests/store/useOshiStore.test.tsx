@@ -456,7 +456,7 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
   });
 
   // ── 聚合缺口（方案 B）：剥离旧窗口 + 清 memberIds,保住合法半边 ──
-  it('旧 Lawson 事件被聚合进 agg- 卡：剥离旧窗口与 memberIds,eplus 那半保留', () => {
+  it('旧 Lawson 事件被聚合进 agg- 卡：剥离旧窗口,eplus 那半与别名保留', () => {
     const agg = makeEvent({
       id: 'agg-倉木麻衣-2030-08-10-会場x',
       platform: 'Lawson Ticket',
@@ -474,7 +474,8 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
 
     const card = result.current.events[0];
     expect(card.ticketWindows?.map(w => w.id)).toEqual(['eplus-99-0']); // 幽灵窗口已剥离
-    expect(card.memberIds).toEqual(['eplus-99']);                        // 旧 id 已清出别名
+    // memberIds 保留：纯别名,剥掉会让收藏静默失联（评审 E）
+    expect(card.memberIds).toEqual(['lawson-444647', 'eplus-99']);
     const persisted = JSON.parse(localStorage.getItem('oshikatsu_events')!) as ActivityEvent[];
     expect(persisted[0].ticketWindows?.map(w => w.id)).toEqual(['eplus-99-0']);
   });
@@ -521,7 +522,7 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
     const { result } = render();
 
     expect(result.current.events[0].ticketWindows?.map(w => w.id)).toEqual(['eplus-9-0']);
-    expect(result.current.events[0].memberIds).toEqual(['eplus-9']);
+    expect(result.current.events[0].memberIds).toEqual(['lawson-3', 'eplus-9']); // 别名保留
   });
 
   it('已是最新迁移版本的设备 → 不再重复剪枝(合法的 lawson-<纯数字> 不被误删)', () => {
@@ -532,6 +533,75 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
     const { result } = render();
 
     expect(result.current.events.map(e => e.id)).toEqual(['lawson-777']);
+  });
+
+  // stableConcertKey 只用「艺人|日期」(不含会场/id) → 同艺人同日的不同事件共用 keyBase;
+  // 而 concert 提醒无条件用 windowId='event'。据此推导「被剪事件的死 id」会连坐幸存事件,
+  // 正是本分支声称消灭的静默误删。'event' 不是旧方案窗口,其 id 不可证明归属于被剪事件。
+  it('剪掉旧事件不得连坐同艺人同日幸存事件的当日提醒', () => {
+    const legacy = makeEvent({ id: 'lawson-444647', platform: 'Lawson Ticket', artistName: 'A', date: '2030-08-10', ticketWindows: [] });
+    const live = makeEvent({
+      id: 'eplus-99', platform: 'eplus', artistName: 'A', date: '2030-08-10', venueName: '別会場',
+      ticketWindows: [{ id: 'eplus-99-0', platform: 'eplus', roundType: '一般', applyStart: null, applyEnd: '2030-07-25T23:59:00+09:00' }],
+    });
+    // 幸存事件的「公演当日」提醒——与被剪事件共用 keyBase,windowId 同为 'event'
+    const concertAlert = {
+      id: 'alert-concert', eventId: 'eplus-99', eventTitle: live.title, platform: 'eplus' as const,
+      type: 'concert' as const, alertDate: '2030-08-10', isTriggered: false,
+      windowId: 'event', scheduleAt: '2030-08-09T18:00:00+09:00',
+      notificationId: makeReminderNotificationId(stableConcertKey(live), 'event', 'concert'),
+    };
+    localStorage.setItem('oshikatsu_events', JSON.stringify([legacy, live]));
+    localStorage.setItem('oshikatsu_alerts', JSON.stringify([concertAlert]));
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts.map(a => a.notificationId)).toEqual([concertAlert.notificationId]);
+    const dead = vi.mocked(notifications.cancelReminderIds).mock.calls[0]?.[0];
+    if (dead) expect(dead.has(concertAlert.notificationId)).toBe(false);
+  });
+
+  // 旧结构回退路径至今仍在产 lawson-<纯数字> 事件与 lawson-<数字>-0 窗口
+  //（parser-fixtures 有断言）。alert 形状清扫若每次启动都跑,用户为这类合法结果开的提醒
+  // 会在每次启动被删 + 取消 —— 就是「搜到又消失」换到提醒上。
+  it('已迁移设备：合法 legacy 形状结果的提醒不得被每次启动清掉', () => {
+    const fresh = makeEvent({
+      id: 'lawson-12345', platform: 'Lawson Ticket', artistName: 'F', date: '2030-09-01',
+      ticketWindows: [{ id: 'lawson-12345-0', platform: 'Lawson Ticket', roundType: '先行', applyStart: '2030-08-01T10:00:00+09:00', applyEnd: '2030-08-20T23:59:00+09:00' }],
+    });
+    const alert = {
+      id: 'alert-fresh', eventId: 'lawson-12345', eventTitle: fresh.title, platform: 'Lawson Ticket' as const,
+      type: 'lottery_start' as const, alertDate: '2030-08-01', isTriggered: false,
+      windowId: 'lawson-12345-0', scheduleAt: '2030-08-01T10:00:00+09:00',
+      notificationId: makeReminderNotificationId(stableConcertKey(fresh), 'lawson-12345-0', 'lottery_start'),
+    };
+    localStorage.setItem('oshikatsu_events', JSON.stringify([fresh]));
+    localStorage.setItem('oshikatsu_alerts', JSON.stringify([alert]));
+    localStorage.setItem('oshikatsu_lawson_id_migrated', '2'); // 已完成迁移
+
+    const { result } = render();
+
+    expect(result.current.activeAlerts.map(a => a.notificationId)).toEqual([alert.notificationId]);
+    expect(notifications.cancelReminderIds).not.toHaveBeenCalled();
+  });
+
+  it('剥离旧窗口时保留 memberIds 别名(否则收藏会被静默解除)', () => {
+    const agg = makeEvent({
+      id: 'agg-a-2030-08-10-会場x', platform: 'eplus', artistName: 'A', date: '2030-08-10',
+      memberIds: ['lawson-444647', 'eplus-99'],
+      ticketWindows: [
+        { id: 'eplus-99-0', platform: 'eplus', roundType: '一般', applyStart: null, applyEnd: '2030-07-25T23:59:00+09:00' },
+        { id: 'lawson-444647-0', platform: 'Lawson Ticket', roundType: '先行', applyStart: null, applyEnd: '2030-07-20T23:59:00+09:00' },
+      ],
+    });
+    localStorage.setItem('oshikatsu_events', JSON.stringify([agg]));
+    localStorage.setItem('oshikatsu_favorites', JSON.stringify(['lawson-444647']));
+
+    const { result } = render();
+
+    expect(result.current.events[0].ticketWindows?.map(w => w.id)).toEqual(['eplus-99-0']);
+    // memberIds 是纯别名,没有任何东西从它派生 notificationId 或卡片;剥掉只会让收藏失联
+    expect(result.current.favorites).toEqual(['lawson-444647']);
   });
 
   // ── 方案 A：只取消可证明属于旧方案的提醒 ──

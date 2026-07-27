@@ -45,6 +45,9 @@ interface LegacyMigration {
   events: ActivityEvent[];
   deadReminderIds: Set<number>;
   changed: boolean;
+  // 有事件处理失败（结构损坏抛出）→ 本轮迁移不完整，标记不能落，下次启动重试。
+  // 否则一条坏数据就让「重复卡 + 幽灵窗口」对该用户永久固化。
+  failed: boolean;
 }
 
 // 迁移而非改写：旧「整组一场」对应新的 N 场公演，没有可靠的 1:1 映射，替用户猜一场等于凭空造数据。
@@ -59,6 +62,7 @@ function migrateLegacyLawson(events: ActivityEvent[], pruneEvents = true): Legac
   const deadReminderIds = new Set<number>();
   const surviving: ActivityEvent[] = [];
   let changed = false;
+  let failed = false;
 
   for (const event of events) {
     // 喂进来的是持久化数据（localStorage 可以是任何东西：ticketWindows 可能是字符串、
@@ -74,14 +78,16 @@ function migrateLegacyLawson(events: ActivityEvent[], pruneEvents = true): Legac
 
       if (pruneEvents && LEGACY_LAWSON_ID_RE.test(event.id)) {
         for (const window of windows) markDead(window.id);
-        markDead('event'); // 无窗口时 buildReminderTargets 的 fallback 目标
+        // 刻意**不**给 windowId='event' 记死：stableConcertKey 只用「艺人|日期」(不含会场/id)，
+        // 同艺人同日的不同事件共用 keyBase，而 concert 提醒无条件用 'event' 作 windowId ——
+        // 记死它会连坐幸存事件的当日提醒，正是本轮要消灭的静默误删。
+        // 无窗口旧事件的 fallback 提醒由下面 isLegacyAlert(按 alert 自己的 eventId) 精确覆盖。
         changed = true;
         continue;
       }
 
       const legacyWindows = windows.filter(window => LEGACY_LAWSON_WINDOW_ID_RE.test(window.id));
-      const legacyMembers = memberIds.filter(id => LEGACY_LAWSON_ID_RE.test(id));
-      if (legacyWindows.length === 0 && legacyMembers.length === 0) {
+      if (legacyWindows.length === 0) {
         surviving.push(event);
         continue;
       }
@@ -89,19 +95,22 @@ function migrateLegacyLawson(events: ActivityEvent[], pruneEvents = true): Legac
       for (const window of legacyWindows) markDead(window.id);
       const ticketWindows = windows.filter(window => !LEGACY_LAWSON_WINDOW_ID_RE.test(window.id));
       changed = true;
+      // memberIds 原样保留：它是纯别名（favoriteAliases 用它认收藏），没有任何东西从它派生
+      // notificationId 或卡片。剥掉只会让「当初收藏独立 Lawson 卡、后来该卡被聚合」的收藏
+      // 静默失联 —— 幽灵是窗口，不是别名。
       surviving.push({
         ...event,
-        memberIds: memberIds.filter(id => !LEGACY_LAWSON_ID_RE.test(id)),
         ticketWindows,
         timeline: deriveTimelineFromWindows(ticketWindows),
       });
     } catch (error: unknown) {
       console.warn('[store] 事件迁移失败,原样保留', event?.id, error);
       surviving.push(event);
+      failed = true;
     }
   }
 
-  return { events: surviving, deadReminderIds, changed };
+  return { events: surviving, deadReminderIds, changed, failed };
 }
 
 // 持久化写入的统一兜底。启动加载链里的自愈写入（迁移剪枝、alert 清理）**绝不能抛穿**：
@@ -213,7 +222,7 @@ export function useOshiStore(t: TFunction) {
     const migratedVersion = Number(localStorage.getItem(LAWSON_ID_MIGRATION_KEY));
     const alreadyMigrated = migratedVersion >= LAWSON_MIGRATION_VERSION;
     const migration: LegacyMigration = alreadyMigrated
-      ? { events: persistedEvents, deadReminderIds: new Set<number>(), changed: false }
+      ? { events: persistedEvents, deadReminderIds: new Set<number>(), changed: false, failed: false }
       : migrateLegacyLawson(persistedEvents, !(migratedVersion >= 1));
     // Aggregate on load so events persisted before cross-platform merge migrate cleanly.
     const loadedEvents = aggregateConcerts(migration.events);
@@ -224,7 +233,7 @@ export function useOshiStore(t: TFunction) {
       const persisted = migration.changed
         ? safeSetItem('oshikatsu_events', JSON.stringify(loadedEvents))
         : true; // 无事可剪：标记照落，否则日后合法的 lawson-<纯数字> 会被误剪
-      if (persisted) safeSetItem(LAWSON_ID_MIGRATION_KEY, String(LAWSON_MIGRATION_VERSION));
+      if (persisted && !migration.failed) safeSetItem(LAWSON_ID_MIGRATION_KEY, String(LAWSON_MIGRATION_VERSION));
     }
     const validEventIds = new Set(loadedEvents.map(event => event.id));
 
@@ -276,18 +285,26 @@ export function useOshiStore(t: TFunction) {
       : [];
     const deadReminderIds = migration.deadReminderIds;
     // alert 自己的 eventId/windowId 也可能带旧方案形状（其事件早已不在存量里 → 上面收集不到）。
-    const isLegacyAlert = (alert: NotificationAlert): boolean =>
-      LEGACY_LAWSON_ID_RE.test(alert.eventId)
-      || (alert.windowId !== undefined && LEGACY_LAWSON_WINDOW_ID_RE.test(alert.windowId));
-    for (const alert of storedAlerts) {
-      if (alert.notificationId !== undefined && isLegacyAlert(alert)) deadReminderIds.add(alert.notificationId);
+    // **必须与剪枝同为一次性**：旧结构回退路径至今仍在产同形状的 lawson-<纯数字> 事件与
+    // lawson-<数字>-0 窗口（parser-fixtures 有断言）。每次启动都按形状清扫，等于把用户为这类
+    // 合法结果开的提醒在每次启动删掉 + 取消 —— 就是「搜到又消失」换到提醒上。
+    if (!alreadyMigrated) {
+      const isLegacyAlert = (alert: NotificationAlert): boolean =>
+        LEGACY_LAWSON_ID_RE.test(alert.eventId)
+        || (alert.windowId !== undefined && LEGACY_LAWSON_WINDOW_ID_RE.test(alert.windowId));
+      for (const alert of storedAlerts) {
+        if (alert.notificationId !== undefined && isLegacyAlert(alert)) deadReminderIds.add(alert.notificationId);
+      }
     }
     // 缺 notificationId 的旧 schema 记录也是死记录（开关按 notificationId 匹配,永远点不亮）。
     const liveAlerts = storedAlerts.filter(alert =>
       alert.notificationId !== undefined && !deadReminderIds.has(alert.notificationId));
     setActiveAlerts(liveAlerts);
-    if (liveAlerts.length !== storedAlerts.length) saveToStorage('oshikatsu_alerts', liveAlerts);
-    if (deadReminderIds.size > 0) void cancelReminderIds(deadReminderIds);
+    // 回写失败就别取消原生通知：记录会在下次启动复活,而通知已被取消 → 开关显示「已开」
+    // 却永远不响,且无路可退（只能重置全部数据）。宁可这轮不清,下轮重试。
+    const alertsPersisted = liveAlerts.length === storedAlerts.length
+      || safeSetItem('oshikatsu_alerts', JSON.stringify(liveAlerts));
+    if (deadReminderIds.size > 0 && alertsPersisted) void cancelReminderIds(deadReminderIds);
     setSearchResultIds(loadJson<string[]>('oshikatsu_search_result_ids', []).filter(id => validEventIds.has(id)));
     setSearchReports(loadJson<TicketSearchReport[]>('oshikatsu_search_reports', []));
     setRecentSearches(loadJson<string[]>('oshikatsu_recent_searches', []));
