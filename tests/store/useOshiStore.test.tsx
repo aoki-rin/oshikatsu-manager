@@ -314,18 +314,34 @@ describe('useOshiStore — id 方案迁移遗留的孤儿提醒 reconcile', () =
   it('无孤儿 → 不回写 alerts（每次启动都重写是无谓写入）', () => {
     const event = migratedEvent();
     seed([event], [alertOn(event, 'lawson-L12345-20300810-1')]);
-    // 必须 spy 代码实际用的那个对象：tests/setup.ts 为绕开 Node 25 的残缺实验性全局，
-    // 装的是 Map 背书的普通对象而非 Storage 实例，spy 到 Storage.prototype 永远录不到调用
-    // → 断言恒真，即使代码每次启动都回写也照绿（#83 事后评审）。
-    const setItem = vi.spyOn(globalThis.localStorage, 'setItem');
-
-    const { result } = render();
-
-    expect(result.current.activeAlerts).toHaveLength(1);
-    // 先证明 spy 确实在录（迁移标记那次写入必然发生），否则本用例又会悄悄退化成恒真
-    expect(setItem.mock.calls.length).toBeGreaterThan(0);
-    expect(setItem.mock.calls.filter(([key]) => key === 'oshikatsu_alerts')).toEqual([]);
-    setItem.mockRestore();
+    // 不能用 vi.spyOn：两种运行环境下代码摸到的 localStorage 不是同一种东西
+    // （本地 Node 25 → setup.ts 的普通对象；CI Node 22 → jsdom 真 Storage 是 Proxy），
+    // spy 到任一具体对象都可能录不到调用 → 断言恒真。整体替换绑定来记账，两边都稳。
+    const real = globalThis.localStorage;
+    const written: string[] = [];
+    const recorder: Storage = {
+      get length() { return real.length; },
+      clear: () => real.clear(),
+      getItem: (k: string) => real.getItem(k),
+      key: (i: number) => real.key(i),
+      removeItem: (k: string) => real.removeItem(k),
+      setItem: (k: string, v: string) => { written.push(k); real.setItem(k, v); },
+    };
+    const install = (value: Storage) => {
+      for (const target of [globalThis, window] as Array<typeof globalThis | Window>) {
+        Object.defineProperty(target, 'localStorage', { value, configurable: true, writable: true });
+      }
+    };
+    install(recorder);
+    try {
+      const { result } = render();
+      expect(result.current.activeAlerts).toHaveLength(1);
+      // 先证明记账确实在工作（迁移标记那次写入必然发生），否则本用例又会悄悄退化成恒真
+      expect(written.length).toBeGreaterThan(0);
+      expect(written.filter(key => key === 'oshikatsu_alerts')).toEqual([]);
+    } finally {
+      install(real);
+    }
   });
 
   // 对账把 buildReminderTargets 拉进了启动加载链：一条结构损坏的持久化事件（localStorage
@@ -395,27 +411,47 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
     ...overrides,
   });
 
+  // jsdom 的 Storage 是 Proxy：给它赋 .setItem 会被当成「存一个叫 setItem 的键」而非覆盖方法。
+  // 本地(Node 25 注入残缺 localStorage 全局 → tests/setup.ts 换成普通对象)能改，
+  // CI(Node 22 → 真 jsdom Storage)改不动 —— 覆盖静默失效，测试要么红要么恒真。
+  // 整体替换绑定，两边都稳。
+  const withFailingWrite = (failKey: string, run: () => void) => {
+    const real = globalThis.localStorage;
+    const stub: Storage = {
+      get length() { return real.length; },
+      clear: () => real.clear(),
+      getItem: (k: string) => real.getItem(k),
+      key: (i: number) => real.key(i),
+      removeItem: (k: string) => real.removeItem(k),
+      setItem: (k: string, v: string) => {
+        if (k === failKey) { const err = new Error('quota'); err.name = 'QuotaExceededError'; throw err; }
+        real.setItem(k, v);
+      },
+    };
+    const install = (value: Storage) => {
+      for (const target of [globalThis, window] as Array<typeof globalThis | Window>) {
+        Object.defineProperty(target, 'localStorage', { value, configurable: true, writable: true });
+      }
+    };
+    install(stub);
+    try { run(); } finally { install(real); }
+  };
+
   // ── 启动崩溃循环：加载链里的写入不得抛穿 ──
   // ErrorBoundary 唯一的恢复手段是 reload，reload 重跑同一 effect → 永久循环，
   // 用户在应用内够不到重置按钮。#83 之前这个 effect 里 0 处写入，之后有 3 处。
   it('存储配额爆掉 → 加载链后段照常执行,不抛穿', () => {
     localStorage.setItem('oshikatsu_events', JSON.stringify([legacyEvent()]));
     localStorage.setItem('oshikatsu_recent_searches', JSON.stringify(['ARTIST']));
-    const orig = localStorage.setItem.bind(localStorage);
-    localStorage.setItem = ((key: string, value: string) => {
-      if (key === 'oshikatsu_events') {
-        const err = new Error('quota'); err.name = 'QuotaExceededError'; throw err;
-      }
-      return orig(key, value);
-    }) as typeof localStorage.setItem;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    try {
+    withFailingWrite('oshikatsu_events', () => {
       const { result } = render();
       expect(result.current.recentSearches).toEqual(['ARTIST']); // 加载链未被写入异常中断
-    } finally {
-      localStorage.setItem = orig;
-    }
+      // 证明写入确实被拒（否则本用例在覆盖失效的环境里会恒真）
+      const persisted = JSON.parse(localStorage.getItem('oshikatsu_events')!) as ActivityEvent[];
+      expect(persisted.map(e => e.id)).toEqual(['lawson-444647']);
+    });
   });
 
   it('alerts 存成 [null,42] 这类畸形载荷 → 不抛穿,加载链后段照常执行', () => {
@@ -433,19 +469,15 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
   // ── 迁移原子性：数据写失败时标记不得落地 ──
   it('事件回写失败 → 迁移标记不落地,下次启动重试剪枝', () => {
     localStorage.setItem('oshikatsu_events', JSON.stringify([legacyEvent()]));
-    const orig = localStorage.setItem.bind(localStorage);
-    localStorage.setItem = ((key: string, value: string) => {
-      if (key === 'oshikatsu_events') { throw new Error('quota'); }
-      return orig(key, value);
-    }) as typeof localStorage.setItem;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    try {
+    withFailingWrite('oshikatsu_events', () => {
       render();
       expect(localStorage.getItem('oshikatsu_lawson_id_migrated')).toBeNull();
-    } finally {
-      localStorage.setItem = orig;
-    }
+      // 同上：证明剪枝结果确实没落盘,标记才该缺席
+      const persisted = JSON.parse(localStorage.getItem('oshikatsu_events')!) as ActivityEvent[];
+      expect(persisted.map(e => e.id)).toEqual(['lawson-444647']);
+    });
   });
 
   it('首启无可剪内容 → 标记仍要落地(否则日后合法的 lawson-<纯数字> 会被误剪)', () => {
