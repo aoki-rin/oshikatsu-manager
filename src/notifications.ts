@@ -160,6 +160,45 @@ export async function cancelReminderTarget(notificationId: number): Promise<void
   await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
 }
 
+// 当前事件数据能产出的全部提醒 id。这是判定孤儿的唯一权威：notificationId 由
+// (stableConcertKey, windowId, type) 派生，任一项随源站解析方案变更而变（Lawson
+// lawson-html-v2：窗口 id 硬编码 -0 → -<schduleNo>），旧 id 便再也对不上任何开关。
+export function reminderIdsForEvents(
+  events: readonly ActivityEvent[],
+  t: TFunction = defaultT,
+  now: Date = new Date(),
+): Set<number> {
+  const ids = new Set<number>();
+  for (const event of events) {
+    // 调用方是启动加载链，喂进来的是持久化数据（localStorage 可以是任何东西）：一条结构损坏的
+    // 事件不能把整轮对账连同后续状态加载一起带崩（d24ec3f 的不变量）。跳过它——这种事件本就
+    // 渲染不出详情、也管不了自己的提醒。
+    try {
+      for (const item of buildReminderTargets(event, t, now)) ids.add(item.notificationId);
+    } catch (error: unknown) {
+      console.warn('[notifications] 事件提醒目标构建失败,已跳过', event?.id, error);
+    }
+  }
+  return ids;
+}
+
+// 清扫「系统里还排着、但当前数据已产不出」的通知——即 id 方案迁移后的幽灵通知。
+// 同样以 getPending 为准而非 activeAlerts：连没有 alert 记录的孤儿（竞态遗留，#73/#74）也一并清掉。
+// best-effort：插件不可用/权限异常只记日志，绝不让启动自愈把整条加载链带崩。
+export async function cancelOrphanReminders(validIds: ReadonlySet<number>): Promise<number[]> {
+  if (!Capacitor.isNativePlatform()) return [];
+  try {
+    const pending = await LocalNotifications.getPending();
+    const orphans = pending.notifications.map((n) => n.id).filter((id) => !validIds.has(id));
+    if (orphans.length === 0) return [];
+    await LocalNotifications.cancel({ notifications: orphans.map((id) => ({ id })) });
+    return orphans;
+  } catch (error: unknown) {
+    console.warn('[notifications] 清理孤儿通知失败', error);
+    return [];
+  }
+}
+
 // 取消本 App 排程的全部 pending 通知。以系统 getPending 为准（而非 activeAlerts）——
 // 这样连「UI 已失联的孤儿通知」（聚合 id 漂移/竞态产生，见 #73/#74）也能被清掉。
 // 「重置全部数据」必须先调它再清库，否则系统通知照弹且用户已无从关闭（#71）。

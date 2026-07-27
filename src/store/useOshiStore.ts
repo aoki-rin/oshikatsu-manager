@@ -8,12 +8,33 @@ import { searchPlatformsStreaming, searchableTargets } from '../sources';
 import { buildPlatformSearchUrl, dedupeEvents } from '../sources/shared';
 import { isProxyConfigured } from '../sources/proxy';
 import { aggregateConcerts } from '../sources/aggregate';
-import { cancelAllReminders, cancelReminderTarget, scheduleReminderTarget } from '../notifications';
+import {
+  cancelAllReminders, cancelOrphanReminders, cancelReminderTarget,
+  reminderIdsForEvents, scheduleReminderTarget,
+} from '../notifications';
 import { favoriteAliases } from '../favorites';
 import { supportsLawsonSource } from '../platform';
 import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
 const LIVE_ID_PREFIXES = ['agg-', 'eplus-', 'pia-', 'td-', 'lp-', 'lawson-'];
+
+// lawson-html-v2（64abc9a）前的 Lawson 事件 id：整组一个 lawson-<mid>——单段纯数字，
+// 且那个 mid 常来自页脚新闻链的误抓。新方案逐场，id 恒为
+// `lawson-${base}-${prfDate || `p${prfIdx}`}`（lawsonParser.ts parseResultBoxGroup）：
+// base 有 lcode → groupLcode → 标题 slug → `g${groupIdx}` 四级回退、日期段有 `p${prfIdx}` 回退，
+// 两段都保证非空 → 新格式恒为「两段起步」，形状上不可能命中本规则。
+const LEGACY_LAWSON_ID_RE = /^lawson-\d+$/;
+// 一次性标记。**不能**每次启动都剪：parseLawsonSearch 的旧结构回退路径至今仍在产出同形状的
+// lawson-<纯数字>（lawsonParser.ts 的 legacy 分支，parser-fixtures 有断言），无条件剪会把新版
+// 刚搜到的合法结果在下次启动删掉 → 搜到又消失的死循环。而「首次运行新版本」这一刻，
+// 存量里的该形状 id 必然出自旧版本（新版尚未搜过），此时剪枝才是精确的。
+const LAWSON_ID_MIGRATION_KEY = 'oshikatsu_lawson_id_migrated';
+
+// 迁移而非改写：旧「整组一场」对应新的 N 场公演，没有可靠的 1:1 映射，替用户猜一场等于凭空造数据。
+// 这里只丢弃死记录，正确的逐场事件由下一次搜索补回。
+function pruneLegacyLawsonEvents(events: ActivityEvent[]): ActivityEvent[] {
+  return events.filter(event => !LEGACY_LAWSON_ID_RE.test(event.id));
+}
 
 // 带自愈的持久化读取：单个 key 被写坏（存储满写半截/系统清理）时返回兜底值并清掉坏数据，
 // 而不是让整条加载链在第一个坏 key 处抛异常 → 之后所有状态静默丢失（深度 review 发现：
@@ -101,9 +122,21 @@ export function useOshiStore(t: TFunction) {
     // 2. Events & Plugins. User-visible event content starts empty and is filled by
     // real platform searches only.
     const storedEvents = localStorage.getItem('oshikatsu_events');
+    const persistedEvents = loadPersistedEvents(storedEvents);
+    // 旧 id 方案的存量事件一次性剪枝（见 pruneLegacyLawsonEvents）。不剪的话：①列表里多出一张
+    // 「整组坍缩」的重复卡（新旧 id 不同，dedupeEvents 去重不了，搜索也顶不掉）；②旧事件把旧
+    // windowId 一直续命成合法 id，启动提醒对账会认为对应的幽灵提醒仍有效。
+    const alreadyMigrated = localStorage.getItem(LAWSON_ID_MIGRATION_KEY) !== null;
+    const survivingEvents = alreadyMigrated ? persistedEvents : pruneLegacyLawsonEvents(persistedEvents);
+    // 「这轮确实剪掉了东西」——下面的提醒对账要用它当正基准（见 4. Alerts）。
+    const prunedLegacyEvents = survivingEvents.length !== persistedEvents.length;
     // Aggregate on load so events persisted before cross-platform merge migrate cleanly.
-    const loadedEvents = aggregateConcerts(loadPersistedEvents(storedEvents));
+    const loadedEvents = aggregateConcerts(survivingEvents);
     setEvents(loadedEvents);
+    if (!alreadyMigrated) {
+      localStorage.setItem(LAWSON_ID_MIGRATION_KEY, '1');
+      if (prunedLegacyEvents) saveToStorage('oshikatsu_events', loadedEvents);
+    }
     const validEventIds = new Set(loadedEvents.map(event => event.id));
 
     setArtists(loadJson<Artist[]>('oshikatsu_artists', []));
@@ -137,7 +170,29 @@ export function useOshiStore(t: TFunction) {
     setSourceStats(loadJson<Record<string, SourceStat>>('oshikatsu_source_stats', {}));
 
     // 4. Alerts and configurations
-    setActiveAlerts(loadJson<NotificationAlert[]>('oshikatsu_alerts', []));
+    // 源站解析方案变更会改写 id（Lawson lawson-html-v2：事件 id 整组一个 → 逐场,窗口 id
+    // 硬编码 -0 → -<schduleNo>）。notificationId 内嵌 windowId,于是持久化 alert 与已排定的
+    // 系统通知一起变孤儿：详情页开关显示「未开启」,通知却照弹且用户无从关闭。
+    // 启动时按「当前事件能产出的提醒 id」对账一次（幂等,每次启动都跑,不用版本标记——
+    // 迁移后的新 id 要等下一次搜索进库才比得出来）。
+    // 迁移而非清理？旧「整组一场」对应新的 N 场公演,没有可靠的 1:1 映射,替用户猜一场再
+    // 自动排程等于凭空造提醒；这里只清掉死记录,开关回到可点状态由用户重开。
+    const storedAlerts = loadJson<NotificationAlert[]>('oshikatsu_alerts', []);
+    if (loadedEvents.length === 0 && !prunedLegacyEvents) {
+      // 没有事件数据（从未搜索 / events 坏数据回了兜底）就没有比对基准,整体跳过：
+      // 宁可留孤儿,也不能把用户的有效提醒当孤儿删掉。
+      // 例外是上面刚剪过枝（prunedLegacyEvents）：那是正基准——被剪掉的事件其提醒必然已死,
+      // 此时「空事件表」是剪出来的结果而非无知。只搜过 Lawson 的用户会全量走这条路径,
+      // 漏掉就等于幽灵通知永远排在系统里（两半合流才暴露的缺口）。
+      setActiveAlerts(storedAlerts);
+    } else {
+      const validReminderIds = reminderIdsForEvents(loadedEvents, t);
+      // 缺 notificationId 的旧 schema 记录同样是死记录（开关按 notificationId 匹配,永远点不亮）。
+      const liveAlerts = storedAlerts.filter(alert => alert.notificationId !== undefined && validReminderIds.has(alert.notificationId));
+      setActiveAlerts(liveAlerts);
+      if (liveAlerts.length !== storedAlerts.length) saveToStorage('oshikatsu_alerts', liveAlerts);
+      void cancelOrphanReminders(validReminderIds);
+    }
     setSearchResultIds(loadJson<string[]>('oshikatsu_search_result_ids', []).filter(id => validEventIds.has(id)));
     setSearchReports(loadJson<TicketSearchReport[]>('oshikatsu_search_reports', []));
     setRecentSearches(loadJson<string[]>('oshikatsu_recent_searches', []));
@@ -179,6 +234,9 @@ export function useOshiStore(t: TFunction) {
     const storedLocaleMode = localStorage.getItem(LOCALE_STORAGE_KEY);
     localStorage.clear();
     if (storedLocaleMode) localStorage.setItem(LOCALE_STORAGE_KEY, storedLocaleMode);
+    // 迁移标记必须挺过 clear：库已清空，旧格式存量不可能再有，剪枝已无事可做；而标记若丢了，
+    // 重置后新搜到的、走旧结构回退路径的 lawson-<纯数字> 会在下次启动被误删。
+    localStorage.setItem(LAWSON_ID_MIGRATION_KEY, '1');
     setOshiColorId('pink');
     setEvents([]);
     setArtists([]);
