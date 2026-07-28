@@ -17,6 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 用 Chromium 的网络栈（Cronet）发 HTTP 请求。
@@ -34,18 +37,26 @@ public class CronetHttpPlugin extends Plugin {
     private static final int DEFAULT_TIMEOUT_MS = 20000;
     private CronetEngine engine;
     private ExecutorService executor;
+    private ScheduledExecutorService timeoutScheduler;
 
     @Override
     public void load() {
         // Cronet 引擎构建一次复用：每请求新建会重复初始化 QUIC/缓存，且拖慢首个请求。
         engine = new CronetEngine.Builder(getContext()).build();
         executor = Executors.newCachedThreadPool();
+        timeoutScheduler = Executors.newSingleThreadScheduledExecutor();
     }
 
     @Override
     protected void handleOnDestroy() {
         if (executor != null) {
             executor.shutdown();
+        }
+        if (timeoutScheduler != null) {
+            timeoutScheduler.shutdown();
+        }
+        if (engine != null) {
+            engine.shutdown();
         }
     }
 
@@ -59,7 +70,8 @@ public class CronetHttpPlugin extends Plugin {
         JSObject headers = call.getObject("headers", new JSObject());
         int timeoutMs = call.getInt("timeoutMs", DEFAULT_TIMEOUT_MS);
 
-        UrlRequest.Builder builder = engine.newUrlRequestBuilder(url, new BodyCollector(call, timeoutMs), executor);
+        BodyCollector collector = new BodyCollector(call);
+        UrlRequest.Builder builder = engine.newUrlRequestBuilder(url, collector, executor);
         if (headers != null) {
             // JSObject 继承 JSONObject，用 keys() 迭代（没有 entrySet）。
             for (Iterator<String> it = headers.keys(); it.hasNext(); ) {
@@ -70,48 +82,54 @@ public class CronetHttpPlugin extends Plugin {
                 }
             }
         }
-        builder.build().start();
+        UrlRequest request = builder.build();
+        // 硬超时必须用调度取消,不能只在回调里比时间：连接若在任何回调触发前就卡住
+        // （TCP 黑洞 / TLS 后被静默丢弃——正是 Akamai 拒绝时的表现），回调永远不来,
+        // 那种写法就永远不判超时,PluginCall 也永远不 settle。
+        collector.armTimeout(timeoutScheduler, request, timeoutMs);
+        request.start();
     }
 
     /** 累积响应体；成功/失败都只 resolve/reject 一次。 */
     private static class BodyCollector extends UrlRequest.Callback {
-        private final PluginCall call;
-        private final long deadline;
-        private final ByteArrayOutputStream body = new ByteArrayOutputStream();
-        private boolean settled = false;
+        // 响应体上限：真实搜索页约 180KB。留 8MB 余量,超出即视为异常响应并中止——
+        // 否则一个畸形/超大响应会把整个页面读进内存。
+        private static final int MAX_BODY_BYTES = 8 * 1024 * 1024;
 
-        BodyCollector(PluginCall call, int timeoutMs) {
+        private final PluginCall call;
+        private final ByteArrayOutputStream body = new ByteArrayOutputStream();
+        // settled 跨 Cronet 执行线程与超时调度线程读写,必须 volatile 才有可见性。
+        private volatile boolean settled = false;
+        private ScheduledFuture<?> timeoutTask;
+
+        BodyCollector(PluginCall call) {
             this.call = call;
-            this.deadline = System.currentTimeMillis() + timeoutMs;
         }
 
-        private boolean expired(UrlRequest request) {
-            if (System.currentTimeMillis() <= deadline) {
-                return false;
+        void armTimeout(ScheduledExecutorService scheduler, UrlRequest request, int timeoutMs) {
+            timeoutTask = scheduler.schedule(request::cancel, timeoutMs, TimeUnit.MILLISECONDS);
+        }
+
+        private void disarmTimeout() {
+            if (timeoutTask != null) {
+                timeoutTask.cancel(false);
             }
-            request.cancel();
-            return true;
         }
 
         @Override
         public void onRedirectReceived(UrlRequest request, UrlResponseInfo info, String newLocationUrl) {
-            if (expired(request)) {
-                return;
-            }
             request.followRedirect();
         }
 
         @Override
         public void onResponseStarted(UrlRequest request, UrlResponseInfo info) {
-            if (expired(request)) {
-                return;
-            }
             request.read(ByteBuffer.allocateDirect(32 * 1024));
         }
 
         @Override
         public void onReadCompleted(UrlRequest request, UrlResponseInfo info, ByteBuffer buffer) {
-            if (expired(request)) {
+            if (body.size() > MAX_BODY_BYTES) {
+                request.cancel();
                 return;
             }
             buffer.flip();
@@ -128,6 +146,9 @@ public class CronetHttpPlugin extends Plugin {
                 return;
             }
             settled = true;
+            disarmTimeout();
+            disarmTimeout();
+            disarmTimeout();
             JSObject result = new JSObject();
             result.put("status", info.getHttpStatusCode());
             result.put("url", info.getUrl());

@@ -48,11 +48,10 @@ export const PLATFORM_IDS: Record<TicketPlatform, string> = {
 
 export const PLATFORM_SEARCH_TIMEOUT_MS = 25000;
 
-// 每平台超时上限（QA #2）：Lawson 手机直连基本必被反爬拖死（见 ADR-0002，需住宅代理），
-// 真机实测每次搜索陪跑 20s+ 才超时 —— 8s 内没结果就明确失败，别拖住整个「搜索中」状态。
-const PLATFORM_TIMEOUT_OVERRIDES: Partial<Record<string, number>> = {
-  'Lawson Ticket': 8000,
-};
+// 每平台超时上限。Lawson 曾被压到 8s：当时直连必被反爬拖死（ADR-0002），压低只为快速失败。
+// ADR-0005 之后 Cronet 成了能用的主路径（实测 300-500ms），8s 反而会在弱信号下误杀一次
+// 180KB 的正常抓取 —— 而「人在外面、信号不好」正是本 app 的核心使用场景。回归默认 25s。
+const PLATFORM_TIMEOUT_OVERRIDES: Partial<Record<string, number>> = {};
 export function platformSearchTimeoutMs(platform: string): number {
   return PLATFORM_TIMEOUT_OVERRIDES[platform] ?? PLATFORM_SEARCH_TIMEOUT_MS;
 }
