@@ -34,7 +34,7 @@ export const jaJP = {
   'discover.deadlineClosed': '締切済み',
   'discover.lotteryBadge': '先行 抽選受付',
   'discover.generalBadge': '★一般発売 受付',
-  'discover.proxyDegraded': '⚠️ プロキシに接続できず、今回は端末から直接取得（ローチケ等プロキシ依存ソースは制限）。Mac のプロキシと Tailscale を確認してください。',
+  'discover.proxyDegraded': '⚠️ プロキシに接続できず、今回は端末から直接取得（Android 版はローチケも通常どおり検索可）。結果に問題なければ無視して構いません。',
   'discover.resultsStaleTitle': '前回の検索結果（{count}件 · {time}）',
   'discover.resultsStaleTitleNoTime': '前回の検索結果（{count}件）',
   'discover.searchingEmptyTitle': '各プラットフォームを検索中…',

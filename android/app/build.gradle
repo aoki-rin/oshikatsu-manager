@@ -61,6 +61,9 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // Chromium 网络栈：Akamai 按 TLS 指纹判客户端,OkHttp 被静默丢弃而 Chromium 通过。
+    // 用 Play Services 版(而非 cronet-embedded)：体积几乎为零,自用 Pixel 有 GMS。见 docs/adr/0005。
+    implementation "com.google.android.gms:play-services-cronet:18.1.0"
 }
 
 apply from: 'capacitor.build.gradle'
