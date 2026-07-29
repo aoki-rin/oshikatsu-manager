@@ -16,8 +16,9 @@ vi.mock('@capacitor/core', () => ({
   registerPlugin: () => ({ get: h.cronetGet }),
 }));
 
-import { searchLawson, interpretLawsonHtml } from '../../src/sources/lawson';
-import { CHROME_NAV_HEADERS, CHROME_UA, CHROME_VERSION, describeCronetFailure, isCronetAvailable } from '../../src/sources/cronetHttp';
+import { searchLawson, describeDirectFailure, CAPACITOR_TIMEOUT_MS } from '../../src/sources/lawson';
+import { CHROME_NAV_HEADERS, CHROME_UA, CHROME_VERSION, SAFARI_IOS_UA, describeCronetFailure, isCronetAvailable } from '../../src/sources/cronetHttp';
+import { buildPlatformSearchUrl, platformSearchTimeoutMs } from '../../src/sources/shared';
 
 const RESULT_HTML = `
   <div class="ResultBox boxContents prfSummaryItem">
@@ -149,29 +150,118 @@ describe('失败原因分类', () => {
   });
 });
 
-describe('无 Cronet 环境的兜底路径', () => {
-  it('iOS/web：退回 CapacitorHttp,并复用同一套解析校验', async () => {
-    h.getPlatform.mockReturnValue('web');
+// ADR-0006 之后这条不再是「反正会失败的降级」,而是 iOS 上的主路径。
+// 之前这里只断言「解析出 1 条」+「没走 Cronet」,于是删掉 iOS 的 UA 分支、
+// 让 URL 变陈旧、完全不发 UA、绕过反爬判定——四种改法都能通过全部 306 条测试。
+describe('CapacitorHttp 路径（iOS 主路径 / web 兜底）', () => {
+  // 平台 → 期望 UA。ADR-0006 决定「UA 按平台给自洽的那个」,此前零覆盖。
+  for (const [platform, expectedUa, label] of [
+    ['ios', SAFARI_IOS_UA, 'Safari'],
+    ['web', CHROME_UA, 'Chrome'],
+  ] as const) {
+    it(`${platform}：发 ${label} UA,URL 与 Cronet 路径同源`, async () => {
+      h.getPlatform.mockReturnValue(platform);
+      h.isPluginAvailable.mockReturnValue(false);
+      h.capacitorGet.mockResolvedValue({ status: 200, data: RESULT_HTML });
+
+      const events = await searchLawson('倉木麻衣');
+
+      assert.equal(events.length, 1);
+      assert.equal(events[0].id, 'lawson-90040-20261129');
+      assert.equal(h.cronetGet.mock.calls.length, 0);
+
+      const sent = h.capacitorGet.mock.calls[0][0];
+      assert.equal(sent.headers['User-Agent'], expectedUa);
+      // 两条传输必须打同一个地址。曾经这里是硬编码的第二份,Cronet 那份改了它不会跟。
+      assert.equal(sent.url, buildPlatformSearchUrl('Lawson Ticket', '倉木麻衣'));
+      assert.equal(sent.params, undefined, 'URL 已带 query,再传 params 会重复编码');
+    });
+  }
+
+  // Capacitor 的 iOS 实现只认 connectTimeout(HttpRequestHandler.swift 取
+  // `connectTimeout ?? readTimeout ?? 600000` 塞进 URLRequest.timeoutInterval),
+  // readTimeout 在 iOS 上是死参数 → 值必须由 connectTimeout 承担。
+  it('超时值由 connectTimeout 承担,且留在外层平台超时之内', async () => {
+    h.getPlatform.mockReturnValue('ios');
+    h.isPluginAvailable.mockReturnValue(false);
     h.capacitorGet.mockResolvedValue({ status: 200, data: RESULT_HTML });
+    await searchLawson('倉木麻衣');
 
-    const events = await searchLawson('倉木麻衣');
-
-    assert.equal(events.length, 1);
-    assert.equal(h.cronetGet.mock.calls.length, 0);
-  });
-
-  it('直连抛异常 → 明确文案而非静默空结果', async () => {
-    h.getPlatform.mockReturnValue('web');
-    h.capacitorGet.mockRejectedValue(new Error('timeout'));
-    await assert.rejects(() => searchLawson('X'), /超时\/受限/);
+    assert.equal(h.capacitorGet.mock.calls[0][0].connectTimeout, CAPACITOR_TIMEOUT_MS);
+    // 下界:6s 是 ADR-0005 时期给「实测必失败的路径」定的快速放弃值,
+    // 现在这条要在移动网络上取完 ~190KB 搜索页,不能再照抄。
+    assert.ok(CAPACITOR_TIMEOUT_MS >= 10000, `内层超时 ${CAPACITOR_TIMEOUT_MS}ms 对主路径过短`);
+    // 上界:必须先于外层触发,否则拿不到失败分类,只剩一句 "search timed out"。
+    assert.ok(CAPACITOR_TIMEOUT_MS < platformSearchTimeoutMs('Lawson Ticket'),
+      '内层超时不早于外层 → 失败分类拿不到执行机会');
   });
 });
 
-describe('interpretLawsonHtml 被两条路径共用', () => {
-  // 抽出来就是为了防「换了传输层却漏掉反爬/零结果判定」——这条锁住两路同源。
-  it('同一份 HTML,无论来自哪条路径,判定一致', () => {
-    const viaCronet = interpretLawsonHtml(RESULT_HTML, '倉木麻衣', 200);
-    const viaCapacitor = interpretLawsonHtml(RESULT_HTML, '倉木麻衣', 200);
-    assert.deepEqual(viaCronet.map(e => e.id), viaCapacitor.map(e => e.id));
+describe('CapacitorHttp 路径的失败分类', () => {
+  // 以前一律报「超时/受限」并丢掉原始异常。iOS 上这是主路径,Akamai 收紧、DNS 失败、
+  // TLS 问题被同一句话掩盖,会把排查引向网络。
+  it('超时 → 说超时,并给官方跳转', () => {
+    const msg = describeDirectFailure(new Error('The request timed out.'));
+    assert.match(msg, /超时/);
+    assert.match(msg, /打开ローチケ/);
+  });
+
+  it('DNS/离线 → 说连不上,不说超时', () => {
+    const msg = describeDirectFailure(new Error('A server with the specified hostname could not be found.'));
+    assert.match(msg, /连不上/);
+    assert.doesNotMatch(msg, /超时/);
+  });
+
+  it('任何原因都保留原始异常摘要,不吞信息', () => {
+    assert.match(describeDirectFailure(new Error('some unexpected native error')), /some unexpected native error/);
+    assert.match(describeDirectFailure(new Error('An SSL error has occurred')), /SSL/);
+  });
+
+  it('searchLawson 把直连异常转成带因文案而非静默空结果', async () => {
+    h.getPlatform.mockReturnValue('ios');
+    h.isPluginAvailable.mockReturnValue(false);
+    h.capacitorGet.mockRejectedValue(new Error('A server with the specified hostname could not be found.'));
+    await assert.rejects(() => searchLawson('X'), /连不上/);
+  });
+});
+
+describe('两条传输路径的行为必须一致', () => {
+  // ⚠️ 这里曾经是「同一个函数用同一份参数调用两次再比较」,结构上不可能失败:
+  // 把兜底路径改成直接 parseLawsonSearch(绕过反爬 + 结构漂移判定)时全量测试仍全绿。
+  // 现在改为真的把同一份 HTML 分别灌进两条传输,断言 searchLawson 的最终行为一致。
+  const viaCronet = (html: string, status = 200) => {
+    h.getPlatform.mockReturnValue('android');
+    h.isPluginAvailable.mockReturnValue(true);
+    h.cronetGet.mockResolvedValue({ status, url: 'x', negotiatedProtocol: 'h2', data: html });
+    return searchLawson('倉木麻衣');
+  };
+  const viaCapacitor = (html: string, status = 200) => {
+    h.getPlatform.mockReturnValue('ios');
+    h.isPluginAvailable.mockReturnValue(false);
+    h.capacitorGet.mockResolvedValue({ status, data: html });
+    return searchLawson('倉木麻衣');
+  };
+
+  it('正常页：两条路径解析出同一批事件', async () => {
+    const a = await viaCronet(RESULT_HTML);
+    const b = await viaCapacitor(RESULT_HTML);
+    assert.equal(a.length, 1);
+    assert.deepEqual(a.map(e => e.id), b.map(e => e.id));
+  });
+
+  it('反爬页：两条路径都必须抛,不能有一条静默返回空', async () => {
+    const blocked = '<html>' + 'x'.repeat(300) + '</html>';
+    await assert.rejects(() => viaCronet(blocked, 403), /反爬/);
+    await assert.rejects(() => viaCapacitor(blocked, 403), /反爬/);
+  });
+
+  it('结构漂移：两条路径都必须抛,不能有一条报「无票」', async () => {
+    await assert.rejects(() => viaCronet(UNKNOWN_HTML), /结构无法识别/);
+    await assert.rejects(() => viaCapacitor(UNKNOWN_HTML), /结构无法识别/);
+  });
+
+  it('零结果页：两条路径都返回空数组（无票是正常结局）', async () => {
+    assert.deepEqual(await viaCronet(ZERO_RESULT_HTML), []);
+    assert.deepEqual(await viaCapacitor(ZERO_RESULT_HTML), []);
   });
 });
