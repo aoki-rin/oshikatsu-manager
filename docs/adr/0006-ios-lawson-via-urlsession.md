@@ -44,6 +44,23 @@ web(dev)=vite 同源代理）。函数保留而非删除调用点：它是「按
 UA 按平台给自洽的那个（iOS→Safari、Android→Chrome）。实测虽然不影响结果，但自相矛盾的
 组合没有任何好处，而 Akamai 的策略随时可能收紧到与 Chromium 同等。
 
+## 真机端到端验证（2026-07-29）
+
+iPhone 13 mini 实机，`.env` 已清空（包内无代理地址），经 `ios-webkit-debug-proxy` 驱动：
+
+| 检查项 | 结果 |
+|---|---|
+| `Capacitor.getPlatform()` | `ios` |
+| `isPluginAvailable('CronetHttp')` | **false**（门控正确，走 URLSession 兜底） |
+| `isPluginAvailable('CapacitorHttp')` | true |
+| 搜索「倉木麻衣」 | **实时搜索结果（3场）**，无降级提示 |
+| 平台报告 | `Lawson Ticket:3 件`（其余四源当时无结果） |
+| 事件 id | `lawson-90040-2026{1129,1204,1212}`，会场/日期与 Android 侧一致 |
+
+注意 `window.Capacitor.Plugins.CronetHttp` 在 iOS 上**也是真值**（JS 侧 `registerPlugin`
+建的代理对象与平台无关，调用才抛「未实现」）。所以门控必须用 `isPluginAvailable`，
+判断对象存在会误判成「Cronet 可用」并在 iOS 上走进不存在的原生实现——本次已实测确认。
+
 ## 后果
 
 - ➕ iOS 版取回 Lawson，零原生代码、零体积增加。
