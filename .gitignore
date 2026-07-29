@@ -23,3 +23,8 @@ scraper/output/
 # release 签名(只存本机,丢了以后更新包签名会变——记得备份)
 android/release.keystore
 android/keystore.properties
+
+# iOS 构建产物(xcodebuild -derivedDataPath 的输出)。内含 SPM checkouts 等内嵌 git 仓库,
+# 误提交会触发 "adding embedded git repository" 并把整个依赖树塞进仓库。
+ios/App/DerivedData/
+ios/App/DerivedDataDevice/

@@ -2,15 +2,16 @@ import { CapacitorHttp } from '@capacitor/core';
 import type { ActivityEvent } from '../types';
 import { buildPlatformSearchUrl, looksLikeAntiBot } from './shared';
 import { parseLawsonSearch, isLawsonZeroResults } from './lawsonParser';
-import { CHROME_UA, cronetGet, describeCronetFailure, isCronetAvailable } from './cronetHttp';
+import { cronetGet, describeCronetFailure, isCronetAvailable, platformUserAgent } from './cronetHttp';
 
 export { parseLawsonSearch, isLawsonZeroResults } from './lawsonParser';
 
-// 抓取路径优先级（见 docs/adr/0005）：
-//  ① Cronet（Chromium 网络栈，仅 Android）——唯一能在设备本地过 Akamai 的栈，300-500ms。
-//  ② CapacitorHttp 直连——OkHttp 的 TLS 指纹被 Akamai 静默丢弃，实测必失败；
-//     保留只为在无 Cronet 的环境（iOS/web/旧包）给出明确失败文案而非静默空结果。
-// 代理路径（ADR-0002）仍可用但不再是必需品：Lawson 已能端上自足。
+// 抓取路径优先级（见 docs/adr/0005、0006）：
+//  ① Cronet（Chromium 网络栈，仅 Android）——Android 上唯一能过 Akamai 的栈，300-500ms。
+//  ② CapacitorHttp 直连——在 **iOS 上走 URLSession，实测能过**（Apple 的 CFNetwork 指纹被
+//     Akamai 直接放行，ADR-0006）；在 Android 上则必失败（其 HTTP 栈指纹被静默丢弃）。
+//     同一条兜底分支在两个平台上性质不同，超时文案因此按平台措辞。
+// 代理路径（ADR-0002）仍可用但不再是必需品：两个平台都能端上自足。
 
 const CAPACITOR_TIMEOUT_MS = 6000;
 
@@ -41,18 +42,19 @@ export async function searchLawson(artist: string): Promise<ActivityEvent[]> {
     return interpretLawsonHtml(res.data, artist, res.status);
   }
 
-  // 无 Cronet 的环境：直连基本必被反爬挂起，超时收紧以免拖满全局「搜索中」（QA #2）。
+  // 无 Cronet 的环境。iOS：URLSession 能正常过 Akamai，这是正经路径而非降级。
+  // web/dev：浏览器 CORS 会拦，本就搜不了。
   let res;
   try {
     res = await CapacitorHttp.get({
       url: 'https://l-tike.com/search/',
       params: { keyword: artist },
-      headers: { 'User-Agent': CHROME_UA },
+      headers: { 'User-Agent': platformUserAgent() },
       connectTimeout: CAPACITOR_TIMEOUT_MS,
       readTimeout: CAPACITOR_TIMEOUT_MS + 1000,
     });
   } catch {
-    throw new Error('手机直连ローチケ超时/受限（Android 版走 Chromium 栈可直取；也可点「打开ローチケ」用官方页搜索）');
+    throw new Error('直连ローチケ超时/受限（可点「打开ローチケ」用官方页搜索）');
   }
   const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
   return interpretLawsonHtml(html, artist, res.status);

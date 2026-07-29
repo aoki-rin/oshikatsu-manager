@@ -250,11 +250,13 @@ export function useOshiStore(t: TFunction) {
       })).map(ext => ext.id === 'ext-lawson' ? { ...ext, isInstalled: true } : ext);
       setExtensions(merged);
     } else {
-      // 首启默认：Lawson 只在配置了代理时才开——未配代理的设备（如分发给朋友的包）
-      // 直连恒被反爬拒绝，开着只会让每次搜索多拖 8s + 一行「搜索失败」。插件页可手动开。
-      // iOS 恒关（src/platform.ts）：搜索层已权威过滤，这里保持存储状态一致。
+      // 首启默认：Lawson 与其它源一样默认开启。
+      // 曾经是「只在配了代理时才开」——因为那时未配代理的设备直连恒被反爬拒绝，开着只会白等。
+      // ADR-0005/0006 之后两个平台都能端上直取（Android→Cronet，iOS→URLSession），
+      // 该前提不再成立；继续默认关会让全新安装/重置数据后 Lawson 静默缺席，用户还得自己去插件页开。
+      // 平台裁剪仍以 supportsLawsonSource 为准（搜索层 searchableTargets 是权威过滤，这里只保持一致）。
       setExtensions(INITIAL_EXTENSIONS.map(ext =>
-        ext.id === 'ext-lawson' ? { ...ext, isEnabled: isProxyConfigured() && supportsLawsonSource() } : ext,
+        ext.id === 'ext-lawson' ? { ...ext, isEnabled: supportsLawsonSource() } : ext,
       ));
     }
 
