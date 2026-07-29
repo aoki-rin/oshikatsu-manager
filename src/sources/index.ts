@@ -25,9 +25,11 @@ export function hasPlugin(platform: string): boolean {
 }
 
 // 解析出本次要搜索的平台（'All' → 全部已注册插件；否则只取有插件的）。
-// iOS 裁剪：Lawson 在此权威过滤（src/platform.ts）——代理/直连两条路径都从这里取目标，
-// 所以下游把 targets（显式列表）而非 activePlatforms（可能含 'All'）传给代理，
-// 防止服务端替 iOS 端搜 Lawson。
+// 平台裁剪在此权威生效（src/platform.ts 的 supportsLawsonSource）——代理/直连两条路径
+// 都从这里取目标，所以下游把 targets（显式列表）而非 activePlatforms（可能含 'All'）
+// 传给代理，服务端不会替客户端搜一个它已裁掉的平台。
+// 注：ADR-0006 之后 Lawson 三平台皆可，这个过滤当前不裁任何东西；保留是因为它是
+// 「某平台被反爬挡住时一处关掉」的唯一开关。
 export function searchableTargets(activePlatforms: string[], platform?: AppPlatform): TicketPlatform[] {
   const configured = activePlatforms.includes('All') ? Object.keys(REGISTRY) : activePlatforms;
   return configured
@@ -58,7 +60,7 @@ export async function searchPlatformsStreaming(
   if (!q || targets.length === 0) return;
 
   // 代理优先（未配置代理时 searchViaProxy 返回 null → 走客户端流式）
-  // 传 targets 而非 activePlatforms：平台裁剪（iOS 无 Lawson）对代理路径同样生效。
+  // 传 targets 而非 activePlatforms：平台裁剪对代理路径同样生效。
   let proxyResult: TicketSearchResult | null = null;
   let proxyDegraded = false;
   try {
@@ -168,7 +170,7 @@ export async function searchClientPlatforms(query: string, activePlatforms: stri
 // 各平台原始结果合并后，做跨平台「同一场演出」聚合（同艺人+日期+会场 → 一张卡，多平台窗口）。
 // 注意：reports 仍是各平台「原始」命中数（聚合只影响展示用的 events 列表）。
 export async function searchAllPlatforms(query: string, activePlatforms: string[]): Promise<TicketSearchResult & AggregateResult> {
-  // 先解析成显式目标列表（含 iOS 的 Lawson 裁剪），代理和客户端兜底吃到同一份。
+  // 先解析成显式目标列表（已过平台裁剪），代理和客户端兜底吃到同一份。
   const result = await searchWithProxyFallback(query, searchableTargets(activePlatforms), searchClientPlatforms);
   return {
     ...result,
