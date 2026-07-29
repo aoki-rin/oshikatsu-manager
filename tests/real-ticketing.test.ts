@@ -173,10 +173,15 @@ describe('ticket source helpers', () => {
     );
   });
 
-  it('Lawson 直连超时收敛到 8s，其他平台维持默认（QA #2）', () => {
-    assert.equal(platformSearchTimeoutMs('Lawson Ticket'), 8000);
-    assert.equal(platformSearchTimeoutMs('eplus'), PLATFORM_SEARCH_TIMEOUT_MS);
-    assert.equal(platformSearchTimeoutMs('Ticket Pia'), PLATFORM_SEARCH_TIMEOUT_MS);
+  // 曾经 Lawson 被压到 8s（QA #2）：那时直连必被反爬拖死，压低只为快速失败。
+  // ADR-0005 之后 Cronet 成了能用的主路径，8s 会在弱信号下误杀一次 180KB 的正常抓取——
+  // 而「人在外面、信号不好」正是本 app 的核心场景。全平台统一默认值。
+  it('所有平台统一默认超时（Lawson 不再特殊收敛，ADR-0005）', () => {
+    for (const platform of ['Lawson Ticket', 'eplus', 'Ticket Pia', 'LivePocket', 'TicketDive']) {
+      assert.equal(platformSearchTimeoutMs(platform), PLATFORM_SEARCH_TIMEOUT_MS, platform);
+    }
+    // 上限必须宽于实测抓取耗时（真机 300-500ms）一个数量级以上，否则弱网必误杀
+    assert.ok(PLATFORM_SEARCH_TIMEOUT_MS >= 20000);
   });
 
   it('derives compatible timeline fields from ticket windows', () => {
