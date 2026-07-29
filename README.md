@@ -7,12 +7,13 @@
 ## 它解决什么
 日本一场 live 常开好几轮抽選，每轮 申込開始/締切 散在 Pia / eplus / ローチケ / LivePocket，极易漏报名。这工具替我聚合搜索、统一展示多轮窗口、到点提醒。
 
-## 架构（Mihon 式平台搜索插件 + 轻量代理）
+## 架构（Mihon 式平台搜索插件 + 可选代理）
 ```
 搜索框输入艺人名
       │
       ▼
-优先请求同仓 Express 代理 /api/search?q=&sources=
+配了代理 → 同仓 Express /api/search?q=&sources=（全平台）
+未配代理 → 端上直取：Lawson 在 Android 走 Cronet / iOS 走 URLSession，其余走 CapacitorHttp
   ├─ eplus adapter   search() → 事件[] + 多轮窗口
   ├─ Pia adapter     search() → 事件[]
   ├─ LivePocket / TicketDive adapter
@@ -22,7 +23,7 @@
 聚合显示 → 点开事件 → 多轮 ticket_window（JST）→ 申込/官方页跳转 → .ics / 本地通知
 ```
 - **不配官网 URL**：按艺人名搜各平台（像 Mihon 搜漫画源），不是为每次巡演配置网址。
-- **代理优先，App 内兜底**：配置 `VITE_TICKET_PROXY_BASE_URL` 时走代理；未配置或代理不可达时，Android/iOS 包继续用 CapacitorHttp 直连搜索。
+- **代理可选，端上自足**：配置 `VITE_TICKET_PROXY_BASE_URL` 时**全平台**走代理（配了就不会走端上）；留空则直接端上直取。Lawson 在 Android 走 Cronet（Chromium 网络栈，[ADR-0005](docs/adr/0005-lawson-cronet-on-device.md)）、在 iOS 走 CapacitorHttp 的 URLSession（Apple 的 CFNetwork 指纹被直接放行，零原生代码，[ADR-0006](docs/adr/0006-ios-lawson-via-urlsession.md)）。**两个平台都不再需要常驻 Mac + Tailscale。**
 - **ExtensionView** = 启用/停用哪些平台规则，并查看代理/解析状态。
 - 时间统一 JST（`+09:00`），`.ics` 用 `TZID=Asia/Tokyo`，海外时区不偏。
 
@@ -32,11 +33,11 @@
 | **eplus** | `eplus.jp/sf/search?keyword=` | ✅ 内嵌 JSON，search 直接带多轮窗口，**插件已实现** |
 | **Pia** | `t.pia.jp/pia/search_all.do?kw=` | ✅ 命中艺人，详情 pattern 待做 |
 | **LivePocket** | `t.livepocket.jp/search` | ⚠️ JS 渲染，需找 XHR JSON API |
-| **Lawson** | `l-tike.com/search/?keyword=` | ⚠️ 后端代理解析官方搜索页；反爬/异常时明确失败并提供ローチケ跳转 |
+| **Lawson** | `l-tike.com/search/?keyword=` | ✅ 端上直取：Android=Cronet（~400ms，ADR-0005）/ iOS=URLSession（ADR-0006）。失败时明确报因并提供ローチケ跳转 |
 
 ## 当前状态
 - ✅ **eplus 平台搜索插件**（`src/sources/eplus.ts`）：search(艺人) → 事件 + 多轮受付窗口（プレオーダー/抽選/先着, JST）。通用、非写死。
-- ✅ **Capacitor Android + iOS** 已搭好（`capacitor.config.ts`，CapacitorHttp 已启用）；Android 用 Android Studio JBR 21、iOS 用 Xcode 构建，真机调试（自用）。iOS 版按能力裁剪：无日历导出、无 Lawson 搜票，见 [ADR-0004](docs/adr/0004-ios-scope-trim.md)。
+- ✅ **Capacitor Android + iOS** 已搭好（`capacitor.config.ts`，CapacitorHttp 已启用）；Android 用 Android Studio JBR 21、iOS 用 Xcode 构建，真机调试（自用）。iOS 版按能力裁剪：无日历导出（[ADR-0004](docs/adr/0004-ios-scope-trim.md)）；Lawson 搜票已于 ADR-0006 取回。
 - ✅ R3 多轮 `ticket_window` 类型 + EventDetailModal 多轮渲染，搜索结果会写入本地缓存。
 - ✅ 搜索框已接入平台实时搜索，代理优先、CapacitorHttp 直连兜底。
 - ✅ Pia / eplus / LivePocket / TicketDive / Lawson 已接入统一 source/report；Lawson 失败会明确给出ローチケ跳转。
@@ -94,7 +95,7 @@ mv .env .env.bak \
 **iOS 真机调试**（Xcode，自用）：
 1. `npm run cap:build` 后 `npm run ios` 打开 Xcode 工程。
 2. 顶部设备下拉选你的 iPhone → ▶ Run。首次装机需在 iPhone 设置 → 通用 → VPN与设备管理 里信任开发者证书。
-- iOS 能力裁剪（无日历导出 / 无 Lawson）见 [ADR-0004](docs/adr/0004-ios-scope-trim.md)；代理为明文 http，Info.plist 已放开 ATS（自用）。
+- iOS 能力裁剪（无日历导出）见 [ADR-0004](docs/adr/0004-ios-scope-trim.md)——其中「无 Lawson」一条已被 [ADR-0006](docs/adr/0006-ios-lawson-via-urlsession.md) 推翻。代理为明文 http，Info.plist 已放开 ATS（自用）。
 
 ## 测试
 分层自动化测试（Vitest + Testing Library + Playwright）。每个 PR 经 GitHub Actions 跑 `tsc` + 覆盖率门禁 + E2E。

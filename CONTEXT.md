@@ -34,7 +34,7 @@
 | **跨平台同场合并** | 同一场真实演出在多平台都有 → 合并成一张卡,卡内列各平台 windows。 |
 | **推し / 推しカラー(应援色)** | 用户主推的艺人 / 其代表色(`oshiColor`,贯穿 UI 主题)。 |
 | **新着** | 自用户上次查看后新出现的演出 / 轮次(角标提示)。⚠️ 见 issue #6,**尚未实现**。 |
-| **proxy-first / CapacitorHttp 兜底** | 配 `VITE_TICKET_PROXY_BASE_URL` 时走同仓 Express 代理;未配 / 不可达时安卓包用原生 HTTP 直连。见 ADR-0002。 |
+| **proxy-first / 客户端兜底** | 配 `VITE_TICKET_PROXY_BASE_URL` 时**全平台**走同仓 Express 代理(配了就不会走客户端,见 ADR-0005「生效条件」);未配 / 不可达时走客户端:Lawson 在 Android 用 Cronet(Chromium 栈)、在 iOS 用 CapacitorHttp 的 URLSession,其余平台一律 CapacitorHttp。见 ADR-0002 / ADR-0005 / ADR-0006。 |
 
 ## 核心实体(`src/types.ts` 为权威)
 
@@ -54,12 +54,12 @@
 - **持久化**:localStorage(`oshikatsu_*` 键),集中在 `src/store/useOshiStore.ts`。
 - **构建 / 测试用 `/opt/homebrew/bin/node`**(避开硬化运行时原生模块签名问题);Android 用 Android Studio JBR 21。
 
-## 平台现状(2026-05)
+## 平台现状(2026-07)
 
 | 平台 | search | 精确受付窗口(getDetails) |
 |---|---|---|
 | eplus | ✅ 内嵌 JSON,search 直接带多轮窗口 | ✅(随 search) |
 | Ticket Pia | ✅ | ✅ 详情页 `ticketInformation.do` |
-| Lawson(ローチケ) | ✅ 经 Tailscale 代理绕 Akamai | ✅ 搜索页 ResultBox 每公演×每轮全窗口(2026-07);反爬时给官方跳转 |
+| Lawson(ローチケ) | ✅ 端上直取,无需代理:Android=Cronet(ADR-0005,~400ms)/iOS=URLSession(ADR-0006) | ✅ 搜索页 ResultBox 每公演×每轮全窗口(2026-07);失败时给官方跳转 |
 | LivePocket | ✅ `event/search?word=` | ⬜ 待补(方向②) |
 | TicketDive | ✅ Next.js superjson | ⬜ 待补(方向②) |
