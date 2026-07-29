@@ -660,18 +660,16 @@ describe('useOshiStore — 迁移加固（#83 事后评审）', () => {
 });
 
 describe('useOshiStore — Lawson 插件默认开关（分发化）', () => {
-  it('首启未配置代理 → Lawson 默认关闭（其余插件不受影响）', () => {
-    vi.mocked(proxy.isProxyConfigured).mockReturnValue(false);
-    const { result } = render();
-    const lawson = result.current.extensions.find(e => e.id === 'ext-lawson');
-    expect(lawson?.isEnabled).toBe(false);
-    expect(result.current.extensions.filter(e => e.id !== 'ext-lawson').every(e => e.isEnabled)).toBe(true);
-  });
-
-  it('首启已配置代理 → Lawson 默认开启', () => {
-    vi.mocked(proxy.isProxyConfigured).mockReturnValue(true);
-    const { result } = render();
-    expect(result.current.extensions.find(e => e.id === 'ext-lawson')?.isEnabled).toBe(true);
+  // 曾经「未配代理 → Lawson 默认关」,因为那时直连恒被反爬拒绝。ADR-0005/0006 之后
+  // 两个平台都能端上直取,再默认关会让全新安装/重置数据后 Lawson 静默缺席。
+  it('首启默认开启,与代理是否配置无关（ADR-0006）', () => {
+    for (const configured of [false, true]) {
+      vi.mocked(proxy.isProxyConfigured).mockReturnValue(configured);
+      const { result } = render();
+      expect(result.current.extensions.find(e => e.id === 'ext-lawson')?.isEnabled).toBe(true);
+      expect(result.current.extensions.every(e => e.isEnabled)).toBe(true);
+      cleanup();
+    }
   });
 
   it('用户手动关掉 Lawson 后重载不再被强制打开（存量 bug 回归）', () => {

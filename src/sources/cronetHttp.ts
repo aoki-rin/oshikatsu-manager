@@ -44,6 +44,20 @@ export function isCronetAvailable(): boolean {
   return Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('CronetHttp');
 }
 
+// iOS 的 CapacitorHttp 走 URLSession(CapacitorUrlRequest.swift 用 URLSession.shared /
+// URLSessionConfiguration.default)。实测 Apple 的 CFNetwork 指纹被 Akamai 直接放行——
+// 与 Chromium 不同，它不附加「头集须与 UA 自洽」的条件：Safari UA、Chrome UA、
+// Chrome UA + client hints、甚至完全不设 UA，四种组合都返回 200 全量页面（ADR-0006）。
+// 所以 iOS 无需任何原生插件，用现成的 CapacitorHttp 即可。
+// UA 仍按平台给自洽的那个：实测虽不影响，但自相矛盾的组合没有任何好处，
+// 且 Akamai 的策略随时可能收紧到与 Chromium 同等。
+export const SAFARI_IOS_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+
+export function platformUserAgent(): string {
+  return Capacitor.getPlatform() === 'ios' ? SAFARI_IOS_UA : CHROME_UA;
+}
+
 export async function cronetGet(url: string, timeoutMs = 20000): Promise<CronetResponse> {
   return CronetHttp.get({ url, headers: { ...CHROME_NAV_HEADERS }, timeoutMs });
 }
