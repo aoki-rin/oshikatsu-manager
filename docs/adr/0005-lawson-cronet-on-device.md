@@ -54,6 +54,24 @@ Lawson 的抓取改由**设备本地的 Cronet**(Chromium 网络栈,Chrome 用�
 响应体 180421 字节,与 Mac 上 Node fetch 拿到的 180429 字节实质一致 → **现有
 `parseLawsonSearch` 无需任何改动**。
 
+## 生效条件（容易踩空的一步）
+
+编排是**代理优先**：`searchPlatformsStreaming` 先调 `searchViaProxy(q, targets)`，成功即
+`return`，客户端路径（Cronet 所在处）根本不会执行。所以**只要 `.env` 里还填着
+`VITE_TICKET_PROXY_BASE_URL` 且代理可达，Lawson 仍然走 Mac，本 ADR 的改动完全空转**。
+
+| `.env` 状态 | 实际行为 |
+|---|---|
+| 填了值 + 代理可达 | 全平台走代理，Cronet 用不上 |
+| 填了值 + 代理不可达 | 每次搜索先等 3s 连接超时再回落到 Cronet |
+| 留空 | `searchViaProxy` 立即返回 null → 直接走 Cronet，无等待、无降级提示 |
+
+要真正退役 Mac：清空该变量并**重新构建安装**（`VITE_` 是 build 时编入的）。
+
+评估过「让 Lawson 无视代理、始终走 Cronet」的方案（改编排把 Lawson 从代理批次里排除），
+未采纳：目标是退役 Mac 而非长期并存，清空一个变量即可达成，不值得动中央调度逻辑的回归风险。
+若将来要保留代理给 iOS 用、同时让 Android 走本地，再回头做这件事。
+
 ## 后果
 
 - ➕ 删掉 Mac 常开 + Tailscale 在线两项运维依赖,这是本 ADR 的全部动机。
