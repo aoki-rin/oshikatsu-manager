@@ -3,7 +3,5 @@
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">127.0.0.1</domain>
         <domain includeSubdomains="false">localhost</domain>
-        <!-- 家里 Mac(aokimac-mini) 的 Tailscale 地址：真机经 Tailscale 走 http 代理需要放行明文 -->
-        <domain includeSubdomains="false">100.72.246.48</domain>
     </domain-config>
 </network-security-config>

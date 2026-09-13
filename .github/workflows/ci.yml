@@ -29,6 +29,8 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npm run lint
+      - name: Check release versions
+        run: npm run check:version
       - name: Unit tests + coverage gate
         run: npm run test:cov
 
@@ -87,7 +89,7 @@ jobs:
           fi
           if ! git cat-file -e "$BASE" 2>/dev/null; then
             echo "hit=true" >> "$GITHUB_OUTPUT" # 拿不到基准(强推/首推)宁可多跑一次
-          elif git diff --name-only "$BASE" HEAD | grep -qE '^android/|^capacitor\.config\.ts$|^package(-lock)?\.json$'; then
+          elif git diff --name-only "$BASE" HEAD | grep -qE '^android/|^scripts/|^capacitor\.config\.ts$|^package(-lock)?\.json$'; then
             echo "hit=true" >> "$GITHUB_OUTPUT"
           else
             echo "hit=false" >> "$GITHUB_OUTPUT"
@@ -107,7 +109,7 @@ jobs:
         if: steps.changed.outputs.hit == 'true'
         run: |
           npm ci
-          npm run build
+          npm run build:release
           npx cap sync android
       - name: assembleDebug
         if: steps.changed.outputs.hit == 'true'

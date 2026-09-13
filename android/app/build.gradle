@@ -1,12 +1,18 @@
 apply plugin: 'com.android.application'
 
-// release 签名配置（android/keystore.properties，gitignored、只存本机）。
-// 文件不存在时静默跳过 → CI / 他人 clone 后 assembleDebug 不受影响。
+// 本机用 gitignored keystore.properties；发布 CI 通过环境变量注入。
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('keystore.properties')
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
 }
+def signingValues = [
+    storeFile: System.getenv('ANDROID_KEYSTORE_PATH') ?: keystoreProperties['storeFile'],
+    storePassword: System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: keystoreProperties['storePassword'],
+    keyAlias: System.getenv('ANDROID_KEY_ALIAS') ?: keystoreProperties['keyAlias'],
+    keyPassword: System.getenv('ANDROID_KEY_PASSWORD') ?: keystoreProperties['keyPassword'],
+]
+def hasReleaseSigning = signingValues.values().every { it != null && !it.toString().trim().isEmpty() }
 
 android {
     namespace = "com.aoki.oshikatsumgr"
@@ -15,8 +21,8 @@ android {
         applicationId "com.aoki.oshikatsumgr"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.1.1"
+        versionCode 4
+        versionName "1.1.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -25,12 +31,12 @@ android {
         }
     }
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
+        if (hasReleaseSigning) {
             release {
-                storeFile rootProject.file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
+                storeFile rootProject.file(signingValues.storeFile)
+                storePassword signingValues.storePassword
+                keyAlias signingValues.keyAlias
+                keyPassword signingValues.keyPassword
             }
         }
     }
@@ -38,10 +44,37 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (keystorePropertiesFile.exists()) {
+            if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             }
         }
+    }
+}
+
+// Never produce a misleading unsigned "release" APK. Debug builds need no keys.
+tasks.configureEach { task ->
+    if (task.name == 'preReleaseBuild') {
+        task.doFirst {
+            if (!hasReleaseSigning) {
+                throw new GradleException('Release signing is missing. See docs/BUILDING.md; use assembleDebug for local development.')
+            }
+        }
+    }
+}
+
+// Dependency inventory for the license file distributed beside the APK.
+tasks.register('exportReleaseDependencies') {
+    doLast {
+        // Local Capacitor projects are already covered by their npm licenses.
+        def artifacts = configurations.releaseRuntimeClasspath.incoming.artifactView {
+            componentFilter { id -> id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier }
+        }.artifacts.artifacts
+        def entries = artifacts.collect { artifact ->
+            [name: artifact.id.componentIdentifier.displayName, file: artifact.file.absolutePath]
+        }.sort { it.name }
+        def destination = layout.buildDirectory.file('release-dependencies.json').get().asFile
+        destination.parentFile.mkdirs()
+        destination.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(entries))
     }
 }
 

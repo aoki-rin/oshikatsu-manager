@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "oshikatsu-manager",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -19,7 +19,9 @@
     "cap:build": "vite build && cap sync",
     "cap:sync": "cap sync",
     "android": "cap open android",
-    "ios": "cap open ios"
+    "ios": "cap open ios",
+    "build:release": "node scripts/build-release.mjs",
+    "check:version": "node scripts/check-version.mjs"
   },
   "dependencies": {
     "@capacitor-community/file-opener": "^8.0.1",
@@ -42,21 +44,33 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.5",
     "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "jsdom": "^29.1.1",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
+  },
+  "license": "MIT",
+  "description": "Local-first Japanese live ticket lottery tracker for Android and iOS",
+  "engines": {
+    "node": ">=22.22.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoki-rin/oshikatsu-manager.git"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
