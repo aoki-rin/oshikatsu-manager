@@ -1,0 +1,502 @@
+{
+  "revision": "87fa7ac",
+  "date": "2026-09-13",
+  "timezone": "Asia/Tokyo",
+  "devices": {
+    "android": {
+      "model": "Pixel (grizzly)",
+      "os": "Android 17"
+    },
+    "ios": {
+      "model": "iPhone 13 mini",
+      "os": "iOS 26.4.1"
+    }
+  },
+  "liveSearch": {
+    "android": [
+      {
+        "platform": "eplus",
+        "query": "アイドル",
+        "reported": 20,
+        "renderedCards": 12
+      },
+      {
+        "platform": "Ticket Pia",
+        "query": "FRUITS ZIPPER",
+        "reported": 3,
+        "renderedCards": 3
+      },
+      {
+        "platform": "LivePocket",
+        "query": "闇雲",
+        "reported": 20,
+        "renderedCards": 15
+      },
+      {
+        "platform": "TicketDive",
+        "query": "HEROINES",
+        "reported": 10,
+        "renderedCards": 10
+      },
+      {
+        "platform": "Lawson Ticket",
+        "query": "あいみょん",
+        "reported": 1,
+        "renderedCards": 1
+      }
+    ],
+    "ios": [
+      {
+        "platform": "eplus",
+        "query": "アイドル",
+        "reported": 20,
+        "renderedCards": 12
+      },
+      {
+        "platform": "Ticket Pia",
+        "query": "FRUITS ZIPPER",
+        "reported": 2,
+        "renderedCards": 2
+      },
+      {
+        "platform": "LivePocket",
+        "query": "闇雲",
+        "reported": 20,
+        "renderedCards": 15
+      },
+      {
+        "platform": "TicketDive",
+        "query": "HEROINES",
+        "reported": 10,
+        "renderedCards": 10
+      },
+      {
+        "platform": "Lawson Ticket",
+        "query": "あいみょん",
+        "reported": 1,
+        "renderedCards": 1
+      }
+    ]
+  },
+  "sameVenueDifferentShows": [
+    {
+      "merged": {
+        "id": "agg-闇雲-2026-09-06-radhall",
+        "title": "◆闇雲presents「CHAOS DOGMA」名古屋編",
+        "time": "16:00",
+        "date": "2026-09-06"
+      },
+      "original": [
+        {
+          "id": "lp-x3n-y",
+          "title": "◆闇雲presents「CHAOS DOGMA」名古屋編",
+          "date": "2026-09-06",
+          "time": "16:00",
+          "venue": "RADHALL",
+          "url": "https://livepocket.jp/e/x3n-y"
+        },
+        {
+          "id": "lp-itqaq",
+          "title": "◆闇雲presents「三都激突」名古屋編",
+          "date": "2026-09-06",
+          "time": "18:20",
+          "venue": "RADHALL",
+          "url": "https://livepocket.jp/e/itqaq"
+        }
+      ]
+    },
+    {
+      "merged": {
+        "id": "agg-闇雲-2026-09-05-梅田odyssey",
+        "title": "◆闇雲presents「CHAOS DOGMA」大阪編",
+        "time": "16:15",
+        "date": "2026-09-05"
+      },
+      "original": [
+        {
+          "id": "lp-cracf",
+          "title": "◆闇雲presents「CHAOS DOGMA」大阪編",
+          "date": "2026-09-05",
+          "time": "16:15",
+          "venue": "梅田ODYSSEY",
+          "url": "https://livepocket.jp/e/cracf"
+        },
+        {
+          "id": "lp-0difp",
+          "title": "◆闇雲presents「三都激突」大阪編",
+          "date": "2026-09-05",
+          "time": "18:35",
+          "venue": "梅田ODYSSEY",
+          "url": "https://livepocket.jp/e/0difp"
+        }
+      ]
+    },
+    {
+      "merged": {
+        "id": "agg-闇雲-2026-08-31-東京キネマ倶楽部",
+        "title": "SENKOU SUMMER FEST 2026 (1DAY Sチケット / 通常チケット専用 購入ページ)",
+        "time": "13:55",
+        "date": "2026-08-31"
+      },
+      "original": [
+        {
+          "id": "lp-senkou-summer-fest-2026_day-s",
+          "title": "SENKOU SUMMER FEST 2026 (1DAY Sチケット / 通常チケット専用 購入ページ)",
+          "date": "2026-08-31",
+          "time": "13:55",
+          "venue": "東京キネマ倶楽部",
+          "url": "https://livepocket.jp/e/senkou-summer-fest-2026_day-s"
+        },
+        {
+          "id": "lp-senkou-summer-fest-2026_night-s",
+          "title": "SENKOU SUMMER FEST 2026 (AFTER6 Sチケット専用 購入ページ)",
+          "date": "2026-08-31",
+          "time": "18:00",
+          "venue": "東京キネマ倶楽部",
+          "url": "https://livepocket.jp/e/senkou-summer-fest-2026_night-s"
+        },
+        {
+          "id": "lp-senkou-summer-fest-2026_day-ss",
+          "title": "SENKOU SUMMER FEST 2026 (1DAY SSチケット専用 購入ページ)",
+          "date": "2026-08-31",
+          "time": "13:55",
+          "venue": "東京キネマ倶楽部",
+          "url": "https://livepocket.jp/e/senkou-summer-fest-2026_day-ss"
+        }
+      ]
+    },
+    {
+      "merged": {
+        "id": "agg-闇雲-2026-09-23-池袋soundpeace",
+        "title": "Tear Rabbits主催「阿修羅chan vol.3」",
+        "time": "12:50",
+        "date": "2026-09-23"
+      },
+      "original": [
+        {
+          "id": "lp-rggm4",
+          "title": "9/23(水)独ちゃんず(仮)「みすず生誕祭」",
+          "date": "2026-09-23",
+          "time": "12:50",
+          "venue": "池袋SOUND PEACE",
+          "url": "https://livepocket.jp/e/rggm4"
+        },
+        {
+          "id": "lp-cw4vm",
+          "title": "Tear Rabbits主催「阿修羅chan vol.3」",
+          "date": "2026-09-23",
+          "time": "16:50",
+          "venue": "池袋SOUNDPEACE",
+          "url": "https://livepocket.jp/e/cw4vm"
+        }
+      ]
+    }
+  ],
+  "eplusIdentityCollision": [
+    {
+      "kogyo_code": "202963",
+      "koen_code": "001",
+      "koenbi_term": "20260912",
+      "kaien_time": "1100",
+      "kanren_kogyo_sub": {
+        "kogyo_name_1": "MARQUEE祭",
+        "kogyo_sub_code": "0558",
+        "kogyo_name_2": "mini Vol.344",
+        "kogyo_code": "202963"
+      },
+      "kanren_venue": {
+        "venue_name": "Spotify O-nest",
+        "todofuken_code": "13",
+        "todofuken_name": "東京都",
+        "venue_code": "1500320"
+      },
+      "koen_detail_url_pc": "/sf/detail/2029630001-P0030558P021001"
+    },
+    {
+      "kogyo_code": "202963",
+      "koen_code": "001",
+      "koenbi_term": "20260912",
+      "kaien_time": "1700",
+      "kanren_kogyo_sub": {
+        "kogyo_name_1": "MARQUEE祭",
+        "kogyo_sub_code": "0559",
+        "kogyo_name_2": "mini Vol.345",
+        "kogyo_code": "202963"
+      },
+      "kanren_venue": {
+        "venue_name": "Spotify O-nest",
+        "todofuken_code": "13",
+        "todofuken_name": "東京都",
+        "venue_code": "1500320"
+      },
+      "koen_detail_url_pc": "/sf/detail/2029630001-P0030559P021001"
+    }
+  ],
+  "calendarDeadline": {
+    "eventId": "eplus-459028-20260824～20260930-041",
+    "sourceWindow": {
+      "id": "eplus-459028-20260824～20260930-041-0",
+      "platform": "eplus",
+      "roundType": "<期間中有効券>平日",
+      "labelRaw": "先着",
+      "applyStart": "2026-08-22T10:00:00+09:00",
+      "applyEnd": "2026-09-30T18:00:00+09:00",
+      "resultStart": "2026-08-22T10:00:00+09:00",
+      "resultEnd": "2026-10-01T23:59:00+09:00",
+      "sourceUrl": "https://eplus.jp/sf/detail/4590280001-P0030004P021041",
+      "applyUrl": "https://eplus.jp/sf/detail/4590280001-P0030004P021041"
+    },
+    "exportedStart": "DTSTART;TZID=Asia/Tokyo:20260930T235900"
+  },
+  "lawsonEvent": {
+    "id": "lawson-70896-20261130,20261201",
+    "title": "あいみょん",
+    "artistId": "artist-あいみょん",
+    "artistName": "あいみょん",
+    "artistSource": "query",
+    "venueId": "venue-日本武道館",
+    "venueName": "日本武道館（東京都）",
+    "date": "2026-11-30",
+    "time": "00:00",
+    "region": "東京都",
+    "platform": "Lawson Ticket",
+    "price": "—",
+    "imageUrl": "https://img.hmv.co.jp//image/artist/190/0000/0000/0608/000000000608246-1.jpg",
+    "timeline": {
+      "lotteryStartDate": "2026-09-01",
+      "lotteryEndDate": "2026-09-13"
+    },
+    "ticketWindows": [
+      {
+        "id": "lawson-70896-20261130,20261201-5",
+        "platform": "Lawson Ticket",
+        "roundType": "抽選 プレリク",
+        "labelRaw": "プレリク",
+        "applyStart": "2026-09-01T12:00:00+09:00",
+        "applyEnd": "2026-09-13T23:59:00+09:00",
+        "statusText": "受付中",
+        "sourceUrl": "https://l-tike.com/artist/000000000608246/"
+      }
+    ],
+    "originalUrl": "https://l-tike.com/artist/000000000608246/",
+    "description": "あいみょん（Lawson Ticket 平台实时搜索结果）",
+    "category": "J-Pop",
+    "tags": [
+      "Lawson Ticket",
+      "实时"
+    ],
+    "purchaseUrl": "https://l-tike.com/artist/000000000608246/",
+    "sourceKind": "live",
+    "sourcePlatformId": "lawson",
+    "lastFetchedAt": "2026-09-13T14:25:09.834Z"
+  },
+  "piaBusyPage": {
+    "status": 200,
+    "contentType": "text/html; charset=None",
+    "text": "アクセスが集中しております",
+    "applyStartAfterEnrichment": null,
+    "resultStartAfterEnrichment": null
+  },
+  "checks": {
+    "android": {
+      "features": [
+        {
+          "name": "favorite stored",
+          "pass": true
+        },
+        {
+          "name": "detail visible",
+          "pass": true
+        },
+        {
+          "name": "ticket timeline",
+          "pass": true
+        },
+        {
+          "name": "reminder controls",
+          "pass": true
+        },
+        {
+          "name": "artist followed",
+          "pass": true
+        },
+        {
+          "name": "venue followed",
+          "pass": true
+        },
+        {
+          "name": "calendar tracked",
+          "pass": true
+        },
+        {
+          "name": "calendar export platform",
+          "pass": true
+        },
+        {
+          "name": "TicketDive disable",
+          "pass": true
+        },
+        {
+          "name": "TicketDive enable",
+          "pass": true
+        },
+        {
+          "name": "Ticket Pia disable",
+          "pass": true
+        },
+        {
+          "name": "Ticket Pia enable",
+          "pass": true
+        },
+        {
+          "name": "eplus disable",
+          "pass": true
+        },
+        {
+          "name": "eplus enable",
+          "pass": true
+        },
+        {
+          "name": "LivePocket disable",
+          "pass": true
+        },
+        {
+          "name": "LivePocket enable",
+          "pass": true
+        },
+        {
+          "name": "Lawson Ticket disable",
+          "pass": true
+        },
+        {
+          "name": "Lawson Ticket enable",
+          "pass": true
+        },
+        {
+          "name": "Japanese language",
+          "pass": true
+        },
+        {
+          "name": "Chinese language",
+          "pass": true
+        },
+        {
+          "name": "theme color",
+          "pass": true
+        }
+      ],
+      "notifications": {
+        "uiScheduled": true,
+        "uiCancelled": true,
+        "delivered": true
+      },
+      "injectedNetworkFailure": {
+        "errorVisible": true,
+        "notStuck": true,
+        "favoritesKept": true
+      },
+      "restartPersistence": true,
+      "resetClearedDataAndPendingNotifications": true
+    },
+    "ios": {
+      "features": [
+        {
+          "name": "favorite stored",
+          "pass": true
+        },
+        {
+          "name": "detail visible",
+          "pass": true
+        },
+        {
+          "name": "ticket timeline",
+          "pass": true
+        },
+        {
+          "name": "reminder controls",
+          "pass": true
+        },
+        {
+          "name": "artist followed",
+          "pass": true
+        },
+        {
+          "name": "venue followed",
+          "pass": true
+        },
+        {
+          "name": "calendar tracked",
+          "pass": true
+        },
+        {
+          "name": "calendar export platform",
+          "pass": true
+        },
+        {
+          "name": "TicketDive disable",
+          "pass": true
+        },
+        {
+          "name": "TicketDive enable",
+          "pass": true
+        },
+        {
+          "name": "Ticket Pia disable",
+          "pass": true
+        },
+        {
+          "name": "Ticket Pia enable",
+          "pass": true
+        },
+        {
+          "name": "eplus disable",
+          "pass": true
+        },
+        {
+          "name": "eplus enable",
+          "pass": true
+        },
+        {
+          "name": "LivePocket disable",
+          "pass": true
+        },
+        {
+          "name": "LivePocket enable",
+          "pass": true
+        },
+        {
+          "name": "Lawson Ticket disable",
+          "pass": true
+        },
+        {
+          "name": "Lawson Ticket enable",
+          "pass": true
+        },
+        {
+          "name": "Japanese language",
+          "pass": true
+        },
+        {
+          "name": "Chinese language",
+          "pass": true
+        },
+        {
+          "name": "theme color",
+          "pass": true
+        }
+      ],
+      "notifications": {
+        "uiScheduled": true,
+        "uiCancelled": true,
+        "delivered": true
+      },
+      "injectedNetworkFailure": {
+        "notStuck": true,
+        "favoritesKept": true,
+        "errorVisible": true
+      },
+      "restartPersistence": true,
+      "resetClearedDataAndPendingNotifications": true
+    }
+  }
+}

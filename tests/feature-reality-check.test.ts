@@ -120,13 +120,13 @@ describe('跨平台聚合会改变 event.id（所以收藏键不能用 id）', (
 });
 
 describe('收藏键跨聚合稳定（#7 修复）', () => {
-  // favoriteKey 用 艺人+日期+会场，单平台与聚合后一致 → 收藏不再因 id 变化丢失。
-  it('favoriteKey 跨「单平台 ↔ 聚合」保持一致', () => {
+  // 用成员平台编号保留跨聚合收藏，同时区分昼夜场。
+  it('成员别名保留跨「单平台 ↔ 聚合」收藏', () => {
     const lawson = makeEvent({ id: 'lawson-1', platform: 'Lawson Ticket', artistName: 'A', date: '2026-08-01', venueName: 'GLION ARENA KOBE（兵庫県）' });
     const eplus = makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: 'A', date: '2026-08-01', venueName: 'GLION ARENA KOBE' });
     const singleKey = favoriteKey(aggregateConcerts([lawson])[0]);
     const merged = aggregateConcerts([lawson, eplus])[0];
-    assert.equal(favoriteKey(merged), singleKey);
+    assert.ok(favoriteAliases(merged).includes(singleKey));
     assert.ok(isFavorited(merged, [singleKey]), '聚合后用单平台时收藏的键仍命中');
   });
 
@@ -221,8 +221,8 @@ describe('收藏别名跨「换关键词重搜」稳定（QA ISSUE-001 回归）
       makeEvent({ id: 'eplus-9', platform: 'eplus', artistName: '藍井エイル', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
       makeEvent({ id: 'pia-B1', platform: 'Ticket Pia', artistName: '藍井エイル', date: '2026-07-25', venueName: '舞洲スポーツアイランド' }),
     ])[0];
-    assert.notEqual(second.id, first.id, '前提：聚合 id 确实随关键词漂移');
-    assert.notEqual(favoriteKey(second), favoriteKey(first), '前提：稳定键确实漂移');
+    assert.equal(second.id, first.id, '聚合 id 不再随关键词漂移');
+    assert.equal(favoriteKey(second), favoriteKey(first));
     assert.equal(isFavorited(second, favorites), true, '成员平台 id 别名兜住收藏');
   });
 });

@@ -13,6 +13,7 @@ export interface TicketTimeline {
 // 时间均为带时区的 ISO 字符串，存 JST (+09:00)。
 export interface TicketWindow {
   id: string;
+  previousIds?: string[]; // 迁移旧排程时识别已存在的系统通知
   platform: string;          // 'Ticket Pia' | 'eplus' | 'Lawson Ticket' | 'LivePocket' | 'Fan Club' | 'unknown'
   roundType: string;         // 先行 / 2次先行 / 独占先行 / 先着 / FC先行 / 一般 ...
   labelRaw?: string;         // 原始标签，如「チケットぴあ独占2次先行」
@@ -35,6 +36,7 @@ export interface TourPerformance {
 }
 
 export interface ActivityEvent {
+  detailWarning?: 'pia-busy' | 'unavailable';
   id: string;
   title: string;
   artistId: string;
@@ -64,6 +66,7 @@ export interface ActivityEvent {
   // 跨平台聚合后保留的成员平台事件 id（如 eplus-xxx / pia-yyy）。
   // 收藏用它做「查询无关」的稳定别名：同一场演出换个关键词再搜到，收藏仍命中。
   memberIds?: string[];
+  sourceEvents?: ActivityEvent[]; // 聚合前的逐平台场次，刷新时重新分组用
 }
 
 export interface Artist {
@@ -123,6 +126,8 @@ export interface TicketSearchResult {
 }
 
 export interface ReminderTarget {
+  eventAliases?: string[];
+  previousNotificationIds?: number[];
   eventId: string;
   eventTitle: string;
   platform: TicketPlatform;

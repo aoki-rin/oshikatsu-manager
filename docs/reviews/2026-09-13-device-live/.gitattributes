@@ -1,0 +1,2 @@
+# Preserve the exported iCalendar bytes, including CRLF and folded content.
+*.ics -text whitespace=-blank-at-eol

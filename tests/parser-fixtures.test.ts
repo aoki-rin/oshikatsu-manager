@@ -50,7 +50,7 @@ describe('eplus search parser', () => {
     const events = parseEplusSearch(html, 'いきものがかり');
     assert.equal(events.length, 1);
     const [e] = events;
-    assert.equal(e.eventId, 'eplus-KG1-20260718-V1');
+    assert.equal(e.eventId, 'eplus-abc-20260718-1800');
     assert.equal(e.title, 'いきものがかり ツアー2026');
     assert.equal(e.date, '2026-07-18');
     assert.equal(e.time, '18:00');

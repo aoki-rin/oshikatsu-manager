@@ -8,6 +8,8 @@
 
 ## 下载与安装
 
+[v1.1.3 更新说明](docs/releases/v1.1.3.md)：修复场次误合并、eplus 场次丢失、日历截止时间、Lawson 多日公演和 Pia 繁忙提示，并兼容旧收藏和提醒。
+
 ### Android
 
 1. 打开上方下载链接，在 **Assets** 中下载 `oshikatsu-manager.apk`。

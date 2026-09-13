@@ -146,3 +146,10 @@ describe('DiscoverView', () => {
     expect(ids).toEqual(['event-card-eplus-open', 'event-card-eplus-closed']);
   });
 });
+
+it('keeps a merged card visible when its primary source is disabled but another member is enabled', () => {
+  const event=makeEvent({platform:'Ticket Pia',ticketWindows:[{id:'eplus-w',platform:'eplus',roundType:'受付',applyStart:null,applyEnd:null}]});
+  const props=makeProps({searchResults:[event],extensions:[eplusExt]});
+  const {container}=renderWithI18n(<DiscoverView {...(props as unknown as ComponentProps<typeof DiscoverView>)} />);
+  expect(container.querySelector('[id^="event-card-"]')).toBeTruthy();
+});

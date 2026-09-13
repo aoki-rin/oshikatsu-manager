@@ -84,3 +84,15 @@ describe('EventDetailModal', () => {
     expect(native.openPurchaseUrl).toHaveBeenCalledTimes(1);
   });
 });
+
+import { waitFor } from '@testing-library/react';
+import * as sources from '../../src/sources';
+it('shows a Pia busy warning and user-triggered retry clears it after success', async () => {
+  const event=makeEvent({platform:'Ticket Pia',ticketWindows:[makeWindow({platform:'Ticket Pia',applyStart:null})]});
+  vi.mocked(sources.enrichEventWindows).mockResolvedValueOnce({...event,detailWarning:'pia-busy'}).mockResolvedValueOnce({...event,detailWarning:undefined});
+  const screen=renderWithI18n(<EventDetailModal {...makeProps({event})} />);
+  await waitFor(()=>expect(screen.getByTestId('detail-fetch-warning')).toBeInTheDocument());
+  expect(screen.getByTestId('detail-fetch-warning').textContent).toContain('Pia 官网繁忙');
+  fireEvent.click(screen.getByText('重试获取详情'));
+  await waitFor(()=>expect(screen.queryByTestId('detail-fetch-warning')).not.toBeInTheDocument());
+});

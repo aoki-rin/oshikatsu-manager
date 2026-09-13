@@ -21,11 +21,11 @@ describe('eplus 真实搜索页（あいみょん, 2026-07-26）', () => {
   // 原始 JSON：so_kensu=3；同一巡演(kogyo 043020)两场不同日期 → 必须拆成两个事件。
   const events = parseEplusSearch(fx('eplus-search-aimyon.html'), 'あいみょん');
 
-  it('record_list 全量成事件：同巡演分日期、id=kogyo+日期+场馆码', () => {
+  it('record_list 全量成事件：同巡演分日期、id=完整公演标识+日期+时间', () => {
     assert.deepEqual(events.map((e) => e.eventId), [
-      'eplus-005318-20260828-4010110',
-      'eplus-043020-20260829-9820080',
-      'eplus-043020-20260830-9820080',
+      'eplus-0053180001-P0030045P021001-20260828-1000',
+      'eplus-0430200001-P0030016P021001-20260829-1700',
+      'eplus-0430200001-P0030016P021002-20260830-1700',
     ]);
     assert.deepEqual(events.map((e) => e.date), ['2026-08-28', '2026-08-29', '2026-08-30']);
     // 载荷标题里是 NBSP（U+00A0）分隔——用显式转义，肉眼不可见的字面量迟早被格式化器弄丢
@@ -37,7 +37,7 @@ describe('eplus 真实搜索页（あいみょん, 2026-07-26）', () => {
   it('多轮受付窗口齐全：轮次名实体解码、JST 起止精确', () => {
     assert.deepEqual(events.map((e) => e.ticketWindows.length), [1, 2, 2]);
     const [w] = events[0].ticketWindows;
-    assert.equal(w.id, 'eplus-005318-20260828-4010110-0');
+    assert.equal(w.id, 'eplus-0053180001-P0030045P021001-20260828-1000-0');
     assert.equal(w.roundType, '★<8/28公演>一般発売');
     assert.equal(w.applyStart, '2026-07-18T10:00:00+09:00');
     assert.equal(w.applyEnd, '2026-08-27T23:59:00+09:00');

@@ -192,7 +192,16 @@ export function dedupeEvents(events: ActivityEvent[]): ActivityEvent[] {
     }
     const existingTime = existing.lastFetchedAt ? Date.parse(existing.lastFetchedAt) : 0;
     const nextTime = event.lastFetchedAt ? Date.parse(event.lastFetchedAt) : 0;
-    map.set(event.id, nextTime >= existingTime ? { ...existing, ...event } : { ...event, ...existing });
+    const older = nextTime >= existingTime ? existing : event;
+    const newer = nextTime >= existingTime ? event : existing;
+    map.set(event.id, {
+      ...older, ...newer,
+      memberIds: [...new Set([...(older.memberIds ?? []), ...(newer.memberIds ?? [])])],
+      ticketWindows: (newer.ticketWindows ?? older.ticketWindows)?.map(window => {
+        const previous = older.ticketWindows?.find(w => w.id === window.id);
+        return { ...window, previousIds: [...new Set([...(previous?.previousIds ?? []), ...(window.previousIds ?? [])])] };
+      }),
+    });
   }
   return [...map.values()].sort((a, b) => {
     const aTime = a.lastFetchedAt ? Date.parse(a.lastFetchedAt) : 0;

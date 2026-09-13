@@ -9,13 +9,12 @@ const PLACEHOLDER_IMG =
 export const eplusSource: ServerTicketSource = {
   id: 'eplus',
   platform: 'eplus',
-  parserVersion: 'eplus-json-v1',
+  parserVersion: 'eplus-json-v2',
   buildSearchUrl: (query) => buildPlatformSearchUrl('eplus', query),
   async search(query, ctx): Promise<ActivityEvent[]> {
     const html = await ctx.fetchText(this.buildSearchUrl(query));
     return parseEplusSearch(html, query).map((event) => {
       const ticketWindows = event.ticketWindows as TicketWindow[];
-      const fallbackDate = ticketWindows.find((window) => window.applyEnd)?.applyEnd?.slice(0, 10) || '';
       return normalizeLiveEvent({
         id: event.eventId,
         title: event.title,
@@ -26,8 +25,8 @@ export const eplusSource: ServerTicketSource = {
         artistSource: 'query',
         venueId: canonicalVenueId(event.venue) || `eplus-venue-${event.eventId}`,
         venueName: event.venue,
-        date: event.date || fallbackDate,
-        time: event.time || '18:00',
+        date: event.date,
+        time: event.time,
         region: event.prefecture,
         platform: 'eplus',
         price: '—',

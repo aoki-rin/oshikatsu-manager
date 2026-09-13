@@ -1,4 +1,5 @@
 import React from 'react';
+import { version } from '../../package.json';
 import type { Locale, LocaleMode } from '../i18n/core';
 import { useI18n } from '../i18n/I18nProvider';
 import { OSHI_COLORS } from '../data/mockData';
@@ -164,7 +165,7 @@ export function SettingsView({
         <div className="text-center pt-4 space-y-1">
           <div className="flex justify-center items-center gap-1 text-slate-400">
             <Heart className="w-3.5 h-3.5 fill-pink-500 text-pink-500 animate-pulse" />
-            <span className="text-[10.5px] font-bold text-slate-500">推し活マネージャー v1.0</span>
+            <span className="text-[10.5px] font-bold text-slate-500">推し活マネージャー v{version}</span>
           </div>
           <p className="text-[9px] text-slate-400 font-mono">
             {t('settings.metaStack')}

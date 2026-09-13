@@ -5,14 +5,17 @@ import {
 } from '../types';
 import { INITIAL_EXTENSIONS, OSHI_COLORS } from '../data/mockData';
 import { searchPlatformsStreaming, searchableTargets } from '../sources';
-import { buildPlatformSearchUrl, dedupeEvents, deriveTimelineFromWindows } from '../sources/shared';
+import { buildPlatformSearchUrl, deriveTimelineFromWindows } from '../sources/shared';
 import { isProxyConfigured } from '../sources/proxy';
+import { refreshSearchCache, refreshFavorites } from '../sources/cache';
 import { aggregateConcerts, stableConcertKey } from '../sources/aggregate';
 import {
-  cancelAllReminders, cancelReminderIds, cancelReminderTarget,
+  cancelAllReminders, cancelReminderIds, cancelReminderTarget, findActiveReminder,
   reminderIdsForWindow, scheduleReminderTarget,
 } from '../notifications';
-import { favoriteAliases } from '../favorites';
+import { favoriteAliases, migrateFavorites } from '../favorites';
+import { migrateEplusEvent } from '../sources/eplus';
+import { migrateLawsonEvent } from '../sources/lawsonParser';
 import { supportsLawsonSource } from '../platform';
 import { LOCALE_STORAGE_KEY, TFunction } from '../i18n/core';
 
@@ -213,7 +216,10 @@ export function useOshiStore(t: TFunction) {
     // 2. Events & Plugins. User-visible event content starts empty and is filled by
     // real platform searches only.
     const storedEvents = localStorage.getItem('oshikatsu_events');
-    const persistedEvents = loadPersistedEvents(storedEvents);
+    const originalEvents = loadPersistedEvents(storedEvents);
+    const identityMigration = originalEvents.map(before => ({ before, after: migrateLawsonEvent(migrateEplusEvent(before)) }));
+    const persistedEvents = identityMigration.flatMap(item => item.after);
+    const identityChanged = identityMigration.some(({before, after}) => after.length !== 1 || after[0] !== before);
     // 旧 id 方案的存量事件一次性剪枝（见 pruneLegacyLawsonEvents）。不剪的话：①列表里多出一张
     // 「整组坍缩」的重复卡（新旧 id 不同，dedupeEvents 去重不了，搜索也顶不掉）；②旧事件把旧
     // windowId 一直续命成合法 id，启动提醒对账会认为对应的幽灵提醒仍有效。
@@ -227,6 +233,7 @@ export function useOshiStore(t: TFunction) {
     // Aggregate on load so events persisted before cross-platform merge migrate cleanly.
     const loadedEvents = aggregateConcerts(migration.events);
     setEvents(loadedEvents);
+    if (identityChanged) safeSetItem('oshikatsu_events', JSON.stringify(loadedEvents));
     if (!alreadyMigrated) {
       // 顺序：先落数据、成功了才置标记。反过来的话，一次写失败就让标记永久生效，
       // 旧数据留在盘上却再也不会被剪 —— 迁移变成永久 no-op（#83 事后评审）。
@@ -263,7 +270,17 @@ export function useOshiStore(t: TFunction) {
     // 3. User relationships
     // 收藏项可能是稳定键(新)、event.id(旧)或成员平台 id(别名)：任一仍指向现存事件即有效。
     const validFavKeys = new Set(loadedEvents.flatMap(event => favoriteAliases(event)));
-    setFavorites(loadJson<string[]>('oshikatsu_favorites', []).filter(id => validFavKeys.has(id)));
+    const originalFavorites = migrateFavorites(originalEvents, loadJson<string[]>('oshikatsu_favorites', []));
+    const remappedFavorites = new Set(originalFavorites);
+    for (const {before, after} of identityMigration) {
+      if (after.length === 1 && after[0] === before) continue;
+      if (!favoriteAliases(before).some(id => originalFavorites.includes(id))) continue;
+      if (!after.some(event => favoriteAliases(event).includes(before.id))) remappedFavorites.delete(before.id);
+      for (const event of after) for (const id of favoriteAliases(event)) remappedFavorites.add(id);
+    }
+    const migratedFavorites = [...remappedFavorites];
+    setFavorites(migratedFavorites.filter(id => validFavKeys.has(id)));
+    safeSetItem('oshikatsu_favorites', JSON.stringify(migratedFavorites));
     setFollowedArtists(loadJson<string[]>('oshikatsu_followed_artists', []));
     setFollowedVenues(loadJson<string[]>('oshikatsu_followed_venues', []));
     setLastViewed(loadJson<Record<string, string>>('oshikatsu_last_viewed', {}));
@@ -286,6 +303,11 @@ export function useOshiStore(t: TFunction) {
       ? rawAlerts.filter((alert): alert is NotificationAlert => !!alert && typeof alert === 'object')
       : [];
     const deadReminderIds = migration.deadReminderIds;
+    // 旧 Lawson 默认午夜产生的公演提醒没有官方依据，不能继续在午夜响铃。
+    const unknownTimeLawsonIds = new Set(originalEvents.filter(e => e.platform === 'Lawson Ticket' && e.time === '00:00').map(e => e.id));
+    for (const alert of storedAlerts) {
+      if (alert.type === 'concert' && unknownTimeLawsonIds.has(alert.eventId) && alert.notificationId !== undefined) deadReminderIds.add(alert.notificationId);
+    }
     // alert 自己的 eventId/windowId 也可能带旧方案形状（其事件早已不在存量里 → 上面收集不到）。
     // **必须与剪枝同为一次性**：旧结构回退路径至今仍在产同形状的 lawson-<纯数字> 事件与
     // lawson-<数字>-0 窗口（parser-fixtures 有断言）。每次启动都按形状清扫，等于把用户为这类
@@ -496,11 +518,18 @@ export function useOshiStore(t: TFunction) {
     setSearchResultIds([]);
 
     const apply = () => {
-      const searchEvents = aggregateConcerts([...rawEventsById.values()]);
       setSearchReports([...reportsByPlatform.values()]);
-      setSearchResultIds(searchEvents.map(event => event.id));
       // 增量合并进全局事件（含已持久化的），按 id 去重 + 跨平台聚合，幂等
-      setEvents(prev => aggregateConcerts(dedupeEvents([...searchEvents, ...prev])));
+      setEvents(prev => {
+        const refreshed = refreshSearchCache([...rawEventsById.values()], prev);
+        setSearchResultIds(refreshed.searchIds);
+        if (refreshed.replacements.length) setFavorites(favorites => {
+          const updated = refreshFavorites(favorites, refreshed.replacements);
+          saveToStorage('oshikatsu_favorites', updated);
+          return updated;
+        });
+        return refreshed.events;
+      });
     };
 
     try {
@@ -521,10 +550,7 @@ export function useOshiStore(t: TFunction) {
       // 全部完成：持久化最终结果
       const searchEvents = aggregateConcerts([...rawEventsById.values()]);
       const reports = [...reportsByPlatform.values()];
-      const ids = searchEvents.map(event => event.id);
       setSearchReports(reports);
-      setSearchResultIds(ids);
-      saveToStorage('oshikatsu_search_result_ids', ids);
       saveToStorage('oshikatsu_search_reports', reports);
       // 记录每个源这次抓取的时间/命中数/状态（插件页本地源管理展示）。
       const statsAt = new Date().toISOString();
@@ -541,7 +567,10 @@ export function useOshiStore(t: TFunction) {
         return next;
       });
       setEvents(prev => {
-        const merged = aggregateConcerts(dedupeEvents([...searchEvents, ...prev]));
+        const refreshed = refreshSearchCache([...rawEventsById.values()], prev);
+        const merged = refreshed.events;
+        setSearchResultIds(refreshed.searchIds);
+        saveToStorage('oshikatsu_search_result_ids', refreshed.searchIds);
         saveToStorage('oshikatsu_events', merged);
         return merged;
       });
@@ -580,11 +609,11 @@ export function useOshiStore(t: TFunction) {
   // 快速连开多个提醒时,闭包捕获的旧 activeAlerts 会让后写覆盖先写 → 丢失的那条成为
   // UI 管不到的孤儿系统通知(#73)。函数式更新 + 按 notificationId 幂等去重根除该竞态。
   const handleToggleAlert = async (target: ReminderTarget) => {
-    const isRemoving = activeAlerts.some(a => a.notificationId === target.notificationId);
-    if (isRemoving) {
-      await cancelReminderTarget(target.notificationId);
+    const existingAlert = findActiveReminder(target, activeAlerts);
+    if (existingAlert) {
+      await cancelReminderTarget(existingAlert.notificationId!);
       setActiveAlerts(prev => {
-        const next = prev.filter(a => a.notificationId !== target.notificationId);
+        const next = prev.filter(a => a.notificationId !== existingAlert.notificationId);
         saveToStorage('oshikatsu_alerts', next);
         return next;
       });

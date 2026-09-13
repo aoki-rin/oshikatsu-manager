@@ -128,42 +128,90 @@ function addMinutesAsJstIcs(dateStr: string, timeStr: string, minutes: number): 
   return `${parts.year}${parts.month}${parts.day}T${parts.hour}${parts.minute}00`;
 }
 
-function targetDateFor(
-  event: ActivityEvent,
-  targetDateType: 'concert' | 'lottery_end' | 'payment',
-  t: TFunction,
-): { summary: string; date: string; time: string; durationMinutes: number; description: string } {
-  const url = event.purchaseUrl || event.originalUrl;
-  if (targetDateType === 'lottery_end') {
-    return {
-      summary: t('ics.summary.lotteryEnd', { title: event.title }),
-      date: event.timeline.lotteryEndDate || event.date,
-      time: '23:59',
-      durationMinutes: 15,
-      description: t('ics.description.lotteryEnd', { platform: event.platform, url }),
-    };
-  }
-  if (targetDateType === 'payment') {
-    return {
-      summary: t('ics.summary.payment', { title: event.title }),
-      date: event.timeline.paymentDeadlineDate || event.date,
-      time: '23:00',
-      durationMinutes: 15,
-      description: t('ics.description.payment', { platform: event.platform, url }),
-    };
-  }
+interface CalendarEntry {
+  uid: string;
+  date: string;
+  time: string;
+  minutes: number;
+  summary: string;
+  description: string;
+  url: string;
+  venue: string;
+}
+
+function validCalendarDate(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const value = new Date(`${date}T00:00:00+09:00`);
+  return !Number.isNaN(value.getTime()) && getJstDateKey(value) === date;
+}
+
+function eventCalendarEntry(event: ActivityEvent, t: TFunction): CalendarEntry {
   return {
-    summary: event.title,
-    date: event.date,
-    time: event.time || '18:00',
-    durationMinutes: 180,
-    description: t('ics.description.concert', {
-      description: event.description,
-      platform: event.platform,
-      price: event.price,
-      url,
-    }),
+    uid: `${event.id}-concert`, date: event.date,
+    time: /^\d{1,2}:\d{2}$/.test(event.time || '') ? normalizeIcsTime(event.time) : '',
+    minutes: 180, summary: t('ics.summary.allConcert', { title: event.title }),
+    description: t('ics.description.concert', { description: event.description, platform: event.platform, price: event.price, url: event.purchaseUrl || event.originalUrl }),
+    url: event.purchaseUrl || event.originalUrl, venue: event.venueName,
   };
+}
+
+type WindowDateField = 'applyStart' | 'applyEnd' | 'resultStart' | 'resultEnd';
+const WINDOW_DATE_FIELDS: WindowDateField[] = ['applyStart', 'applyEnd', 'resultStart', 'resultEnd'];
+
+function windowCalendarEntries(event: ActivityEvent, fields: WindowDateField[], t: TFunction): CalendarEntry[] {
+  return (event.ticketWindows ?? []).flatMap(window => fields.flatMap(field => {
+    const iso = window[field];
+    if (!iso) return [];
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return [];
+    const parts = jstParts(date);
+    return [{
+      uid: `${event.id}-${window.id}-${field}`,
+      date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`,
+      minutes: 15, summary: `【${t(`ics.window.${field}`)}】${event.title} · ${window.roundType}`,
+      description: `${window.platform} · ${window.roundType}`,
+      url: window.applyUrl || window.sourceUrl || event.purchaseUrl || event.originalUrl,
+      venue: event.venueName,
+    }];
+  }));
+}
+
+// 旧缓存只有日期时导出全天待定日程，不把任意兜底时间伪装成官方截止。
+function fallbackCalendarEntries(event: ActivityEvent, fields: Array<keyof ActivityEvent['timeline']>, t: TFunction): CalendarEntry[] {
+  const labels = {
+    lotteryStartDate: 'applyStart', lotteryEndDate: 'applyEnd', generalStartDate: 'applyStart',
+    generalEndDate: 'applyEnd', paymentDeadlineDate: 'resultEnd',
+  } as const;
+  return fields.flatMap(field => event.timeline[field] ? [{
+    uid: `${event.id}-${field}`, date: event.timeline[field]!, time: '', minutes: 15,
+    summary: `【${t(`ics.window.${labels[field]}`)}】${event.title}`,
+    description: event.description, url: event.purchaseUrl || event.originalUrl, venue: event.venueName,
+  }] : []);
+}
+
+function buildCalendar(entries: CalendarEntry[], now: Date, t: TFunction): string {
+  const valid = [...new Map(entries.filter(e => validCalendarDate(e.date)).map(e => [e.uid, e])).values()];
+  if (!valid.length) return '';
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//OshikatsuManager//JA_LIVE_AGGREGATOR//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VTIMEZONE', `TZID:${JST_TIME_ZONE}`, 'BEGIN:STANDARD', 'DTSTART:19700101T000000',
+    'TZOFFSETFROM:+0900', 'TZOFFSETTO:+0900', 'TZNAME:JST', 'END:STANDARD', 'END:VTIMEZONE',
+  ];
+  for (const entry of valid) {
+    const summary = entry.time ? entry.summary : `${entry.summary} (${t('common.timeUnknown')})`;
+    const timing = entry.time ? [
+      `DTSTART;TZID=${JST_TIME_ZONE}:${formatToIcsDate(entry.date, entry.time)}`,
+      `DTEND;TZID=${JST_TIME_ZONE}:${addMinutesAsJstIcs(entry.date, entry.time, entry.minutes)}`,
+    ] : [
+      `DTSTART;VALUE=DATE:${entry.date.replace(/-/g, '')}`,
+      `DTEND;VALUE=DATE:${getJstDateKey(new Date(new Date(`${entry.date}T00:00:00+09:00`).getTime() + 86400000)).replace(/-/g, '')}`,
+    ];
+    lines.push('BEGIN:VEVENT', `UID:${escapeIcs(entry.uid)}@oshikatsu.manager`, `DTSTAMP:${utcStamp(now)}`,
+      ...timing, `SUMMARY:${escapeIcs(summary)}`, `DESCRIPTION:${escapeIcs(entry.description)}`,
+      `LOCATION:${escapeIcs(entry.venue)}`, `URL:${escapeIcs(entry.url)}`,
+      'STATUS:CONFIRMED', ...icsAlarmLines(summary), 'END:VEVENT');
+  }
+  return [...lines, 'END:VCALENDAR'].map(foldIcsLine).join('\r\n');
 }
 
 export function buildEventIcs(
@@ -172,113 +220,27 @@ export function buildEventIcs(
   now: Date = new Date(),
   t: TFunction = defaultT,
 ): string {
-  const target = targetDateFor(event, targetDateType, t);
-  // 无有效日期 → 不产出 VEVENT（否则 DTSTART 会是裸时间 T…，导致整份 .ics 无法导入）。
-  if (!target.date) return '';
-  const startFormatted = formatToIcsDate(target.date, target.time);
-  const endFormatted = addMinutesAsJstIcs(target.date, target.time, target.durationMinutes);
-  return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//OshikatsuManager//JA_LIVE_AGGREGATOR//EN',
-    'CALSCALE:GREGORIAN',
-    'BEGIN:VTIMEZONE',
-    `TZID:${JST_TIME_ZONE}`,
-    'BEGIN:STANDARD',
-    'DTSTART:19700101T000000',
-    'TZOFFSETFROM:+0900',
-    'TZOFFSETTO:+0900',
-    'TZNAME:JST',
-    'END:STANDARD',
-    'END:VTIMEZONE',
-    'BEGIN:VEVENT',
-    `UID:${event.id}-${targetDateType}@oshikatsu.manager`,
-    `DTSTAMP:${utcStamp(now)}`,
-    `DTSTART;TZID=${JST_TIME_ZONE}:${startFormatted}`,
-    `DTEND;TZID=${JST_TIME_ZONE}:${endFormatted}`,
-    `SUMMARY:${escapeIcs(target.summary)}`,
-    `DESCRIPTION:${escapeIcs(target.description)}`,
-    `LOCATION:${escapeIcs(event.venueName)}`,
-    `URL:${event.purchaseUrl || event.originalUrl}`,
-    'STATUS:CONFIRMED',
-    ...icsAlarmLines(target.summary),
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ].map(foldIcsLine).join('\r\n');
+  if (targetDateType === 'concert') return buildCalendar([eventCalendarEntry(event, t)], now, t);
+  const precise = windowCalendarEntries(event, [targetDateType === 'payment' ? 'resultEnd' : 'applyEnd'], t);
+  return buildCalendar(precise.length ? precise : fallbackCalendarEntries(event,
+    targetDateType === 'payment' ? ['paymentDeadlineDate'] : ['lotteryEndDate', 'generalEndDate'], t), now, t);
 }
 
-// Generate an ICS string and trigger a download for a clean Japanese Live Event
 export async function downloadEventIcs(
   event: ActivityEvent,
   targetDateType: 'concert' | 'lottery_end' | 'payment' = 'concert',
   t: TFunction = defaultT,
 ): Promise<void> {
-  const icsString = buildEventIcs(event, targetDateType, new Date(), t);
-  if (!icsString) return; // 无有效日期：跳过，避免导出损坏文件。
-  await deliverIcs(`${event.artistName}_${targetDateType}_reminder.ics`, icsString);
+  const content = buildEventIcs(event, targetDateType, new Date(), t);
+  if (content) await deliverIcs(`${event.artistName}_${targetDateType}_reminder.ics`, content);
 }
 
-// 纯构建函数（与 deliverIcs 解耦——此前 build/deliver 耦在一起，导出内容从未被完整单测，
-// 非法 DTSTART 混进真机导出文件才被发现）。空日程返回 ''（调用方跳过投递）。
 export function buildAllFollowedEventsIcs(events: ActivityEvent[], t: TFunction = defaultT): string {
-  const icsLines: string[] = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//OshikatsuManager//ALL_FOLLOWED_CALENDAR//EN',
-    'CALSCALE:GREGORIAN',
-    'BEGIN:VTIMEZONE',
-    `TZID:${JST_TIME_ZONE}`,
-    'BEGIN:STANDARD',
-    'DTSTART:19700101T000000',
-    'TZOFFSETFROM:+0900',
-    'TZOFFSETTO:+0900',
-    'TZNAME:JST',
-    'END:STANDARD',
-    'END:VTIMEZONE',
-  ];
-
-  events.forEach((event) => {
-    // 1. Live Concert Event（无日期则跳过，避免裸时间 DTSTART 污染整份日历）
-    if (event.date) {
-      const liveStart = formatToIcsDate(event.date, event.time);
-      const liveEnd = addMinutesAsJstIcs(event.date, event.time || '18:00', 180);
-      icsLines.push(
-        'BEGIN:VEVENT',
-        `UID:${event.id}-concert-all@oshikatsu.manager`,
-        `DTSTAMP:${utcStamp()}`,
-        `DTSTART;TZID=${JST_TIME_ZONE}:${liveStart}`,
-        `DTEND;TZID=${JST_TIME_ZONE}:${liveEnd}`,
-        `SUMMARY:${escapeIcs(t('ics.summary.allConcert', { title: event.title }))}`,
-        `DESCRIPTION:${escapeIcs(event.description.slice(0, 100))}`,
-        `LOCATION:${escapeIcs(event.venueName)}`,
-        `URL:${event.purchaseUrl || event.originalUrl}`,
-        ...icsAlarmLines(t('ics.summary.allConcert', { title: event.title })),
-        'END:VEVENT'
-      );
-    }
-
-    // 2. Lottery End Alert if exists
-    if (event.timeline.lotteryEndDate) {
-      const lotStart = formatToIcsDate(event.timeline.lotteryEndDate, '23:59');
-      const lotEnd = addMinutesAsJstIcs(event.timeline.lotteryEndDate, '23:59', 15);
-      icsLines.push(
-        'BEGIN:VEVENT',
-        `UID:${event.id}-lottery-all@oshikatsu.manager`,
-        `DTSTAMP:${utcStamp()}`,
-        `DTSTART;TZID=${JST_TIME_ZONE}:${lotStart}`,
-        `DTEND;TZID=${JST_TIME_ZONE}:${lotEnd}`,
-        `SUMMARY:${escapeIcs(t('ics.summary.allLottery', { artist: event.artistName }))}`,
-        `DESCRIPTION:${escapeIcs(t('ics.description.allLottery', { platform: event.platform, url: event.purchaseUrl || event.originalUrl }))}`,
-        `LOCATION:${escapeIcs(event.venueName)}`,
-        ...icsAlarmLines(t('ics.summary.allLottery', { artist: event.artistName })),
-        'END:VEVENT'
-      );
-    }
-  });
-
-  if (!icsLines.some((line) => line === 'BEGIN:VEVENT')) return ''; // 没有任何可导出的日程
-  icsLines.push('END:VCALENDAR');
-  return icsLines.map(foldIcsLine).join('\r\n');
+  const entries = events.flatMap(event => [eventCalendarEntry(event, t),
+    ...(event.ticketWindows?.length ? windowCalendarEntries(event, WINDOW_DATE_FIELDS, t)
+      : fallbackCalendarEntries(event, ['lotteryStartDate', 'lotteryEndDate', 'generalStartDate', 'generalEndDate', 'paymentDeadlineDate'], t)),
+  ]);
+  return buildCalendar(entries, new Date(), t);
 }
 
 // Generate dynamic ICS Calendar comprising all followed items

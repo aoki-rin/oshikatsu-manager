@@ -5,7 +5,7 @@ import {
   Sparkles, Bell, Heart, Check, Building, CreditCard 
 } from 'lucide-react';
 import { downloadEventIcs, formatDisplayDate, getDaysRemaining, platformLabel } from '../utils';
-import { buildReminderTargets, isPastReminder } from '../notifications';
+import { buildReminderTargets, isPastReminder, findActiveReminder } from '../notifications';
 import { openPurchaseUrl } from '../native';
 import { supportsCalendarExport } from '../platform';
 import { eventPlatforms } from '../sources/aggregate';
@@ -82,24 +82,30 @@ export function EventDetailModal({
   // Lazy detail enrichment (e.g. Pia precise 受付 dates) on open — search stays fast,
   // details load when you actually open the event (Mihon-style). Best-effort.
   const [event, setEvent] = useState<ActivityEvent>(eventProp);
+  const [detailAttempt, setDetailAttempt] = useState(0);
+  const [isEnriching, setIsEnriching] = useState(false);
   useEffect(() => {
-    setEvent(eventProp);
+    const requestEvent = detailAttempt > 0 && event.id === eventProp.id ? event : eventProp;
+    setEvent(requestEvent);
     let cancelled = false;
-    enrichEventWindows(eventProp).then((enriched) => {
-      if (cancelled || enriched === eventProp) return;
+    setIsEnriching(true);
+    enrichEventWindows(requestEvent).then((enriched) => {
+      if (cancelled || enriched === requestEvent) return;
       setEvent(enriched);
       onEnrichEvent?.(enriched);
-    });
+    }).catch(() => {
+      if (!cancelled) setEvent(previous => ({ ...previous, detailWarning: 'unavailable' }));
+    }).finally(() => { if (!cancelled) setIsEnriching(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventProp.id]);
+  }, [eventProp.id, detailAttempt]);
 
   const artist = artists.find(a => a.id === event.artistId);
   const venue = venues.find(v => v.id === event.venueId);
 
   // 过滤掉已过期的窗口：避免对已结束的受付显示一个「点了就立刻弹/无反应」的提醒开关。
   const reminderTargets = buildReminderTargets(event, t).filter((target) => !isPastReminder(target));
-  const isReminderActive = (target: ReminderTarget) => activeAlerts.some(a => a.notificationId === target.notificationId);
+  const isReminderActive = (target: ReminderTarget) => !!findActiveReminder(target, activeAlerts);
 
   const [activeTab, setActiveTab] = useState<'info' | 'timeline' | 'reminders'>('info');
 
@@ -214,6 +220,14 @@ export function EventDetailModal({
         {/* Scrollable Container Area */}
         <div className="flex-1 overflow-y-auto px-5 py-4 pb-8 h-4/5 text-slate-800">
           
+          {event.detailWarning && (
+            <div role="alert" data-testid="detail-fetch-warning" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <p>{t(event.detailWarning === 'pia-busy' ? 'detail.piaBusy' : 'detail.fetchUnavailable')}</p>
+              <button id="btn-retry-detail" disabled={isEnriching} onClick={() => setDetailAttempt(value => value + 1)} className="mt-2 underline disabled:opacity-50">
+                {t(isEnriching ? 'detail.fetching' : 'detail.retryFetch')}
+              </button>
+            </div>
+          )}
           {activeTab === 'info' && (
             <div className="space-y-4">
               
@@ -230,7 +244,7 @@ export function EventDetailModal({
                     <span className="text-[10px] text-white/80 font-mono">{t('detail.dateTimeLabel')}</span>
                     <p className="text-white text-sm font-bold flex items-center gap-1.5 mt-0.5">
                       <Calendar className="w-4 h-4 text-white" />
-                      {formatDisplayDate(event.date)} ({event.time})
+                      {formatDisplayDate(event.date)} ({event.time || t('common.timeUnknown')})
                     </p>
                   </div>
                 </div>

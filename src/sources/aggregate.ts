@@ -75,6 +75,31 @@ function firstNonEmpty(values: string[]): string {
   return values.find((value) => value && value.trim()) || '';
 }
 
+function sourceIds(event: ActivityEvent): string[] {
+  return [...new Set([event.id, ...(event.memberIds ?? [])])].filter(id => !id.startsWith('agg-'));
+}
+
+function sameSourceRecord(a: ActivityEvent, b: ActivityEvent): boolean {
+  return sourceIds(a).some(id => sourceIds(b).includes(id));
+}
+
+function compatiblePerformances(a: ActivityEvent, b: ActivityEvent, group: ActivityEvent[]): boolean {
+  if (!venuesCompatible(a.venueName, b.venueName)) return false;
+  if (a.time && b.time && a.time !== b.time) return false;
+  if (sameSourceRecord(a, b)) return true;
+  // 同平台不同公演编号不能因地点相同被合并。
+  if (eventPlatforms(a).some(p => eventPlatforms(b).includes(p))) return false;
+  if (a.time && b.time) return true;
+  // 时间未知时，仅在该会场没有多个候选场次的情况下跨平台匹配。
+  const nearby = group.filter(e => venuesCompatible(e.venueName, a.venueName));
+  if (new Set(nearby.map(e => e.time).filter(Boolean)).size > 1) return false;
+  for (const platform of new Set(nearby.flatMap(eventPlatforms))) {
+    const records = nearby.filter(e => e.platform === platform && !e.id.startsWith('agg-'));
+    if (new Set(records.map(e => e.id)).size > 1) return false;
+  }
+  return true;
+}
+
 function mergeCluster(cluster: ActivityEvent[]): ActivityEvent {
   const sorted = [...cluster].sort(
     (a, b) => platformRank(a.platform) - platformRank(b.platform) || fetchedMs(b) - fetchedMs(a),
@@ -100,18 +125,19 @@ function mergeCluster(cluster: ActivityEvent[]): ActivityEvent {
   const artistName = attributed?.artistName || primary.artistName;
 
   // 成员平台事件 id（查询无关，如 eplus-xxx / pia-yyy）：收藏用它做稳定别名。
-  // 排除 agg- 前缀（聚合 id 含检索词，换关键词会漂移）；幂等（成员本身可能已是聚合产物）。
+  // 排除聚合展示 id（它会随成员变化）；成员本身可能已是聚合产物。
   const memberIds = [...new Set(cluster.flatMap((event) => [event.id, ...(event.memberIds ?? [])]))]
     .filter((id) => !id.startsWith('agg-'));
 
   const merged: ActivityEvent = {
     ...primary,
-    id: `agg-${normalizeArtist(artistName)}-${primary.date}-${venueCore(venueName) || 'x'}`,
+    id: `agg-${[...memberIds].sort().map(encodeURIComponent).join('+')}`,
     title: pickLongest(cluster.map((event) => event.title)) || primary.title,
     artistId: canonicalArtistId(artistName) || primary.artistId,
     artistName,
     artistSource: attributed ? 'platform' : primary.artistSource,
     memberIds,
+    sourceEvents: cluster.flatMap(event => event.sourceEvents ?? [event]),
     venueId: canonicalVenueId(venueName) || primary.venueId,
     venueName,
     region: firstNonEmpty(cluster.map((event) => event.region)),
@@ -145,7 +171,7 @@ export function aggregateConcerts(events: ActivityEvent[]): ActivityEvent[] {
   for (const group of groups.values()) {
     const clusters: ActivityEvent[][] = [];
     for (const event of group) {
-      const target = clusters.find((cluster) => cluster.some((member) => venuesCompatible(member.venueName, event.venueName)));
+      const target = clusters.find((cluster) => cluster.every((member) => compatiblePerformances(member, event, group)));
       if (target) target.push(event);
       else clusters.push([event]);
     }

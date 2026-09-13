@@ -133,7 +133,7 @@ export function DiscoverView({
       event.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
     // 2. Extension Check: Only allow events from platforms whose Tachiyomi extensions are currently ACTIVE
-    const isExtensionActive = activePlatforms.includes(event.platform) || activePlatforms.includes('All');
+    const isExtensionActive = eventPlatforms(event).some(platform => activePlatforms.includes(platform as TicketPlatform)) || activePlatforms.includes('All');
     if (!isExtensionActive) return false;
 
     // 3. Platform filter (merged events expose every platform present in their windows)

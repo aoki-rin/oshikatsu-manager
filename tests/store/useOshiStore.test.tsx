@@ -690,9 +690,9 @@ describe('useOshiStore — 收藏稳定键（#36 回归）', () => {
     act(() => result.current.handleToggleFavorite(ev));
 
     const key = favoriteKey(ev);
-    expect(key.startsWith('fav:')).toBe(true);
-    expect(result.current.favorites).toEqual([key, 'lawson-1']);
-    expect(JSON.parse(localStorage.getItem('oshikatsu_favorites')!)).toEqual([key, 'lawson-1']);
+    expect(key).toBe(ev.id);
+    expect(result.current.favorites).toEqual([key]);
+    expect(JSON.parse(localStorage.getItem('oshikatsu_favorites')!)).toEqual([key]);
   });
 
   it('再次 toggle 取消收藏（清掉 key 与旧 id）', () => {
@@ -999,4 +999,47 @@ describe('useOshiStore — 主题 / 重置 / 查看 / 清空 / 扩展合并', ()
     // 旧行为强制 isEnabled:true（用户关不掉 Lawson 的存量 bug）——现尊重持久化选择
     expect(lawson.isEnabled).toBe(false);
   });
+});
+
+it('device review: migrates a saved two-date Lawson favorite and removes only the invented midnight reminder', async () => {
+  const old=makeEvent({id:'lawson-70896-20301130,20301201',platform:'Lawson Ticket',date:'2030-11-30',time:'00:00'});
+  localStorage.setItem('oshikatsu_events',JSON.stringify([old]));
+  localStorage.setItem('oshikatsu_favorites',JSON.stringify([old.id]));
+  localStorage.setItem('oshikatsu_lawson_id_migrated','2');
+  localStorage.setItem('oshikatsu_alerts',JSON.stringify([
+    {eventId:old.id,type:'concert',notificationId:501,scheduleAt:'2030-11-30T00:00:00+09:00'},
+    {eventId:old.id,type:'lottery_end',notificationId:502,scheduleAt:'2030-11-01T18:00:00+09:00'},
+  ]));
+  const {result}=render();
+  expect(result.current.events.map(e=>e.date)).toEqual(['2030-11-30','2030-12-01']);
+  expect(result.current.favorites).toEqual(['lawson-70896-20301130','lawson-70896-20301201']);
+  expect(result.current.activeAlerts.map(a=>a.notificationId)).toEqual([502]);
+  expect(notifications.cancelReminderIds).toHaveBeenCalledWith(new Set([501]));
+  act(()=>result.current.handleToggleFavorite(result.current.events[0]));
+  expect(result.current.favorites).toEqual(['lawson-70896-20301201']);
+});
+
+it('device review: an existing migrated reminder cancels its original system id', async () => {
+  localStorage.setItem('oshikatsu_alerts',JSON.stringify([{eventId:'old',type:'lottery_end',notificationId:123}]));
+  const {result}=render();
+  await act(async()=>result.current.handleToggleAlert(makeTarget({notificationId:456,previousNotificationIds:[123]})));
+  expect(notifications.cancelReminderTarget).toHaveBeenCalledWith(123);
+  expect(notifications.scheduleReminderTarget).not.toHaveBeenCalled();
+  expect(result.current.activeAlerts).toEqual([]);
+});
+
+it('device review: a real search replaces a saved mismerged card, persists split favorites and exposes both ids', async () => {
+  const a=makeEvent({id:'lp-a',platform:'LivePocket',artistName:'闇雲',time:'12:50'});
+  const b=makeEvent({...a,id:'lp-b',time:'16:50'});
+  localStorage.setItem('oshikatsu_events',JSON.stringify([{...a,id:'agg-old',memberIds:[a.id,b.id]}]));
+  localStorage.setItem('oshikatsu_favorites',JSON.stringify(['agg-old']));
+  vi.mocked(sources.searchPlatformsStreaming).mockImplementationOnce(async (_q,_p,onBatch) => {
+    onBatch({platform:'LivePocket',status:'ok',count:2},[a,b]);
+  });
+  const {result}=render();
+  await act(async()=>{await result.current.handleRunPlatformSearch('闇雲',['LivePocket']);});
+  expect(result.current.events.map(e=>e.id)).toEqual([a.id,b.id]);
+  expect(result.current.searchResultIds).toEqual([a.id,b.id]);
+  expect(result.current.favorites).toEqual([a.id,b.id]);
+  expect(JSON.parse(localStorage.getItem('oshikatsu_events')!).map((e:ActivityEvent)=>e.id)).toEqual([a.id,b.id]);
 });

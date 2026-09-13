@@ -52,7 +52,8 @@ describe('enrichPiaWindows', () => {
     const out = await enrichPiaWindows(event);
 
     expect(h.get).toHaveBeenCalledTimes(1);
-    expect(out).toBe(event);
+    expect(out.ticketWindows).toEqual(event.ticketWindows);
+    expect(out.detailWarning).toBe('unavailable');
   });
 });
 
@@ -118,4 +119,28 @@ describe('enrichLivePocketWindows（2026-07 新版详情）', () => {
     const out = await enrichLivePocketWindows(event);
     expect(out).toBe(event);
   });
+});
+
+describe('device review: Pia HTTP 200 busy page', () => {
+  it('preserves existing data but reports busy status instead of silently succeeding', async () => {
+    h.get.mockResolvedValue({status:200,data:'<html><body>アクセスが集中しております。The website is too busy</body></html>'});
+    const event=makeEvent({platform:'Ticket Pia',ticketWindows:[piaWindow({applyEnd:'2030-05-20T23:59:00+09:00'})]});
+    const enriched=await enrichPiaWindows(event);
+    expect(enriched.ticketWindows).toEqual(event.ticketWindows);
+    expect(enriched.detailWarning).toBe('pia-busy');
+  });
+  it('a later successful fetch clears a prior busy warning', async () => {
+    h.get.mockResolvedValue({status:200,data:'<div>受付期間 2030/5/1(水) 10:00 ~ 2030/5/20(火) 18:00</div><div>結果発表開始日時 2030/6/1(月) 15:00</div>'});
+    const event=makeEvent({detailWarning:'pia-busy',ticketWindows:[piaWindow()]});
+    const enriched=await enrichPiaWindows(event);
+    expect(enriched.detailWarning).toBeUndefined();
+    expect(enriched.ticketWindows![0].applyEnd).toBe('2030-05-20T18:00:00+09:00');
+  });
+});
+
+import { searchPia } from '../../src/sources/pia';
+it('classifies a busy secondary Pia search response as an error, not zero results', async () => {
+  h.get.mockResolvedValueOnce({status:200,data:'<html>'+ 'normal search page '.repeat(30)+'</html>'})
+    .mockResolvedValueOnce({status:200,data:'<html>アクセスが集中しております</html>'});
+  await expect(searchPia('FRUITS ZIPPER')).rejects.toThrow('繁忙');
 });

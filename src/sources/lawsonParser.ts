@@ -32,6 +32,12 @@ function lawsonDate(value: string): string {
   return match ? `${match[1]}-${z2(match[2])}-${z2(match[3])}` : '';
 }
 
+export function explicitLawsonDates(attribute: string): string[] {
+  if (!/^\d{8}(?:,\d{8})*$/.test(attribute)) return [];
+  return [...new Set(attribute.split(','))].map(value => `${value.slice(0,4)}-${value.slice(4,6)}-${value.slice(6,8)}`)
+    .filter(value => { const d = new Date(`${value}T00:00:00Z`); return !Number.isNaN(d.getTime()) && d.toISOString().slice(0,10) === value; });
+}
+
 function firstMatch(value: string, patterns: RegExp[]): string {
   for (const pattern of patterns) {
     const match = value.match(pattern);
@@ -207,49 +213,52 @@ function parseResultBoxGroup(group: string, query: string, groupIdx: number, fet
   const seenIds = new Set<string>();
   chunks.forEach((chunk, prfIdx) => {
     const venue = informationText(chunk, '会場') || '—';
-    const date = lawsonDate(informationText(chunk, '公演日'));
+    const firstDate = lawsonDate(informationText(chunk, '公演日'));
     const prfAttrs = dataAttrs(chunk);
-    const prfDate = prfAttrs.prfdate || date.replace(/-/g, '');
-    // Lコード优先取本公演自己按钮上的（若平台某天改成逐轮发码，id 至少绑住本场，不随他轮下架漂移）
-    const base = safeIdPart(prfAttrs.lcode) || groupLcode || titleSlug || `g${groupIdx}`;
-    let eventId = `lawson-${base}-${prfDate || `p${prfIdx}`}`;
-    if (seenIds.has(eventId)) {
-      // 同日昼夜二部：prfDate 只有日粒度，同 id 会被 dedupeEvents 吞掉一场——
-      // 用 pfKeys（平台自身的公演键，跨轮一致）消歧；缺失时才退位置后缀。
-      eventId = `${eventId}-${safeIdPart(prfAttrs.pfkeys).slice(-6) || `p${prfIdx}`}`;
+    const explicitDates = explicitLawsonDates(prfAttrs.prfdate || '');
+    for (const date of explicitDates.length ? explicitDates : [firstDate]) {
+      const prfDate = date.replace(/-/g, '');
+      // Lコード优先取本公演自己按钮上的（若平台某天改成逐轮发码，id 至少绑住本场，不随他轮下架漂移）
+      const base = safeIdPart(prfAttrs.lcode) || groupLcode || titleSlug || `g${groupIdx}`;
+      let eventId = `lawson-${base}-${prfDate || `p${prfIdx}`}`;
+      if (seenIds.has(eventId)) {
+        // 同日昼夜二部：prfDate 只有日粒度，同 id 会被 dedupeEvents 吞掉一场——
+        // 用 pfKeys（平台自身的公演键，跨轮一致）消歧；缺失时才退位置后缀。
+        eventId = `${eventId}-${safeIdPart(prfAttrs.pfkeys).slice(-6) || `p${prfIdx}`}`;
+      }
+      seenIds.add(eventId);
+      // 末尾边界含 ResultBlock（组尾出演者模块）：否则最后一轮的切片会吞进出演者链接，
+      // applyUrl 误取 /artist/ 页。
+      const items = [
+        ...chunk.matchAll(/<div[^>]{1,400}class="[^"]*ResultBox__table\s+prfItem[^"]*"[\s\S]*?(?=<div[^>]{1,400}class="[^"]*ResultBox__table\s+prfItem|<div[^>]{1,400}class="[^"]*ResultBlock\b|$)/gi),
+      ].map((match) => match[0]);
+      const windows = items
+        .map((item, i) => parsePrfWindow(item, eventId, groupUrl, i))
+        .filter((window): window is TicketWindow => window !== null);
+      if (!date && windows.length === 0) continue;
+      events.push(normalizeLiveEvent({
+        id: eventId,
+        title,
+        artistId: canonicalArtistId(query) || `lawson-artist-${query}`,
+        artistName: query,
+        artistSource: 'query',
+        venueId: canonicalVenueId(venue) || `lawson-venue-${eventId}`,
+        venueName: venue,
+        date,
+        time: '',
+        region: venue.match(/[（(]([^）)]+)[）)]/)?.[1] || '',
+        platform: 'Lawson Ticket',
+        price: '—',
+        imageUrl,
+        timeline: deriveTimelineFromWindows(windows),
+        ticketWindows: windows,
+        originalUrl: groupUrl,
+        description: `${title}（Lawson Ticket 平台实时搜索结果）`,
+        category: 'J-Pop',
+        tags: ['Lawson Ticket', '实时'],
+        purchaseUrl: groupUrl,
+      }, 'lawson', fetchedAt));
     }
-    seenIds.add(eventId);
-    // 末尾边界含 ResultBlock（组尾出演者模块）：否则最后一轮的切片会吞进出演者链接，
-    // applyUrl 误取 /artist/ 页。
-    const items = [
-      ...chunk.matchAll(/<div[^>]{1,400}class="[^"]*ResultBox__table\s+prfItem[^"]*"[\s\S]*?(?=<div[^>]{1,400}class="[^"]*ResultBox__table\s+prfItem|<div[^>]{1,400}class="[^"]*ResultBlock\b|$)/gi),
-    ].map((match) => match[0]);
-    const windows = items
-      .map((item, i) => parsePrfWindow(item, eventId, groupUrl, i))
-      .filter((window): window is TicketWindow => window !== null);
-    if (!date && windows.length === 0) return;
-    events.push(normalizeLiveEvent({
-      id: eventId,
-      title,
-      artistId: canonicalArtistId(query) || `lawson-artist-${query}`,
-      artistName: query,
-      artistSource: 'query',
-      venueId: canonicalVenueId(venue) || `lawson-venue-${eventId}`,
-      venueName: venue,
-      date: date || windows[0]?.applyEnd?.slice(0, 10) || '',
-      time: '00:00',
-      region: venue.match(/[（(]([^）)]+)[）)]/)?.[1] || '',
-      platform: 'Lawson Ticket',
-      price: '—',
-      imageUrl,
-      timeline: deriveTimelineFromWindows(windows),
-      ticketWindows: windows,
-      originalUrl: groupUrl,
-      description: `${title}（Lawson Ticket 平台实时搜索结果）`,
-      category: 'J-Pop',
-      tags: ['Lawson Ticket', '实时'],
-      purchaseUrl: groupUrl,
-    }, 'lawson', fetchedAt));
   });
   return events;
 }
@@ -290,8 +299,8 @@ export function parseLawsonSearch(rawHtml: string, query: string, fetchedAt = ne
       artistSource: 'query',
       venueId: canonicalVenueId(venue) || `lawson-venue-${code}`,
       venueName: venue,
-      date: date || windows[0]?.applyEnd?.slice(0, 10) || '',
-      time: '00:00',
+      date,
+      time: '',
       region: venue.match(/[（(]([^）)]+)[）)]/)?.[1] || '',
       platform: 'Lawson Ticket',
       price: '—',
@@ -306,4 +315,23 @@ export function parseLawsonSearch(rawHtml: string, query: string, fetchedAt = ne
     }, 'lawson', fetchedAt));
   });
   return events;
+}
+
+// 旧缓存的明确日期列表可以无网络展开；旧默认午夜不是官方开演时间。
+export function migrateLawsonEvent(event: ActivityEvent): ActivityEvent[] {
+  if (event.platform !== 'Lawson Ticket' || typeof event.id !== 'string' || event.id.startsWith('agg-') || (event.ticketWindows != null && !Array.isArray(event.ticketWindows))) return [event];
+  const match = event.id.match(/^(lawson-.+-)(\d{8}(?:,\d{8})+)(.*)$/);
+  const dates = match ? explicitLawsonDates(match[2]) : [event.date];
+  return dates.map(date => {
+    const id = match ? `${match[1]}${date.replace(/-/g, '')}${match[3]}` : event.id;
+    if (id === event.id && event.time !== '00:00') return event;
+    return { ...event, id, date, time: event.time === '00:00' ? '' : event.time,
+      // 不把一对多的旧 id 写到每一场的收藏别名里（否则新收藏又会串场）。
+      memberIds: match ? undefined : event.memberIds,
+      ticketWindows: (event.ticketWindows ?? []).map(w => ({ ...w,
+        id: w.id.replace(event.id, id),
+        previousIds: id === event.id ? w.previousIds : [...new Set([w.id, ...(w.previousIds ?? [])])],
+      })),
+    };
+  });
 }

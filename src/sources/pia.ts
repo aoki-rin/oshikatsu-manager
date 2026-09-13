@@ -193,6 +193,17 @@ export function parsePiaDetailDates(html: string): PiaDetail {
   };
 }
 
+class PiaBusyError extends Error {}
+
+function validatePiaResponse(html: string, status = 200): void {
+  if (/アクセスが集中しております|The website is too busy/i.test(html)) {
+    throw new PiaBusyError('Ticket Pia 官网繁忙，请稍后再试');
+  }
+  if (status >= 400 || /cf-browser-verification|\/cdn-cgi\/challenge-platform\//i.test(html)) {
+    throw new Error('Ticket Pia 返回异常页面');
+  }
+}
+
 export async function getPiaDetail(url: string): Promise<PiaDetail | null> {
   try {
     // 兜底：存量事件可能还存着 ticket.pia.jp 旧链接（该域名 301 回 t.pia.jp）。
@@ -201,8 +212,10 @@ export async function getPiaDetail(url: string): Promise<PiaDetail | null> {
     if (!target || new URL(target).hostname !== 't.pia.jp') return null;
     const res = await CapacitorHttp.get({ url: target, headers: { 'User-Agent': UA }, connectTimeout: 10000, readTimeout: 15000 });
     const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+    validatePiaResponse(html, res.status);
     return parsePiaDetailDates(html);
-  } catch {
+  } catch (error) {
+    if (error instanceof PiaBusyError) throw error;
     return null;
   }
 }
@@ -240,7 +253,9 @@ async function fetchPiaText(url: string): Promise<string> {
     connectTimeout: 10000,
     readTimeout: 20000,
   });
-  return typeof res.data === 'string' ? res.data : String(res.data ?? '');
+  const html = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+  validatePiaResponse(html, res.status);
+  return html;
 }
 
 export async function searchPia(artist: string): Promise<ActivityEvent[]> {
@@ -257,6 +272,7 @@ export async function searchPia(artist: string): Promise<ActivityEvent[]> {
   if (looksLikeAntiBot(searchHtml, s.status).blocked) {
     throw new Error('Ticket Pia 直连返回反爬/异常内容（配置代理或用平台跳转继续搜索）');
   }
+  validatePiaResponse(searchHtml, s.status);
   const artistInfo = parsePiaArtistInfo(searchHtml);
 
   // 2) 艺人命中 → 该艺人的发售/抽選一览。搜索只抓 rlsInfo（快）：状态行自带的「開始～締切」
@@ -287,21 +303,25 @@ export async function enrichPiaWindows(event: ActivityEvent): Promise<ActivityEv
   );
   const byId = new Map(windows.map((w) => [w.id, w] as const));
   let changed = false;
+  let detailWarning: ActivityEvent['detailWarning'] = targets.length > 4 ? 'unavailable' : undefined;
   for (const r of results) {
-    if (r.status === 'fulfilled' && r.value.detail && (r.value.detail.applyStart || r.value.detail.applyEnd)) {
+    if (r.status === 'fulfilled' && r.value.detail && (r.value.detail.applyStart || r.value.detail.applyEnd || r.value.detail.resultStart)) {
       const w = byId.get(r.value.id);
       if (w) {
         byId.set(r.value.id, {
           ...w,
-          applyStart: r.value.detail.applyStart,
-          applyEnd: r.value.detail.applyEnd,
+          applyStart: r.value.detail.applyStart ?? w.applyStart,
+          applyEnd: r.value.detail.applyEnd ?? w.applyEnd,
           resultStart: r.value.detail.resultStart ?? w.resultStart,
         });
         changed = true;
       }
+    } else {
+      if (r.status === 'rejected' && r.reason instanceof PiaBusyError) detailWarning = 'pia-busy';
+      else detailWarning ??= 'unavailable';
     }
   }
-  if (!changed) return event;
+  if (!changed && event.detailWarning === detailWarning) return event;
   const ticketWindows = [...byId.values()];
-  return { ...event, ticketWindows, timeline: deriveTimelineFromWindows(ticketWindows) };
+  return { ...event, detailWarning, ticketWindows, timeline: deriveTimelineFromWindows(ticketWindows) };
 }

@@ -52,13 +52,21 @@ interface EplusRecord {
   koen_code?: string;
   koenbi_term?: string;
   kaien_time?: string;
-  kanren_kogyo_sub?: { kogyo_name_1?: string; kogyo_name_2?: string };
+  kanren_kogyo_sub?: { kogyo_name_1?: string; kogyo_name_2?: string; kogyo_sub_code?: string };
   kanren_venue?: { venue_name?: string; todofuken_name?: string; venue_code?: string };
   koen_detail_url_pc?: string | null;
   kanren_uketsuke_koen_list?: EplusRound[];
 }
 interface EplusSearchJson {
   data?: { record_list?: EplusRecord[] };
+}
+
+// 官网详情路径包含興行 + 子公演 + 公演号；同一興行的不同 Vol. 不能共用 id。
+// 同一路径还可能覆盖不同日期/入场时段，所以日期、时间也参与身份。
+export function eplusPerformanceId(url: string | null | undefined, date: string, time: string): string | null {
+  if (typeof url !== 'string' || typeof date !== 'string' || typeof time !== 'string') return null;
+  const token = url.match(/\/sf\/detail\/([A-Za-z0-9-]+)/)?.[1];
+  return token ? `eplus-${token}-${date.replace(/-/g, '')}-${time.replace(':', '') || 'tbd'}` : null;
 }
 
 // 纯函数：从 eplus 搜索 HTML(内嵌 JSON) 解析事件 + 多轮窗口
@@ -73,11 +81,12 @@ export function parseEplusSearch(html: string, query: string): EplusEvent[] {
     const sub = r.kanren_kogyo_sub ?? {};
     const venue = r.kanren_venue ?? {};
     const rounds = r.kanren_uketsuke_koen_list ?? [];
-    // 唯一 id：同巡演多场次要区分（加日期 + 场馆 code）
-    const eventId = `eplus-${r.kogyo_code}-${r.koenbi_term || ''}-${venue.venue_code || r.koen_code || ''}`;
+
     // eplus 给的 koen_detail_url_pc 是相对路径(/sf/detail/...)，必须补成绝对地址，
     // 否则真机上 new URL(相对, http://localhost/) 会跳到 localhost 而不是 eplus。
     const detailUrl = absoluteUrl(r.koen_detail_url_pc, EPLUS_BASE);
+    const eventId = eplusPerformanceId(detailUrl, ymd(r.koenbi_term), hm(r.kaien_time))
+      || `eplus-${r.kogyo_code || 'unknown'}-${sub.kogyo_sub_code || 'x'}-${r.koen_code || 'x'}-${r.koenbi_term || ''}-${r.kaien_time || 'tbd'}-${venue.venue_code || 'x'}`;
     const ticketWindows: TicketWindow[] = rounds.map((u, i) => ({
       id: `${eventId}-${i}`,
       platform: 'eplus',
@@ -105,7 +114,6 @@ export function parseEplusSearch(html: string, query: string): EplusEvent[] {
 
 // 把 eplus 事件映射成 app 的 ActivityEvent（含派生 timeline 给卡片倒计时用）
 function toActivityEvent(e: EplusEvent, query: string): ActivityEvent {
-  const fallbackDate = e.ticketWindows.find((window) => window.applyEnd)?.applyEnd?.slice(0, 10) || '';
   const base: ActivityEvent = {
     id: e.eventId,
     title: e.title,
@@ -116,8 +124,8 @@ function toActivityEvent(e: EplusEvent, query: string): ActivityEvent {
     artistSource: 'query',
     venueId: canonicalVenueId(e.venue) || `eplus-venue-${e.eventId}`,
     venueName: e.venue,
-    date: e.date || fallbackDate,
-    time: e.time || '18:00',
+    date: e.date,
+    time: e.time,
     region: e.prefecture,
     platform: 'eplus',
     price: '—',
@@ -147,4 +155,17 @@ export async function searchEplus(artist: string): Promise<ActivityEvent[]> {
     throw new Error('eplus 直连返回反爬/异常内容（配置代理或用平台跳转继续搜索）');
   }
   return parseEplusSearch(html, artist).map((e) => toActivityEvent(e, artist));
+}
+
+// 只迁移可从缓存的精确详情 URL 识别出的单场，不给未知聚合记录猜公演身份。
+export function migrateEplusEvent(event: ActivityEvent): ActivityEvent {
+  if (event.platform !== 'eplus' || typeof event.id !== 'string' || event.id.startsWith('agg-') || (event.ticketWindows != null && !Array.isArray(event.ticketWindows))) return event;
+  const id = eplusPerformanceId(event.originalUrl, event.date, event.time);
+  if (!id || id === event.id) return event;
+  return {
+    ...event, id, memberIds: [...new Set([event.id, ...(event.memberIds ?? [])])],
+    ticketWindows: (event.ticketWindows ?? []).map((w, i) => ({
+      ...w, id: `${id}-${i}`, previousIds: [...new Set([w.id, ...(w.previousIds ?? [])])],
+    })),
+  };
 }

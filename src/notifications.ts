@@ -1,6 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import type { ActivityEvent, AlertType, ReminderTarget, TicketWindow } from './types';
+import type { ActivityEvent, AlertType, ReminderTarget, TicketWindow, NotificationAlert } from './types';
+import { canonicalVenueId } from './sources/shared';
+import { favoriteAliases } from './favorites';
 import { stableConcertKey } from './sources/aggregate';
 import { createTranslator, type TFunction } from './i18n/core';
 
@@ -55,8 +57,8 @@ function deadlineReminder(applyEndIso: string, now: Date): DeadlineReminder | nu
 }
 
 function fromEventDate(event: ActivityEvent): string | null {
-  if (!event.date) return null;
-  return `${event.date}T${event.time || '18:00'}:00+09:00`;
+  if (!event.date || !/^\d{1,2}:\d{2}$/.test(event.time)) return null;
+  return `${event.date}T${event.time.padStart(5, '0')}:00+09:00`;
 }
 
 function target(
@@ -79,6 +81,7 @@ function target(
   };
   return {
     eventId: event.id,
+    eventAliases: favoriteAliases(event),
     eventTitle: event.title,
     platform: event.platform,
     windowId,
@@ -99,7 +102,7 @@ function targetsFromWindow(event: ActivityEvent, window: TicketWindow, t: TFunct
     target(event, window.id, 'result_start', t('notification.window.resultStart', { round: window.roundType }), window.resultStart, t),
     target(event, window.id, 'payment_deadline', t('notification.window.paymentDeadline', { round: window.roundType }), window.resultEnd, t),
   ].filter(Boolean) as ReminderTarget[];
-  return result;
+  return result.map(info => ({ ...info, previousNotificationIds: (window.previousIds ?? []).map(id => makeReminderNotificationId(stableConcertKey(event), id, info.type)) }));
 }
 
 export function buildReminderTargets(event: ActivityEvent, t: TFunction = defaultT, now: Date = new Date()): ReminderTarget[] {
@@ -112,7 +115,7 @@ export function buildReminderTargets(event: ActivityEvent, t: TFunction = defaul
     target(event, 'event', 'general_start', t('notification.fallback.generalStart'), event.timeline.generalStartDate ? `${event.timeline.generalStartDate}T08:00:00+09:00` : null, t),
     target(event, 'event', 'payment_deadline', t('notification.fallback.paymentDeadline'), event.timeline.paymentDeadlineDate ? `${event.timeline.paymentDeadlineDate}T20:00:00+09:00` : null, t),
   ].filter(Boolean) as ReminderTarget[];
-  const concert = target(event, 'event', 'concert', t('notification.fallback.concert'), fromEventDate(event), t);
+  const concert = target(event, `concert:${event.time}:${canonicalVenueId(event.venueName)}`, 'concert', t('notification.fallback.concert'), fromEventDate(event), t);
   const merged = [...(windowTargets.length > 0 ? windowTargets : fallbackTargets), ...(concert ? [concert] : [])];
   // 同一时刻同一类型只留一条（QA #9）：Lawson 等按票种给多窗口、eplus 多轮共享同一入金截止，
   // 会生成 N 条一模一样的「付款截止 08/03 23:59」开关，用户无从选择。保留先出现的（带轮次名）。
@@ -198,4 +201,12 @@ export async function cancelAllReminders(): Promise<void> {
   const ids = pending.notifications.map((n) => ({ id: n.id }));
   if (ids.length === 0) return;
   await LocalNotifications.cancel({ notifications: ids });
+}
+
+// 旧版已有系统排程保留其真实 notificationId，UI 仍能识别和取消；不重复排程。
+export function findActiveReminder(targetInfo: ReminderTarget, alerts: NotificationAlert[]): NotificationAlert | undefined {
+  const ids = [targetInfo.notificationId, ...(targetInfo.previousNotificationIds ?? [])];
+  return alerts.find(alert => ids.includes(alert.notificationId!)) || alerts.find(alert =>
+    alert.type === targetInfo.type && alert.scheduleAt === targetInfo.scheduleAt
+    && (targetInfo.eventAliases ?? [targetInfo.eventId]).includes(alert.eventId));
 }
